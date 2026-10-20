@@ -1,6 +1,6 @@
 [package]
 name = "hunt"
-version = "0.14.3"
+version = "0.15.0"
 edition = "2024"
 authors = ["Arabesque Labs <https://arabesquelabs.com>"]
 homepage = "https://arabesquelabs.com"
@@ -35,5 +35,5 @@ pulldown-cmark = { version = "0.13.4", default-features = false, features = ["ht
 
 [dev-dependencies]
 http-body-util = "0.1"
-tempfile = "3"
 tower = { version = "0.5", features = ["util"] }
+tempfile = "3"

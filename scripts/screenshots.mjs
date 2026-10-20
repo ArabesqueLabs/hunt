@@ -1,12 +1,13 @@
-// Screenshots of hunt's pages, for the site's Screenshots page (and the home
-// page's, and docs/screenshots.md on GitHub): the demo data
+// Screenshots of hunt's pages, for docs/screenshots.md and the website's
+// Screenshots and home pages (careerhunt.app, which fetches them): the demo data
 // (scripts/demo.sh) served by a hunt of its own, photographed by headless
 // Chrome in light and dark, at desktop and phone widths.
 //
 //   node scripts/screenshots.mjs        (or `make screenshots`, which builds first)
 //
-// Writes src/web/site/screenshots/*.png, and shots.rs there (which hunt
-// builds in, to serve them), and docs/screenshots.md, replacing them.
+// Writes docs/screenshots/*.png, docs/screenshots.md, and
+// docs/screenshots.json (each shot's name, title, what it shows, and whether
+// it's a phone's, for the website), replacing them.
 // Needs Node 22+ (for its WebSocket), Chrome or Chromium (CHROME= to say
 // where), and what scripts/demo.sh needs. No packages.
 import { spawn, spawnSync } from "node:child_process";
@@ -17,7 +18,7 @@ import { join } from "node:path";
 const ADDR = process.env.SHOTS_ADDR || "127.0.0.1:4847";
 const BASE = `http://${ADDR}`;
 const HUNT = process.env.HUNT || "target/debug/hunt";
-const OUT = "src/web/site/screenshots";
+const OUT = "docs/screenshots";
 const PORT = 9347;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -178,11 +179,11 @@ try {
       await b.size(width, height, !!s.phone);
       // The language is the service's setting: set for the shot, then back.
       await api("PATCH", "settings", { language: s.language || "en" });
-      await b.go(`${BASE}/app/settings`);
+      await b.go(`${BASE}/settings`);
       // Each shot as a first visit: nothing folded, opened or chosen before.
       await b.eval(`localStorage.clear(); localStorage.setItem("theme", ${JSON.stringify(theme)}); localStorage.setItem("cardView", ${JSON.stringify(s.detailed ? "detailed" : "compact")}); localStorage.setItem("boardMode", "board"); return 1`);
       if (s.prepare) await s.prepare(ids);
-      await b.go(BASE + "/app" + (typeof s.path === "function" ? s.path(ids) : s.path));
+      await b.go(BASE + (typeof s.path === "function" ? s.path(ids) : s.path));
       if (s.act) { await b.eval(`${s.act}; return 1`); await sleep(1000); }
       if (s.full) {
         const tall = await b.eval("return Math.ceil(document.documentElement.scrollHeight)");
@@ -211,32 +212,17 @@ try {
       "",
       ...(s.about ? [s.about, ""] : []),
       "<picture>",
-      `  <source media="(prefers-color-scheme: dark)" srcset="../${OUT}/${s.name}-dark.png">`,
-      `  <img src="../${OUT}/${s.name}-light.png" alt="${s.title}"${s.phone ? ' width="320"' : ""}>`,
+      `  <source media="(prefers-color-scheme: dark)" srcset="screenshots/${s.name}-dark.png">`,
+      `  <img src="screenshots/${s.name}-light.png" alt="${s.title}"${s.phone ? ' width="320"' : ""}>`,
       "</picture>",
       "",
     ]),
   ].join("\n");
   writeFileSync("docs/screenshots.md", md);
-  // What hunt builds in: each shot's name, title, what it shows and whether
-  // it's a phone's, and the files themselves.
-  const files = SHOTS.flatMap((s) => [`${s.name}-light.png`, `${s.name}-dark.png`]);
-  const rust = [
-    "// Written by scripts/screenshots.mjs (`make screenshots`): don't edit.",
-    "",
-    "/// Each screenshot: its name, title, what it shows, and whether it's a phone's.",
-    "pub const GALLERY: &[(&str, &str, &str, bool)] = &[",
-    ...SHOTS.map((s) => `    (${JSON.stringify(s.name)}, ${JSON.stringify(s.title)}, ${JSON.stringify(s.about || "")}, ${!!s.phone}),`),
-    "];",
-    "",
-    "/// The files, light and dark.",
-    "pub const FILES: &[(&str, &[u8])] = &[",
-    ...files.map((f) => `    (${JSON.stringify(f)}, include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/${OUT}/${f}"))),`),
-    "];",
-    "",
-  ].join("\n");
-  writeFileSync(join(OUT, "shots.rs"), rust);
-  console.log(`screenshots: ${SHOTS.length * 2} in ${OUT} (with shots.rs), and docs/screenshots.md`);
+  // For the website: each shot's name, title, what it shows and whether it's a phone's.
+  const gallery = SHOTS.map((s) => ({ name: s.name, title: s.title, about: s.about || "", phone: !!s.phone }));
+  writeFileSync("docs/screenshots.json", JSON.stringify(gallery, null, 2) + "\n");
+  console.log(`screenshots: ${SHOTS.length * 2} in ${OUT}, and docs/screenshots.md and .json`);
 } finally {
   b.close();
   server.kill();

@@ -33,6 +33,8 @@ done twice. Then:
 
 - Keep a pull request to one change, with tests for it, and `make ci`
   passing.
+- Changed a command of the CLI? Run `make cli-docs`, and say what's new
+  on its page, `docs/cli/<command>.md`.
 - Match the code around yours: its naming, its comments, and its plain
   wording in what people read (no jargon on screen).
 - Anything people see works in light and dark, on a phone, and right to

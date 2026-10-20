@@ -1,0 +1,41 @@
+<!doctype html>
+<!-- Signing in to one person's hunt, with its password (HUNT_PASSWORD):
+     src/auth.rs fills in where to go after, and whether the last try was
+     wrong. -->
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Sign in · hunt</title>
+  <script>
+    // The chosen theme, before anything draws.
+    try { const t = localStorage.getItem("theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch {}
+  </script>
+  <link rel="icon" href="/logo.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/style.css">
+  <style>
+    body { min-block-size: 100vh; display: grid; place-items: center; margin: 0; padding: 1.5rem; background: var(--al-color-bg); }
+    .login { inline-size: min(100%, 22rem); display: grid; gap: 1.5rem; }
+    .login-brand { display: inline-flex; align-items: center; gap: 0.6rem; font: 500 1.4rem var(--al-font-display); color: var(--al-color-text); }
+    .login-brand img { inline-size: 32px; block-size: 32px; }
+    .login form { display: grid; gap: 1rem; }
+    .login h1 { margin: 0; font-size: var(--al-text-lg); font-weight: 500; }
+  </style>
+</head>
+<body>
+  <main class="login">
+    <span class="login-brand"><img src="/logo.svg" alt="">hunt</span>
+    <form method="post" action="/login">
+      <h1>Sign in</h1>
+      <input type="hidden" name="next" value="{{next}}">
+      <div class="al-field">
+        <label class="al-label" for="password">Password</label>
+        <input class="al-input" id="password" name="password" type="password" autocomplete="current-password" required autofocus aria-describedby="login-error">
+        {{error}}
+      </div>
+      <button class="al-button al-button--primary" type="submit">Sign in</button>
+    </form>
+  </main>
+</body>
+</html>

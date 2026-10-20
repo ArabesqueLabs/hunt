@@ -31,7 +31,7 @@ body.al-shell { grid-template-rows: 1fr auto; }
 .al-shell > .sidebar { grid-row: 1 / span 2; }
 /* The lattice behind it mustn't unstick it (.lattice is position: relative). */
 .al-sidebar.lattice { position: sticky; }
-/* Who makes hunt, under every page (legal/footer.css draws it). */
+/* Who makes hunt, under every page (footer.css draws it). */
 .site-foot { grid-column: 2; }
 .brand { display: flex; align-items: center; gap: 0.6rem; font-size: 1.2rem; color: var(--al-color-text); text-decoration: none; padding: 0 0.5rem; letter-spacing: 0; }
 .brand svg { width: 1.6rem; height: 1.6rem; flex: none; color: var(--al-color-accent); }
@@ -1405,6 +1405,12 @@ body.no-account .al-sidebar__nav, body.no-account #logout + * { display: none; }
 .app-stages button:disabled { cursor: default; }
 .app-stages.archived { opacity: 0.55; }
 .app-stages .stage-no { font-variant-numeric: tabular-nums; }
+/* On a phone, many stages don't fit as equal columns: each keeps its name's
+   width, and the row scrolls. */
+@media (max-width: 40rem) {
+  .app-stages { grid-template-columns: repeat(var(--stages, 5), max-content); gap: var(--al-space-3); overflow-x: auto; }
+  .app-stages button { white-space: nowrap; }
+}
 .page.application .app-standing { margin: 0; }
 .app-layout { display: flex; flex-wrap: wrap; gap: var(--al-space-8); align-items: flex-start; }
 .app-main { display: flex; flex-direction: column; gap: var(--al-space-6); min-inline-size: 0; flex: 999 1 32rem; }

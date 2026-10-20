@@ -4,6 +4,7 @@
 //! ([`api`]). The web UI and the CLI are both clients of that API.
 
 pub mod api;
+pub mod auth;
 pub mod backup;
 pub mod client;
 pub mod cycles;
@@ -14,7 +15,6 @@ pub mod experiments;
 pub mod files;
 pub mod fx;
 pub mod google;
-pub mod legal;
 pub mod lookup;
 pub mod mail;
 pub mod posting;
@@ -22,6 +22,7 @@ pub mod prep;
 pub mod resource;
 pub mod scope;
 pub mod service;
+pub mod site;
 pub mod stats;
 pub mod store;
 pub mod system;

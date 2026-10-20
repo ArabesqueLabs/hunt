@@ -71,7 +71,7 @@ async function showSettings() {
   if (q.get("gmail_error")) toast(`Signing in with Google didn't work: ${q.get("gmail_error")}`, "error");
   const tabs = SETTINGS_TABS.filter(([k]) => k !== "account" || myAccount() || META.access);
   const tab = tabs.some(([k]) => k === q.get("tab")) ? q.get("tab") : (tabs.some(([k]) => k === stored("settingsTab")) ? stored("settingsTab") : "general");
-  history.replaceState(null, "", appPath(`/settings${tab === "general" ? "" : `?tab=${tab}`}`));
+  history.replaceState(null, "", `/settings${tab === "general" ? "" : `?tab=${tab}`}`);
   lastUrl = here();
   store("settingsTab", tab);
   const body = h("div.settings-content", { id: "settings-content", role: "region", "aria-labelledby": `settings-tab-${tab}` });
@@ -160,7 +160,7 @@ function accountSettings() {
   section.append(
     h("p", {}, h("b", { translate: "no" }, me.email)),
     h("p.muted", {}, "Deleting your account deletes everything in it, at once and for good: applications, companies, people, notes, files and settings. Download a backup first if you might want any of it.",
-      META.terms ? [" ", h("a", { href: "/data-deletion", "data-reload": "" }, "More about deleting your data")] : null),
+      META.terms ? [" ", h("a", { href: sitePage("/data-deletion/"), target: "_blank", rel: "noopener" }, "More about deleting your data")] : null),
     h("div.actions", {}, h("button.al-button.al-button--quiet.al-button--danger", { type: "button", onclick: async () => {
       const d = await ask({ title: "Delete your account",
         body: h("div.fields", {},

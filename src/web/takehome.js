@@ -114,7 +114,7 @@ function takeHomeDisclaimer() {
     h("p", {}, h("span", {}, "The tool is provided “as is”, without warranty of any kind. To the fullest extent the law allows,"), " ",
       h("span", { translate: "no" }, who), ", ",
       h("span", {}, "and its directors, staff and contributors, accept no liability for any loss or damage, direct or indirect, arising from using it or relying on what it shows. Nothing here limits any liability that the law doesn't allow to be limited.")),
-    META.terms ? h("p", {}, h("span", {}, "Your use of it is also covered by the"), " ", h("a", { href: "/terms", "data-reload": "" }, "terms of use"), ".") : null);
+    META.terms ? h("p", {}, h("span", {}, "Your use of it is also covered by the"), " ", h("a", { href: sitePage("/terms/"), target: "_blank", rel: "noopener" }, "terms of use"), ".") : null);
 }
 
 // ---- an offer's extras: a bonus as a %, shares, benefits in kind ------------------------
@@ -231,7 +231,7 @@ async function showTakeHome() {
     if (PAY_PERIODS.some(([p]) => p === query.get("per"))) s.period = query.get("per");
     if (query.get("currency")) s.currency = query.get("currency").toUpperCase();
   }
-  if (query.toString()) history.replaceState(null, "", appPath("/take-home"));
+  if (query.toString()) history.replaceState(null, "", "/take-home");
 
   const results = h("div.th-results", { "aria-live": "polite" });
   const form = h("form.th-form", { onsubmit: (e) => e.preventDefault() });

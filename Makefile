@@ -12,7 +12,7 @@ MYSQL_URL ?= mysql://root:hunt@127.0.0.1:53306/
 CARGO ?= cargo
 
 .DEFAULT_GOAL := help
-.PHONY: help build release serve serve-release dev dev-tenants dev-hosted watch demo screenshots logo test test-postgres test-mysql test-all db-up db-down check lint fmt fmt-check ci doc install uninstall clean
+.PHONY: help build release serve serve-release dev dev-tenants dev-hosted watch demo screenshots cli-docs logo test test-postgres test-mysql test-all db-up db-down check lint fmt fmt-check ci doc install uninstall clean
 
 help: ## List the targets
 	@awk 'BEGIN { FS = ":.*## " } /^[a-z-]+:.*## / { printf "  \033[1m%-14s\033[0m %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
@@ -45,13 +45,10 @@ dev-tenants: ## Like dev, for several people (ADMINS); be someone at /dev/as?ema
 	@echo "be someone new: http://$(ADDR)/dev/as?email=someone@example.test"
 	$(CARGO) run -- serve --addr $(ADDR) --db target/dev.db $(TENANTS_FLAGS)
 
-# Arabesque Labs' own details: the site as their hosted hunt shows it.
-HOSTED_ENV = HUNT_LEGAL_COMPANY="Arabesque Labs Ltd" HUNT_LEGAL_NUMBER=16408080 \
-  HUNT_LEGAL_OFFICE="71–75 Shelton Street, Covent Garden, London WC2H 9JQ" \
-  HUNT_LEGAL_EMAIL=hello@arabesquelabs.com HUNT_LEGAL_HOSTING="the United Kingdom"
+# Arabesque Labs' own: their hosted hunt, with careerhunt.app's terms.
+HOSTED_ENV = HUNT_SITE_URL=https://careerhunt.app HUNT_OPERATOR="Arabesque Labs Ltd"
 
-dev-hosted: ## Like dev-tenants, as the hosted hunt: the home page at /, legal pages, terms to agree to
-	@echo "the website:    http://$(ADDR)/"
+dev-hosted: ## Like dev-tenants, as the hosted hunt: terms to agree to, and careerhunt.app's legal pages linked
 	@echo "be the admin:   http://$(ADDR)/dev/as?email=$(firstword $(subst $(comma), ,$(ADMINS)))"
 	@echo "be someone new: http://$(ADDR)/dev/as?email=someone@example.test"
 	$(HOSTED_ENV) $(CARGO) run -- serve --addr $(ADDR) --db target/dev.db $(TENANTS_FLAGS)
@@ -66,8 +63,11 @@ demo: build ## Fill target/dev.db (what dev and watch serve) with demo data, rep
 	scripts/demo.sh target/dev.db
 	@! curl -fs -o /dev/null http://$(ADDR)/api/meta || echo "a hunt is running on $(ADDR): restart it to see the demo data"
 
-screenshots: build ## Photograph the demo's pages, for the site's Screenshots and docs/screenshots.md (needs Chrome and Node)
+screenshots: build ## Photograph the demo's pages into docs/screenshots, for docs/screenshots.md and careerhunt.app (needs Chrome and Node)
 	node scripts/screenshots.mjs
+
+cli-docs: build ## Write each CLI command's help into its page, docs/cli/<command>.md
+	scripts/cli-docs.sh
 
 logo: ## The logo as PNGs, in the app's colours, into docs/logo (needs Chrome and Node)
 	node scripts/logo.mjs

@@ -59,8 +59,8 @@ async function showAccountScreen() {
     h("div.field", {}, h("label", { for: "ask-reason" }, "What brings you to hunt?"), reason, h("p.muted.small", {}, "Optional: it helps us decide who to let in first.")),
     // A hunt run for others has terms of use, to agree to.
     META.terms ? h("label.check.agree", { for: "ask-agrees" }, agrees, " I agree to the ",
-      h("a", { href: "/terms", target: "_blank" }, "terms of use"), ", and have read the ",
-      h("a", { href: "/privacy", target: "_blank" }, "privacy notice"), ".") : null,
+      h("a", { href: sitePage("/terms/"), target: "_blank" }, "terms of use"), ", and have read the ",
+      h("a", { href: sitePage("/privacy/"), target: "_blank" }, "privacy notice"), ".") : null,
     h("div.actions", {}, h("button.al-button.al-button--primary", { type: "submit" }, "Join the list")));
     fill(page, head("Join the early access list", lead), who, form);
     name.focus();
@@ -74,7 +74,7 @@ async function showAccountScreen() {
         h("div.actions", {}, h("button.al-button.al-button--primary", { type: "submit" }, "Be them"))));
     email.focus();
   } else if (status === "signed-out") {
-    fill(page, head("Sign in", "hunt is shared: sign in to use it."), h("p", {}, h("a.al-button.al-button--primary", { href: "/app" }, "Sign in")));
+    fill(page, head("Sign in", "hunt is shared: sign in to use it."), h("p", {}, h("a.al-button.al-button--primary", { href: "/" }, "Sign in")));
   } else if ((status === "none" || status === "rejected") && t?.signups_open === false) {
     fill(page, head("The list is closed for now", "We aren't adding anyone to the early access list just now. Try again later."), who);
   } else if (status === "none") {
@@ -155,7 +155,7 @@ function accountsTable(columns, rows, { sort, desc = true, label, chosen = null,
 function setAdminAccount(id) {
   const q = new URLSearchParams(location.search);
   if (id) q.set("account", id); else q.delete("account");
-  history.replaceState(null, "", appPath(`/admin?${q}`));
+  history.replaceState(null, "", `/admin?${q}`);
   lastUrl = here();
 }
 

@@ -57,7 +57,7 @@ function currentCycle() {
 /** Show another running cycle ("" for all of them) where it matters, or its board. */
 function pickCycle(id) {
   store("boardCycle", String(id));
-  const page = appless(location.pathname).split("/")[1] || "";
+  const page = location.pathname.split("/")[1] || "";
   if (["", "applications", "stats"].includes(page)) go(page ? `/${page}` : "/");
   else go("/");
 }
@@ -89,7 +89,7 @@ function drawCycleBox() {
   const run = runningCycles();
   const viewing = viewedCycle();
   const chosen = boardCycle();
-  const page = appless(location.pathname).split("/")[1] || "";
+  const page = location.pathname.split("/")[1] || "";
   const onBoard = ["", "applications", "stats"].includes(page);
   const card = (c, { current, meta, onclick, past = false }) => h("button.al-sidebar__link.cycle-card", {
     type: "button", "aria-current": current ? "true" : null, class: past ? "is-past" : "", title: `${c.name}: ${meta}`, onclick,

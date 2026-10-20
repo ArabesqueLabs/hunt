@@ -32,8 +32,7 @@
 //! | `POST /api/stages/order` | `{ids: [...]}`: reorder the columns |
 //! | `POST /api/stages/{id}/lanes/order` | `{ids}`: a stage's lanes, top to bottom |
 //! | `POST /api/swimlanes/order` | `{ids}`: the board's swimlanes, top to bottom |
-//! | `GET /privacy`, `GET /terms`, `GET /data-deletion` | the privacy notice, terms of use and how to delete your data, when hunt is run for others (no sign-in needed) |
-//! | `GET /ar/`, `/ar/docs`, `/ar/screenshots`, `/ar/privacy`, `/ar/terms`, `/ar/data-deletion` | the public site in Arabic (no sign-in needed) |
+//! | `GET /docs`, `/screenshots`, `/privacy`, `/terms`, `/data-deletion`, `/ar/…` | the website's pages, which hunt once served: redirected there (`HUNT_SITE_URL`); without a website, the docs on GitHub |
 //! | `DELETE /api/account` | delete your own account and everything in it (`{confirm: your email}`) |
 //! | `GET /api/account`, `POST /api/account/request` | with several people (`--tenants`): who's asking and their account; ask for one (`{name, reason, provider, agrees}`: agreeing to the terms of use) |
 //! | `PATCH /api/admin/settings` | admins: `{signups_open}`, whether new people may ask for an account; `{defaults}`, the language, region, time zone and currency new accounts start with |
@@ -85,13 +84,14 @@ use axum::{Json, Router};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
+use crate::auth;
 use crate::db::{Db, Record};
 use crate::error::Error;
 use crate::experiments::{self, Experiments};
 use crate::files::{MAX_FILE, Picture, Upload};
-use crate::legal;
 use crate::resource::{self, RESOURCES, Resource};
 use crate::service::{self, Move};
+use crate::site;
 use crate::takehome;
 use crate::tenants::{Account, Denied, Identity, Tenants};
 
@@ -103,10 +103,13 @@ type Shared = Arc<Mutex<Db>>;
 pub struct AppState {
     db: Shared,
     tenants: Option<Arc<Tenants>>,
-    /// Who runs this hunt (for its legal pages), and where its source is.
-    site: Arc<legal::Site>,
+    /// Its website (the docs and legal pages), who runs it, and its source.
+    site: Arc<site::Site>,
     /// Features being tried out, and whom they're on for.
     experiments: Arc<Experiments>,
+    /// One person's hunt's password, if it has one: the app and the API
+    /// need signing in (see [`crate::auth`]).
+    password: Option<Arc<auth::Password>>,
 }
 
 /// The database, as the request's account sees it: its own rows only (see
@@ -142,6 +145,15 @@ fn denied(d: Denied) -> Response {
     }
 }
 
+/// The address a request came from, as the server saw it: for a sign-in
+/// proxy's header, which counts only from the proxy.
+fn peer(parts: &Parts) -> Option<std::net::IpAddr> {
+    parts
+        .extensions
+        .get::<axum::extract::ConnectInfo<std::net::SocketAddr>>()
+        .map(|c| c.0.ip())
+}
+
 impl FromRequestParts<AppState> for Scoped {
     type Rejection = Response;
 
@@ -156,7 +168,8 @@ impl FromRequestParts<AppState> for Scoped {
             });
         };
         let headers = parts.headers.clone();
-        match tokio::task::spawn_blocking(move || t.active(&headers)).await {
+        let peer = peer(parts);
+        match tokio::task::spawn_blocking(move || t.active(&headers, peer)).await {
             Ok(Ok((_, a))) => Ok(Scoped {
                 db: state.db.clone(),
                 owner: Some(a.id),
@@ -228,15 +241,17 @@ impl FromRequestParts<AppState> for Viewer {
             });
         };
         let headers = parts.headers.clone();
-        let (identity, account) = tokio::task::spawn_blocking(move || match t.identify(&headers) {
-            Ok(who) => {
-                let account = t.account_of(&who).ok().flatten();
-                (Some(who), account)
-            }
-            Err(_) => (None, None),
-        })
-        .await
-        .unwrap_or((None, None));
+        let peer = peer(parts);
+        let (identity, account) =
+            tokio::task::spawn_blocking(move || match t.identify(&headers, peer) {
+                Ok(who) => {
+                    let account = t.account_of(&who).ok().flatten();
+                    (Some(who), account)
+                }
+                Err(_) => (None, None),
+            })
+            .await
+            .unwrap_or((None, None));
         Ok(Viewer {
             app: state.clone(),
             identity,
@@ -266,8 +281,9 @@ impl FromRequestParts<AppState> for Admin {
             .into_response());
         };
         let headers = parts.headers.clone();
+        let peer = peer(parts);
         let check = t.clone();
-        match tokio::task::spawn_blocking(move || check.active(&headers)).await {
+        match tokio::task::spawn_blocking(move || check.active(&headers, peer)).await {
             Ok(Ok((_, a))) if a.is_admin() => Ok(Admin {
                 tenants: t,
                 account: a,
@@ -326,25 +342,38 @@ pub fn router_trying(db: Db, experiments: Experiments) -> Router {
     routes(AppState {
         db: Arc::new(Mutex::new(db)),
         tenants: None,
-        site: Arc::new(legal::Site::default()),
+        site: Arc::new(site::Site::default()),
         experiments: Arc::new(experiments),
+        password: None,
+    })
+}
+
+/// One person's hunt with a password: the app and the API need signing in.
+pub fn router_with_password(db: Db, password: auth::Password) -> Router {
+    routes(AppState {
+        db: Arc::new(Mutex::new(db)),
+        tenants: None,
+        site: Arc::new(site::Site::default()),
+        experiments: Arc::new(Experiments::default()),
+        password: Some(Arc::new(password)),
     })
 }
 
 /// The whole service for several people sharing one database, each with an
 /// account (see [`crate::tenants`]).
 pub fn router_tenants(db: Arc<Mutex<Db>>, tenants: Tenants) -> Router {
-    router_run_by(db, tenants, legal::Site::default())
+    router_run_by(db, tenants, site::Site::default())
 }
 
-/// Several people's hunt, run by the company `site` names: with its privacy
-/// notice and terms of use, agreed to when asking for an account.
-pub fn router_run_by(db: Arc<Mutex<Db>>, tenants: Tenants, site: legal::Site) -> Router {
+/// Several people's hunt, run by whoever `site` names: with its website's
+/// terms of use, agreed to when asking for an account.
+pub fn router_run_by(db: Arc<Mutex<Db>>, tenants: Tenants, site: site::Site) -> Router {
     routes(AppState {
         db,
         tenants: Some(Arc::new(tenants)),
         site: Arc::new(site),
         experiments: Arc::new(Experiments::default()),
+        password: None,
     })
 }
 
@@ -357,32 +386,36 @@ pub fn router_tenants_trying(
     routes(AppState {
         db,
         tenants: Some(Arc::new(tenants)),
-        site: Arc::new(legal::Site::default()),
+        site: Arc::new(site::Site::default()),
         experiments: Arc::new(experiments),
+        password: None,
     })
 }
 
 fn routes(state: AppState) -> Router {
     Router::new()
-        .route("/", get(home))
-        .route("/about", get(about))
-        .route("/app", get(page))
-        .route("/app/", get(page))
-        .route("/app/{*rest}", get(page))
-        .route("/screenshots", get(screenshots_page))
-        .route("/screenshots/{name}", get(screenshot))
-        .route("/docs", get(docs_page))
-        // The site in Arabic: each page's twin under /ar/.
+        // The app: its board at /, and each of its pages at its own path
+        // (the fallback, below).
+        .route("/", get(page))
         .route(
-            "/ar",
-            get(|| async { axum::response::Redirect::permanent("/ar/") }),
+            "/about",
+            get(|| async { axum::response::Redirect::permanent("/") }),
         )
-        .route("/ar/", get(home_ar))
-        .route("/ar/docs", get(docs_page_ar))
-        .route("/ar/screenshots", get(screenshots_page_ar))
-        .route("/ar/privacy", get(privacy_ar))
-        .route("/ar/terms", get(terms_ar))
-        .route("/ar/data-deletion", get(data_deletion_ar))
+        // Signing in with the password, for one person's hunt that has one.
+        .route("/login", get(login_page).post(login))
+        .route("/logout", get(logout).post(logout))
+        .route("/docs", get(to_site))
+        .route("/screenshots", get(to_site))
+        .route("/privacy", get(to_site))
+        .route("/terms", get(to_site))
+        .route("/data-deletion", get(to_site))
+        .route("/ar", get(to_site))
+        .route("/ar/", get(to_site))
+        .route("/ar/{*rest}", get(to_site))
+        // Where the app was, under /app: there now, without it.
+        .route("/app", get(drop_app))
+        .route("/app/", get(drop_app))
+        .route("/app/{*rest}", get(drop_app))
         .route("/app.js", get(script))
         .route("/application.js", get(application_script))
         .route("/notes.js", get(notes_script))
@@ -404,15 +437,12 @@ fn routes(state: AppState) -> Router {
         .route("/fonts/{name}", get(font))
         .route("/vendor/arabesque/{*path}", get(vendored))
         .route("/healthz", get(healthz))
-        .route("/privacy", get(privacy))
-        .route("/terms", get(terms))
         .route("/api/meta", get(meta))
         .route("/api/stats", get(stats))
         .route("/api/system", get(system))
         .route("/dev/as", get(dev_as))
         .route("/api/account", get(account).delete(delete_account))
         .route("/api/account/request", post(request_account))
-        .route("/data-deletion", get(data_deletion))
         .route("/api/admin/overview", get(admin_overview))
         .route("/api/admin/settings", axum::routing::patch(admin_settings))
         .route("/api/admin/invites", post(admin_invite))
@@ -528,6 +558,10 @@ fn routes(state: AppState) -> Router {
         )
         .fallback(not_routed)
         .layer(axum::middleware::map_response_with_state((), caching))
+        .layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            signed_in,
+        ))
         .with_state(state)
 }
 
@@ -538,19 +572,21 @@ pub struct TenancyConfig {
     pub identity: crate::tenants::IdentitySource,
 }
 
-/// Serve on `addr` until ctrl-c: one person's hunt, or (with `tenancy`)
-/// several people's; with `experiments` on for whom they name.
+/// Serve on `addr` until ctrl-c: one person's hunt (behind `password`, if
+/// it has one), or (with `tenancy`) several people's; with `experiments` on
+/// for whom they name.
 pub fn serve(
     db: Db,
     addr: &str,
     tenancy: Option<TenancyConfig>,
     experiments: Experiments,
+    password: Option<auth::Password>,
 ) -> crate::error::Result<()> {
     crate::system::mark_started();
     // Uptime carries on across a rollout; then a heartbeat every minute.
     let _ = db.note_start();
     let runtime = tokio::runtime::Runtime::new()?;
-    let site = Arc::new(legal::Site::from_env()?);
+    let site = Arc::new(site::Site::from_env()?);
     let state: Shared = Arc::new(Mutex::new(db));
     let tenants = match tenancy {
         Some(t) => Some(Arc::new(Tenants::open(
@@ -566,6 +602,7 @@ pub fn serve(
         tenants,
         site,
         experiments: Arc::new(experiments),
+        password: password.map(Arc::new),
     };
     runtime.block_on(async {
         let listener = tokio::net::TcpListener::bind(addr).await?;
@@ -618,11 +655,16 @@ pub fn serve(
                 }
             }
         });
-        axum::serve(listener, routes(app))
-            .with_graceful_shutdown(async {
-                let _ = tokio::signal::ctrl_c().await;
-            })
-            .await?;
+        // Each request's address, for a sign-in proxy's header, which counts
+        // only from the proxy.
+        axum::serve(
+            listener,
+            routes(app).into_make_service_with_connect_info::<std::net::SocketAddr>(),
+        )
+        .with_graceful_shutdown(async {
+            let _ = tokio::signal::ctrl_c().await;
+        })
+        .await?;
         Ok(())
     })
 }
@@ -643,75 +685,196 @@ fn with_db<T>(
 
 /// Anything else: a page of the web UI (its addresses are real paths, like
 /// /applications/2), or, under /api/ or for a file, not found.
-/// An address that isn't hunt's: a page of the dashboard from before it
-/// moved under /app (a bookmark, the bookmarklet, Google's return) goes
-/// there, with its query; anything else isn't found.
-async fn not_routed(method: axum::http::Method, uri: axum::http::Uri) -> Response {
-    let path = uri.path();
+async fn not_routed(method: axum::http::Method, uri: axum::http::Uri, v: Viewer) -> Response {
+    if method == axum::http::Method::GET && is_page(uri.path()) {
+        return page(v).await.into_response();
+    }
+    ApiError(Error::NotFound(format!("nothing at {}", uri.path()))).into_response()
+}
+
+/// An address of the app's from when it lived under /app (a bookmark, the
+/// "Send to hunt" bookmarklet): the same page, without it, with its query.
+async fn drop_app(uri: axum::http::Uri) -> Response {
+    let path = uri.path().strip_prefix("/app").unwrap_or("/");
+    let path = if path.is_empty() { "/" } else { path };
+    let query = uri.query().map(|q| format!("?{q}")).unwrap_or_default();
+    axum::response::Redirect::permanent(&format!("{path}{query}")).into_response()
+}
+
+/// Whether an address is one of the app's pages: anything but a file, the
+/// API, and the few addresses that need nobody (signing in, the health
+/// check, and the website's old ones, which lead there).
+fn is_page(path: &str) -> bool {
     let a_file = path
         .rsplit('/')
         .next()
         .is_some_and(|last| last.contains('.'));
-    if method == axum::http::Method::GET && !path.starts_with("/api/") && !a_file {
-        let query = uri.query().map(|q| format!("?{q}")).unwrap_or_default();
-        return axum::response::Redirect::permanent(&format!("/app{path}{query}")).into_response();
+    let open = matches!(
+        path,
+        "/login"
+            | "/logout"
+            | "/healthz"
+            | "/about"
+            | "/docs"
+            | "/screenshots"
+            | "/privacy"
+            | "/terms"
+            | "/data-deletion"
+            | "/ar"
+            | "/app"
+            | "/dev/as"
+    ) || ["/api/", "/ar/", "/app/"]
+        .iter()
+        .any(|p| path.starts_with(p));
+    !a_file && !open
+}
+
+/// With a password: the app and the API only for whoever has signed in (the
+/// cookie /login sets, or the CLI's `Authorization: Bearer` password). The
+/// rest (the sign-in page, scripts, styles, fonts, the health check and
+/// shared calendar links) needs nothing.
+async fn signed_in(
+    State(app): State<AppState>,
+    req: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> Response {
+    let Some(password) = app.password.clone() else {
+        return next.run(req).await;
+    };
+    let path = req.uri().path();
+    let guarded =
+        is_page(path) || (path.starts_with("/api/") && !path.starts_with("/api/calendar/"));
+    if !guarded || has_signed_in(&password, req.headers()) {
+        return next.run(req).await;
     }
-    ApiError(Error::NotFound(format!("nothing at {path}"))).into_response()
-}
-
-/// The site's front page: hunt's home page.
-async fn home(State(app): State<AppState>) -> Response {
-    html(app.site.home(legal::Lang::En))
-}
-
-/// The home page in Arabic.
-async fn home_ar(State(app): State<AppState>) -> Response {
-    html(app.site.home(legal::Lang::Ar))
-}
-
-/// A page of the site, as it's sent.
-fn html(page: String) -> Response {
-    ([(header::CONTENT_TYPE, "text/html; charset=utf-8")], page).into_response()
-}
-
-/// Where the home page was, for one person's own hunt: it's at / now.
-async fn about() -> Response {
-    axum::response::Redirect::permanent("/").into_response()
-}
-
-/// The docs: hunt's README, as a page of the site.
-async fn docs_page(State(app): State<AppState>) -> Response {
-    html(app.site.docs(legal::Lang::En))
-}
-
-/// The docs in Arabic: README.ar.md.
-async fn docs_page_ar(State(app): State<AppState>) -> Response {
-    html(app.site.docs(legal::Lang::Ar))
-}
-
-/// Every screenshot, as a page of the site.
-async fn screenshots_page(State(app): State<AppState>) -> Response {
-    html(app.site.screenshots(legal::Lang::En))
-}
-
-/// Every screenshot, captioned in Arabic.
-async fn screenshots_page_ar(State(app): State<AppState>) -> Response {
-    html(app.site.screenshots(legal::Lang::Ar))
-}
-
-/// A screenshot, as `make screenshots` took it.
-async fn screenshot(Path(name): Path<String>) -> Response {
-    match legal::shots::FILES.iter().find(|(n, _)| *n == name) {
-        Some((_, png)) => (
-            [
-                (header::CONTENT_TYPE, "image/png"),
-                (header::CACHE_CONTROL, "public, max-age=86400"),
-            ],
-            *png,
+    if path.starts_with("/api/") {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({ "error": "sign in first: this hunt has a password (the CLI sends HUNT_PASSWORD)" })),
         )
-            .into_response(),
-        None => StatusCode::NOT_FOUND.into_response(),
+            .into_response();
     }
+    let here = req
+        .uri()
+        .path_and_query()
+        .map(|p| p.as_str())
+        .unwrap_or("/");
+    axum::response::Redirect::to(&format!("/login?next={}", percent(here))).into_response()
+}
+
+fn has_signed_in(password: &auth::Password, headers: &HeaderMap) -> bool {
+    let bearer = headers
+        .get(header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "));
+    if bearer.is_some_and(|b| password.matches(b)) {
+        return true;
+    }
+    crate::tenants::cookie(headers, auth::COOKIE)
+        .is_some_and(|s| password.valid(&s, jiff::Timestamp::now().as_second()))
+}
+
+/// A query string's value, made safe to put in an address.
+fn percent(text: &str) -> String {
+    text.bytes()
+        .map(|b| match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' | b'/' => {
+                (b as char).to_string()
+            }
+            _ => format!("%{b:02X}"),
+        })
+        .collect()
+}
+
+#[derive(Deserialize)]
+struct LoginQuery {
+    next: Option<String>,
+}
+
+/// The sign-in page (only with a password: else, to the app).
+async fn login_page(State(app): State<AppState>, Query(q): Query<LoginQuery>) -> Response {
+    if app.password.is_none() {
+        return axum::response::Redirect::to("/").into_response();
+    }
+    (
+        [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
+        auth::login_page(&auth::safe_next(q.next.as_deref()), false),
+    )
+        .into_response()
+}
+
+#[derive(Deserialize)]
+struct LoginForm {
+    password: String,
+    next: Option<String>,
+}
+
+/// Signing in: the right password sets the cookie and goes where they were
+/// going; a wrong one waits a second, and asks again.
+async fn login(
+    State(app): State<AppState>,
+    headers: HeaderMap,
+    axum::Form(form): axum::Form<LoginForm>,
+) -> Response {
+    let Some(password) = app.password.clone() else {
+        return axum::response::Redirect::to("/").into_response();
+    };
+    let next = auth::safe_next(form.next.as_deref());
+    if !password.matches(&form.password) {
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        return (
+            StatusCode::UNAUTHORIZED,
+            [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
+            auth::login_page(&next, true),
+        )
+            .into_response();
+    }
+    let age = auth::SESSION_DAYS * 24 * 60 * 60;
+    let until = jiff::Timestamp::now().as_second() + age;
+    // Secure where hunt is reached over HTTPS (through a proxy that says so).
+    let https = headers
+        .get("x-forwarded-proto")
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|p| p.eq_ignore_ascii_case("https"));
+    let cookie = format!(
+        "{}={}; Path=/; Max-Age={age}; HttpOnly; SameSite=Lax{}",
+        auth::COOKIE,
+        password.session(until),
+        if https { "; Secure" } else { "" }
+    );
+    (
+        [(header::SET_COOKIE, cookie)],
+        axum::response::Redirect::to(&next),
+    )
+        .into_response()
+}
+
+/// Signing out: the cookie, gone.
+async fn logout() -> Response {
+    (
+        [(
+            header::SET_COOKIE,
+            format!(
+                "{}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax",
+                auth::COOKIE
+            ),
+        )],
+        axum::response::Redirect::to("/login"),
+    )
+        .into_response()
+}
+
+/// A page that was hunt's and is now its website's (the docs, screenshots
+/// and legal pages, in English and Arabic): there, at its address on the
+/// website; without one, the docs on GitHub, and nothing else.
+async fn to_site(State(app): State<AppState>, uri: axum::http::Uri) -> Response {
+    let path = uri.path().trim_end_matches('/');
+    let to = match (app.site.page(&format!("{path}/")), path) {
+        (Some(page), _) => page,
+        (None, "/docs") => app.site.docs(),
+        _ => return StatusCode::NOT_FOUND.into_response(),
+    };
+    axum::response::Redirect::permanent(&to).into_response()
 }
 
 const LOGO: &str = include_str!("web/img/logo.svg");
@@ -817,7 +980,7 @@ fn asset_fingerprint() -> &'static str {
             include_str!("web/vendor/arabesque/arabesque.css"),
             include_str!("web/tokens.css"),
             include_str!("web/style.css"),
-            include_str!("web/legal/footer.css"),
+            include_str!("web/footer.css"),
             include_str!("web/i18n.js"),
             include_str!("web/i18n-ar.js"),
             include_str!("web/app.js"),
@@ -878,7 +1041,7 @@ async fn caching(uri: axum::http::Uri, mut res: Response) -> Response {
         } else {
             "no-cache"
         }
-    } else if html && (path == "/app" || path.starts_with("/app/")) {
+    } else if html && is_page(path) {
         "private, no-cache"
     } else if html {
         "no-cache"
@@ -1019,14 +1182,14 @@ async fn style() -> impl IntoResponse {
             include_str!("web/vendor/arabesque/arabesque.css"),
             include_str!("web/tokens.css"),
             include_str!("web/style.css"),
-            include_str!("web/legal/footer.css")
+            include_str!("web/footer.css")
         ),
     )
 }
 
 /// The design system's scripts that hunt uses (the date picker, the charts'
-/// tooltips and keys, the sidebar's menu on a phone, the public pages'
-/// header, and what they import) and its icon sprite, as vendored: see
+/// tooltips and keys, the sidebar's menu on a phone, and what they import)
+/// and its icon sprite, as vendored: see
 /// web/vendor/arabesque/README.md.
 async fn vendored(Path(path): Path<String>) -> Response {
     let (kind, body): (&str, &'static str) = match path.as_str() {
@@ -1041,10 +1204,6 @@ async fn vendored(Path(path): Path<String>) -> Response {
         "js/tooltip.js" => (
             "text/javascript; charset=utf-8",
             include_str!("web/vendor/arabesque/js/tooltip.js"),
-        ),
-        "js/site-header.js" => (
-            "text/javascript; charset=utf-8",
-            include_str!("web/vendor/arabesque/js/site-header.js"),
         ),
         "js/sidebar.js" => (
             "text/javascript; charset=utf-8",
@@ -1122,10 +1281,15 @@ async fn meta(v: Viewer, headers: HeaderMap) -> ApiResult {
     ok(json!({
         "access": access,
         "tenancy": tenancy,
-        // Run for others, with terms of use to agree to when asking for an account.
-        "terms": v.app.site.operator.is_some(),
-        // Who runs it, by registered name: for disclaimers.
-        "operator": v.app.site.operator.as_ref().map(|o| o.company.clone()),
+        // Run for others, with a website whose terms of use people agree
+        // to when asking for an account, and whose docs and legal pages the
+        // app links to.
+        "terms": v.app.site.url.is_some(),
+        // Signed in with the password: the sidebar offers to log out.
+        "password": v.app.password.is_some(),
+        "site": v.app.site.url,
+        // Who runs it, by name: for disclaimers.
+        "operator": v.app.site.operator,
         // Features being tried out, on for them.
         "experiments": v.experiments(),
         "resources": RESOURCES,
@@ -2114,45 +2278,6 @@ async fn restore(s: Scoped, Query(q): Query<Replace>, body: Bytes) -> ApiResult 
 }
 
 /// For health checks (Kubernetes' probes): ok when the database answers.
-/// The privacy notice: public, to read before signing up too. Only a hunt
-/// run for others, whose operator has said who they are, has one.
-async fn privacy(State(app): State<AppState>) -> Response {
-    legal_page(&app, legal::Doc::Privacy, legal::Lang::En)
-}
-
-/// The privacy notice in Arabic: as the English, which governs.
-async fn privacy_ar(State(app): State<AppState>) -> Response {
-    legal_page(&app, legal::Doc::Privacy, legal::Lang::Ar)
-}
-
-/// The terms of use: as the privacy notice.
-async fn terms(State(app): State<AppState>) -> Response {
-    legal_page(&app, legal::Doc::Terms, legal::Lang::En)
-}
-
-/// The terms of use in Arabic: as the English, which governs.
-async fn terms_ar(State(app): State<AppState>) -> Response {
-    legal_page(&app, legal::Doc::Terms, legal::Lang::Ar)
-}
-
-/// How to delete your data (as Facebook, among others, asks for): as the
-/// privacy notice.
-async fn data_deletion(State(app): State<AppState>) -> Response {
-    legal_page(&app, legal::Doc::Deletion, legal::Lang::En)
-}
-
-/// How to delete your data, in Arabic.
-async fn data_deletion_ar(State(app): State<AppState>) -> Response {
-    legal_page(&app, legal::Doc::Deletion, legal::Lang::Ar)
-}
-
-fn legal_page(app: &AppState, doc: legal::Doc, lang: legal::Lang) -> Response {
-    match app.site.page(doc, lang) {
-        Some(page) => html(page),
-        None => StatusCode::NOT_FOUND.into_response(),
-    }
-}
-
 /// Kubernetes' probes don't sign in: this asks nobody who they are, and
 /// says only whether the database answers.
 async fn healthz(State(app): State<AppState>) -> Response {
@@ -2358,7 +2483,7 @@ async fn dev_as(v: Viewer, Query(q): Query<DevAs>) -> Response {
         StatusCode::SEE_OTHER,
         [
             (header::SET_COOKIE, cookie),
-            (header::LOCATION, "/app".to_string()),
+            (header::LOCATION, "/".to_string()),
         ],
     )
         .into_response()
@@ -2416,7 +2541,7 @@ async fn request_account(v: Viewer, Json(b): Json<AskFor>) -> ApiResult {
         )));
     };
     // A hunt run for others has terms of use: agreed to, and which, kept.
-    let terms = v.app.site.operator.is_some().then_some(legal::UPDATED);
+    let terms = v.app.site.url.is_some().then_some(site::UPDATED);
     if terms.is_some() && !b.agrees {
         return Err(ApiError(Error::Invalid(
             "agree to the terms of use (and read the privacy notice) to ask for an account".into(),
