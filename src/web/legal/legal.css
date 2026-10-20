@@ -1,0 +1,53 @@
+
+/* The privacy notice and terms of use: public pages, read before signing
+   up as well as after. Set as arabesquelabs.com's own notice is. */
+* { box-sizing: border-box; }
+/* One page column for every public page: header, content and footer share
+   its edges, centred once the screen is wider than it, while each band's
+   background, lattice and hairlines still run edge to edge. Its gutter
+   narrows with the screen. On a large screen the type grows a little, to
+   18px by 2560px, and the column with it, so it's never a strip in a field
+   of space; the reader's own text size and zoom still count. */
+:root {
+  --page-max: 80rem;
+  --gutter: clamp(1rem, 5vw, 4rem);
+  --page-pad: max(var(--gutter), (100% - var(--page-max)) / 2);
+}
+html { -webkit-text-size-adjust: 100%; font-size: clamp(100%, 100% + (100vw - 96rem) / 512, 112.5%); }
+body { margin: 0; min-height: 100vh; display: flex; flex-direction: column; background: var(--al-color-bg); color: var(--al-color-text);
+  font: 400 1rem/1.5 var(--al-font-sans); -webkit-font-smoothing: antialiased; }
+/* Links and focus are the design system's base. */
+
+/* The header is the design system's site header (.al-site-header), with
+   hunt's name and logo, in the page column. */
+.al-site-header__bar, .al-site-header__menu { padding-inline: var(--page-pad); }
+.site-head { border-block-end: 1px solid var(--al-color-line); }
+.legal-brand { display: inline-flex; align-items: center; gap: 0.75rem; font-size: 1.25rem; font-weight: 500; }
+.legal-brand svg { width: 28px; height: 28px; color: var(--al-color-accent); }
+.legal-brand svg [stroke="#fff"] { stroke: var(--al-color-bg); }
+
+body > main { flex: 1; }
+/* The footer, in line with the page's edges. */
+body > .site-foot { padding-inline: var(--page-pad); }
+
+/* In the page column, from its start; its lines no longer than read well. */
+.legal { flex: 1; width: 100%; padding: 5rem var(--page-pad) 6rem; }
+.legal > * { max-inline-size: 36rem; }
+.legal h1 { margin: 0; font-size: 3rem; font-weight: 400; line-height: 1.1; letter-spacing: -0.015em; }
+.legal .updated { margin: 1.25rem 0 0; color: var(--al-color-text-muted); font-size: 0.875rem; }
+.legal section { margin-top: 3.5rem; }
+.legal h2 { margin: 0 0 1rem; font-size: 1.25rem; font-weight: 500; line-height: 1.3; }
+.legal p, .legal li { font-family: var(--al-font-serif); font-size: 1.0625rem; line-height: 1.65; color: var(--al-color-text-muted); }
+.legal p { margin: 0 0 1rem; }
+.legal ul, .legal ol { margin: 0 0 1rem; padding-inline-start: 1.25rem; }
+.legal li { margin-bottom: 0.6rem; }
+.legal li::marker { color: var(--al-color-text-muted); }
+.legal strong { font-family: var(--al-font-sans); font-weight: 500; color: var(--al-color-text); }
+.legal code { font-family: var(--al-font-mono); font-size: 0.85em; }
+.legal section:target h2 { color: var(--al-color-accent); }
+
+@media (max-width: 52rem) {
+  .legal { padding-block: 3rem 4rem; }
+  .legal h1 { font-size: 2.25rem; }
+  .legal section { margin-top: 2.5rem; }
+}

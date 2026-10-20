@@ -1,0 +1,8 @@
+target
+.git
+.jj
+*.db
+*.db-*
+src/web/img/*.jpeg
+src/web/img/*.png
+src/web/img/.DS_Store

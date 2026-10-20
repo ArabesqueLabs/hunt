@@ -1,0 +1,47 @@
+
+/* The docs: hunt's README, with its sections listed alongside. */
+.docs { display: grid; grid-template-columns: 15rem minmax(0, 46rem); gap: 4rem; padding: 4rem var(--page-pad) 6rem; }
+.docs-toc { position: sticky; top: 2rem; align-self: start; max-height: calc(100vh - 4rem); overflow-y: auto; font-size: 0.95rem; }
+.docs-toc-title { margin: 0 0 0.75rem; font-weight: 500; color: var(--al-color-text); }
+.docs-toc ol { list-style: none; margin: 0; padding: 0; border-inline-start: 1px solid var(--al-color-line); }
+.docs-toc li a { display: block; padding: 0.3rem 0 0.3rem 0.9rem; margin-inline-start: -1px; border-inline-start: 1px solid transparent;
+  color: var(--al-color-text-muted); text-decoration: none; line-height: 1.35; }
+.docs-toc li a:hover { color: var(--al-color-text); border-inline-start-color: var(--al-color-line-strong); }
+.docs-toc li a[aria-current] { color: var(--al-color-accent); border-inline-start-color: var(--al-color-accent); }
+.docs-toc-more { margin: 1.25rem 0 0; font-size: 0.875rem; }
+.docs-toc-more a { color: var(--al-color-text-muted); }
+
+.docs-body h1 { margin: 0; font-size: 3rem; font-weight: 400; line-height: 1.1; letter-spacing: -0.015em; }
+.docs-lede, .docs-body .docs-lede { margin: 1.25rem 0 2.5rem; font: 400 1.25rem/1.6 var(--al-font-serif); color: var(--al-color-text-muted); }
+.docs-body h2 { margin: 4rem 0 1rem; padding-top: 2rem; border-top: 1px solid var(--al-color-line); font-size: 1.75rem; font-weight: 400;
+  letter-spacing: -0.01em; scroll-margin-top: 1rem; }
+.docs-body h3 { margin: 2.25rem 0 0.75rem; font-size: 1.2rem; font-weight: 500; scroll-margin-top: 1rem; }
+.docs-body h2 a.anchor, .docs-body h3 a.anchor { margin-inline-start: 0.4rem; color: var(--al-color-line-strong); text-decoration: none; opacity: 0; }
+.docs-body h2:hover a.anchor, .docs-body h3:hover a.anchor { opacity: 1; }
+.docs-body p, .docs-body li { font: 400 1.0625rem/1.7 var(--al-font-serif); color: var(--al-color-text); }
+.docs-body p { margin: 0 0 1rem; }
+.docs-body ul, .docs-body ol { margin: 0 0 1rem; padding-inline-start: 1.25rem; }
+.docs-body li { margin-bottom: 0.45rem; }
+.docs-body li > ul { margin: 0.45rem 0 0; }
+.docs-body li::marker { color: var(--al-color-text-muted); }
+.docs-body strong { font-family: var(--al-font-sans); font-weight: 500; }
+.docs-body code { font-family: var(--al-font-mono); font-size: 0.85em; padding: 0.05em 0.3em; border: 1px solid var(--al-color-line); border-radius: var(--al-radius-sm); background: var(--al-color-surface); }
+.docs-body pre { margin: 0 0 1.25rem; padding: 1.1rem 1.25rem; border: 1px solid var(--al-color-line-strong); border-radius: var(--al-radius-sm); background: var(--al-color-surface);
+  overflow-x: auto; font: 400 0.875rem/1.65 var(--al-font-mono); }
+.docs-body pre code { padding: 0; border: 0; background: none; font-size: inherit; }
+/* Code reads left to right, in the Arabic docs too: a block from its left,
+   and inline code kept whole inside the Arabic around it ("--db", not "db--"). */
+.docs-body pre { direction: ltr; text-align: left; }
+.docs-body code, .legal code { direction: ltr; unicode-bidi: isolate; }
+.docs-body table { width: 100%; margin: 0 0 1.25rem; border-collapse: collapse; font-size: 0.95rem; }
+.docs-body th, .docs-body td { padding: 0.55rem 0.75rem 0.55rem 0; border-bottom: 1px solid var(--al-color-line); text-align: start; vertical-align: top; }
+.docs-body th { font-weight: 500; border-bottom-color: var(--al-color-line-strong); }
+.docs-body hr { border: 0; border-top: 1px solid var(--al-color-line); margin: 2rem 0; }
+
+@media (max-width: 64rem) {
+  .docs { grid-template-columns: minmax(0, 1fr); gap: 2rem; padding-block: 3rem 4rem; }
+  .docs-toc { position: static; max-height: none; }
+  .docs-toc ol { columns: 2; column-gap: 1.5rem; }
+  .docs-body h1 { font-size: 2.25rem; }
+}
+@media (max-width: 40rem) { .docs-toc ol { columns: 1; } }

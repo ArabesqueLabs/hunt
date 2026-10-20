@@ -1,0 +1,6 @@
+track.md
+/target
+research.md
+
+# The global gitignore ignores dist/; the vendored design system ships its icons there
+!src/web/vendor/arabesque/dist/

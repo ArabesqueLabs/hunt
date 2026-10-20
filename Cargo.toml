@@ -1,0 +1,39 @@
+[package]
+name = "hunt"
+version = "0.14.3"
+edition = "2024"
+authors = ["Arabesque Labs <https://arabesquelabs.com>"]
+homepage = "https://arabesquelabs.com"
+repository = "https://github.com/ArabesqueLabs/hunt"
+license = "AGPL-3.0-only"
+description = "A job application tracking system for job hunters. Provides both a CLI tool and a web based dashboard."
+
+[dependencies]
+anyhow = "1"
+axum = "0.8"
+libc = "0.2"
+ego-tree = "0.11"
+clap = { version = "4.6", features = ["derive", "env"] }
+jiff = { version = "0.2", features = ["tzdb-bundle-always"] }
+regex = "1"
+rusqlite = { version = "0.40", features = ["bundled"] }
+scraper = "0.27"
+serde = { version = "1", features = ["derive"] }
+sha2 = "0.10"
+serde_json = { version = "1", features = ["preserve_order"] }
+thiserror = "2"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal"] }
+ureq = { version = "3", features = ["json"] }
+imap = { version = "3.0.0-alpha.15", default-features = false, features = ["rustls-tls"] }
+imap-proto = "0.16"
+mail-parser = "0.11"
+base64 = "0.22"
+postgres = "0.19"
+mysql = { version = "28", default-features = false, features = ["default-rust", "rustls-tls-ring"] }
+jsonwebtoken = "9"
+pulldown-cmark = { version = "0.13.4", default-features = false, features = ["html"] }
+
+[dev-dependencies]
+http-body-util = "0.1"
+tempfile = "3"
+tower = { version = "0.5", features = ["util"] }

@@ -1,0 +1,123 @@
+  <main class="home-main">
+    <section class="hero">
+      <div class="hero-text">
+        <h1>Your job hunt, captured!</h1>
+        <p class="lede">hunt keeps your whole job search in one place: the roles you apply for, the
+          interviews and people along the way, and the offers at the end, with what to do next on
+          each.</p>
+        <div class="cta">
+          {{actions}}
+          <a class="al-link" href="{{source}}" target="_blank" rel="noopener">View on GitHub <svg class="al-icon al-mirror" aria-hidden="true"><use href="/vendor/arabesque/dist/icons.svg#al-icon-external"></use></svg><span class="al-visually-hidden">(opens in a new tab)</span></a>
+        </div>
+        {{signin_note}}
+      </div>
+      <figure class="shot hero-shot">
+        <picture>
+          <source srcset="/screenshots/board-dark.png" media="(prefers-color-scheme: dark)">
+          <img src="/screenshots/board-light.png" width="1440" height="900"
+            alt="hunt's Tracking Board: applications as cards, in columns for each stage of hiring">
+        </picture>
+      </figure>
+    </section>
+
+    <section id="features" class="band">
+      <div class="band-head">
+        <h2>Everything a job search has, kept straight</h2>
+        <p>From the first link you save to the offer you accept.</p>
+      </div>
+      <ul class="features">
+        <li>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15"/><path d="M9.5 4.5v15M14.5 4.5v15"/></svg>
+          <h3>A board of every application</h3>
+          <p>Each stage of hiring is a column, in swimlanes you lay out: what's active, the offers,
+            what's closed. Divide a stage into sub stages, fold what you don't need to see, and drag
+            cards along; or switch to a table to filter, sort and change many at once, with Undo.</p>
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14l4-4M8.5 11.5l-2 2a3.2 3.2 0 0 0 4.5 4.5l2-2M15.5 12.5l2-2a3.2 3.2 0 0 0-4.5-4.5l-2 2"/></svg>
+          <h3>Import a job from its link</h3>
+          <p>Paste a posting from LinkedIn, Greenhouse, Lever, Ashby, Workable or levels.fyi, and
+            hunt fills in the role, company, pay and description. Several links for one job are
+            compared side by side.</p>
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.5"/><path d="M4.5 20.5c.6-4 3.6-6 7.5-6s6.9 2 7.5 6"/></svg>
+          <h3>Companies and people</h3>
+          <p>Recruiters, interviewers and referrers, with the companies they work at, and each
+            application they're part of. Email or call them in a click, or bring them in from
+            LinkedIn.</p>
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5.5" width="17" height="15"/><path d="M3.5 10.5h17M8 3v4M16 3v4"/></svg>
+          <h3>Interviews and next steps</h3>
+          <p>Every interview, task and follow-up has a date. See them on a calendar, by month, week
+            or day around your working hours, in your own calendar app through a feed, and on each
+            card as what's next.</p>
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.5 3.5h9l4 4v13h-13z"/><path d="M14.5 3.5v4h4M8.5 12h7M8.5 16h5"/></svg>
+          <h3>Notes, files and versions</h3>
+          <p>Keep CVs and cover letters, with their versions, and which one went where. Notes and
+            every change sit on each application's timeline.</p>
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 20.5h17M7.5 17v-5M12 17V7M16.5 17v-8"/></svg>
+          <h3>See how it's going</h3>
+          <p>Stats show where applications stand and where they stop, which sources work best, and
+            how long things take: to a first interview, and to an answer.</p>
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg>
+          <h3>An offer, accepted</h3>
+          <p>Accept an offer and hunt wraps up the rest: close the other applications, or plan a
+            note to each recruiter. Then it celebrates with you.</p>
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.4 3.5 5.2 3.5 8.5s-1.1 6.1-3.5 8.5c-2.4-2.4-3.5-5.2-3.5-8.5s1.1-6.1 3.5-8.5z"/></svg>
+          <h3>In your language, and currency</h3>
+          <p>English or Arabic, right to left. Your time zone, your way of writing dates and
+            numbers, and pay shown in your currency at today's rates.</p>
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15"/><path d="M7 9.5l3 2.5-3 2.5M12 15h5"/></svg>
+          <h3>A command line, too</h3>
+          <p>Everything the board does, from your terminal, through the same API, so scripts and
+            the browser always agree. And a backup of everything, in one file.</p>
+        </li>
+      </ul>
+    </section>
+
+    <section class="band split">
+      <div>
+        <h2>RTL Support</h2>
+        <p>hunt is written for Arabic as carefully as for English: the whole page turns round,
+          numbers can be written in Arabic numerals, and dates follow your region.</p>
+      </div>
+      <figure class="shot">
+        <picture>
+          <source srcset="/screenshots/board-ar-dark.png" media="(prefers-color-scheme: dark)">
+          <img src="/screenshots/board-ar-light.png" width="1440" height="900" loading="lazy"
+            alt="The Tracking Board in Arabic, laid out right to left">
+        </picture>
+      </figure>
+    </section>
+
+    <section id="run-it-yourself" class="band split">
+      <div>
+        <h2>Free, open source, and yours to run</h2>
+        <p>hunt is free software, under the GNU AGPL v3. Run it on your own computer or server,
+          with SQLite, PostgreSQL or MySQL, in a container or on Kubernetes. Run it for friends, or
+          a whole team, with each person's search their own.</p>
+        <p class="more"><a class="al-link al-link--arrow" href="/docs#in-a-container-or-on-kubernetes">How to run it <svg class="al-icon al-mirror" aria-hidden="true"><use href="/vendor/arabesque/dist/icons.svg#al-icon-arrow"></use></svg></a> · <a class="al-link" href="{{source}}/blob/main/CONTRIBUTING.md">Contributing</a> · <a class="al-link" href="{{source}}/blob/main/LICENSE">The license</a></p>
+      </div>
+      <pre class="code" dir="ltr" aria-label="Running hunt with Docker"><code><span class="comment"># Build it, and run it on http://localhost:4848</span>
+git clone {{source}}
+cd hunt
+docker build -t hunt .
+docker run -p 4848:4848 -v hunt-data:/data hunt
+
+<span class="comment"># Or with Rust</span>
+cargo install --git {{source}}
+hunt serve</code></pre>
+    </section>
+  </main>

@@ -1,0 +1,121 @@
+  <main class="home-main">
+    <section class="hero">
+      <div class="hero-text">
+        <h1>بحثك عن عمل، كله في قبضتك!</h1>
+        <p class="lede">hunt يجمع بحثك عن عمل كله في مكان واحد: الوظائف التي تتقدّم لها، والمقابلات
+          والأشخاص على الطريق، والعروض في النهاية، مع الخطوة التالية في كلٍّ منها.</p>
+        <div class="cta">
+          {{actions}}
+          <a class="al-link" href="{{source}}" target="_blank" rel="noopener">اطّلع عليه في GitHub <svg class="al-icon al-mirror" aria-hidden="true"><use href="/vendor/arabesque/dist/icons.svg#al-icon-external"></use></svg><span class="al-visually-hidden">(يُفتح في علامة تبويب جديدة)</span></a>
+        </div>
+        {{signin_note}}
+      </div>
+      <figure class="shot hero-shot">
+        <picture>
+          <source srcset="/screenshots/board-ar-dark.png" media="(prefers-color-scheme: dark)">
+          <img src="/screenshots/board-ar-light.png" width="1440" height="900"
+            alt="لوحة المتابعة في hunt: الطلبات بطاقاتٍ، في أعمدة لكل مرحلة من مراحل التوظيف">
+        </picture>
+      </figure>
+    </section>
+
+    <section id="features" class="band">
+      <div class="band-head">
+        <h2>كل ما في البحث عن عمل، مرتّبًا</h2>
+        <p>من أول رابط تحفظه إلى العرض الذي تقبله.</p>
+      </div>
+      <ul class="features">
+        <li>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15"/><path d="M9.5 4.5v15M14.5 4.5v15"/></svg>
+          <h3>لوحة لكل طلباتك</h3>
+          <p>كل مرحلة من مراحل التوظيف عمود، في مسارات ترتّبها بنفسك: ما هو نشط، والعروض، وما
+            أُغلق. قسّم المرحلة إلى مراحل فرعية، واطوِ ما لا تحتاج إلى رؤيته، واسحب البطاقات من مرحلة
+            إلى أخرى؛ أو انتقل إلى الجدول لتصفّي وترتّب وتغيّر كثيرًا منها دفعة واحدة، مع إمكانية
+            التراجع.</p>
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14l4-4M8.5 11.5l-2 2a3.2 3.2 0 0 0 4.5 4.5l2-2M15.5 12.5l2-2a3.2 3.2 0 0 0-4.5-4.5l-2 2"/></svg>
+          <h3>استورد الوظيفة من رابطها</h3>
+          <p>الصق إعلان وظيفة من LinkedIn أو Greenhouse أو Lever أو Ashby أو Workable أو
+            levels.fyi، فيملأ hunt المسمّى الوظيفي والشركة والأجر والوصف. وإن كان للوظيفة الواحدة
+            أكثر من رابط، تُقارَن جنبًا إلى جنب.</p>
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.5"/><path d="M4.5 20.5c.6-4 3.6-6 7.5-6s6.9 2 7.5 6"/></svg>
+          <h3>الشركات والأشخاص</h3>
+          <p>مسؤولو التوظيف والمحاورون ومن رشّحوك، مع الشركات التي يعملون فيها، وكل طلب لهم صلة به.
+            راسلهم أو اتصل بهم بنقرة، أو استوردهم من LinkedIn.</p>
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5.5" width="17" height="15"/><path d="M3.5 10.5h17M8 3v4M16 3v4"/></svg>
+          <h3>المقابلات والخطوات التالية</h3>
+          <p>لكل مقابلة ومهمة ومتابعة موعد. تراها في التقويم، بالشهر أو الأسبوع أو اليوم حول ساعات
+            عملك، وفي تطبيق التقويم الخاص بك عبر رابط اشتراك، وعلى كل بطاقة خطوةً تالية.</p>
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.5 3.5h9l4 4v13h-13z"/><path d="M14.5 3.5v4h4M8.5 12h7M8.5 16h5"/></svg>
+          <h3>الملاحظات والملفات وإصداراتها</h3>
+          <p>احتفظ بسيرك الذاتية وخطابات التقديم بإصداراتها، وأيّها أُرسل إلى أين. والملاحظات وكل تغيير
+            على الخط الزمني لكل طلب.</p>
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 20.5h17M7.5 17v-5M12 17V7M16.5 17v-8"/></svg>
+          <h3>اعرف كيف يسير بحثك</h3>
+          <p>الإحصاءات تُريك أين وصلت طلباتك وأين تتوقف، وأيّ المصادر أنجح، وكم يستغرق كل شيء: حتى أول
+            مقابلة، وحتى الرد.</p>
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg>
+          <h3>عرض مقبول</h3>
+          <p>اقبل عرضًا ويتولّى hunt إنهاء الباقي: أغلق الطلبات الأخرى، أو خطّط لرسالة إلى كل مسؤول
+            توظيف. ثم يحتفل معك.</p>
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.4 3.5 5.2 3.5 8.5s-1.1 6.1-3.5 8.5c-2.4-2.4-3.5-5.2-3.5-8.5s1.1-6.1 3.5-8.5z"/></svg>
+          <h3>بلغتك وعملتك</h3>
+          <p>بالإنجليزية أو بالعربية من اليمين إلى اليسار. بمنطقتك الزمنية، وطريقتك في كتابة التواريخ
+            والأرقام، والأجر معروضًا بعملتك بأسعار اليوم.</p>
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15"/><path d="M7 9.5l3 2.5-3 2.5M12 15h5"/></svg>
+          <h3>وسطر أوامر أيضًا</h3>
+          <p>كل ما تفعله اللوحة، من الطرفية، عبر واجهة البرمجة نفسها، فتتّفق النصوص البرمجية والمتصفح
+            دائمًا. ونسخة احتياطية لكل شيء، في ملف واحد.</p>
+        </li>
+      </ul>
+    </section>
+
+    <section class="band split">
+      <div>
+        <h2>دعم الكتابة من اليمين إلى اليسار</h2>
+        <p>hunt مكتوب للعربية بالعناية نفسها التي كُتب بها للإنجليزية: الصفحة كلها تنقلب، ويمكن
+          كتابة الأرقام بالأرقام العربية الهندية، والتواريخ تتبع منطقتك.</p>
+      </div>
+      <figure class="shot">
+        <picture>
+          <source srcset="/screenshots/application-ar-dark.png" media="(prefers-color-scheme: dark)">
+          <img src="/screenshots/application-ar-light.png" width="1440" height="900" loading="lazy"
+            alt="صفحة طلب بالعربية، من اليمين إلى اليسار">
+        </picture>
+      </figure>
+    </section>
+
+    <section id="run-it-yourself" class="band split">
+      <div>
+        <h2>مجاني، ومفتوح المصدر، وبين يديك</h2>
+        <p>hunt برمجيات حرة، بموجب رخصة <span dir="ltr" lang="en">GNU AGPL v3</span>. شغّله على حاسوبك أو
+          خادمك، مع SQLite أو PostgreSQL أو MySQL، في حاوية أو على Kubernetes. وشغّله لأصدقائك، أو
+          لفريق كامل، ويبقى بحث كل شخص له وحده.</p>
+        <p class="more"><a class="al-link al-link--arrow" href="/ar/docs#في-حاوية-أو-على-kubernetes">كيف تشغّله <svg class="al-icon al-mirror" aria-hidden="true"><use href="/vendor/arabesque/dist/icons.svg#al-icon-arrow"></use></svg></a> · <a class="al-link" href="{{source}}/blob/main/CONTRIBUTING.md">المساهمة</a> · <a class="al-link" href="{{source}}/blob/main/LICENSE">الرخصة</a></p>
+      </div>
+      <pre class="code" dir="ltr" aria-label="تشغيل hunt بـDocker"><code><span class="comment"># Build it, and run it on http://localhost:4848</span>
+git clone {{source}}
+cd hunt
+docker build -t hunt .
+docker run -p 4848:4848 -v hunt-data:/data hunt
+
+<span class="comment"># Or with Rust</span>
+cargo install --git {{source}}
+hunt serve</code></pre>
+    </section>
+  </main>

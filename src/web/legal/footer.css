@@ -1,0 +1,13 @@
+/* The footer under every page, the design system's (.al-footer), as
+   arabesquelabs.com's: the studio's lockup and the links on one line, the
+   legal lines under them. hunt gives it the page's gutter. */
+.site-foot { padding-inline: 2rem; }
+.site-foot .al-lockup { font-size: var(--al-text-base); }
+.al-footer__legal p { margin: 0; line-height: 1.6; }
+/* English, in an Arabic page: still left to right, set to the page's side. */
+[dir="rtl"] .al-footer__legal [dir="ltr"] { text-align: right; }
+@media (max-width: 52rem) {
+  /* One column, not wrapping: the legal line's flex-basis (100%, for a row)
+     would otherwise wrap it into a second column, off a phone's screen. */
+  .site-foot { padding-inline: 1rem; flex-direction: column; flex-wrap: nowrap; }
+}

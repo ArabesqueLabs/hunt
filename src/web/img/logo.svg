@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" style="overflow:hidden" aria-hidden="true">
+  <!-- Outer Square Border -->
+  <rect x="3.2" y="3.2" width="57.6" height="57.6" />
+
+  <!-- Simplified 12-Point Starburst -->
+  <path d="M32 8L36.5 22L51 17L42 28.5L56 32L42 35.5L51 47L36.5 42L32 56L27.5 42L13 47L22 35.5L8 32L22 28.5L13 17L27.5 22Z" />
+
+  <!-- Central Resume Document -->
+  <rect x="26" y="24" width="12" height="16" rx="1" stroke-width="1.8" />
+  <line x1="28.5" y1="28" x2="33.5" y2="28" stroke-width="1.5" />
+  <line x1="28.5" y1="31" x2="35.5" y2="31" stroke-width="1.5" />
+  <line x1="28.5" y1="34" x2="32.5" y2="34" stroke-width="1.5" />
+
+  <!-- Status Checkmark Badge -->
+  <circle cx="36" cy="38" r="3.5" fill="currentColor" stroke="none" />
+  <path d="M34.5 38l1 1 2-2" stroke="#fff" stroke-width="1.2" />
+</svg>
