@@ -10,11 +10,21 @@ pub const DEFAULT_URL: &str = "http://127.0.0.1:4848";
 /// id and secret, from these variables.
 const ACCESS_ID_VAR: &str = "HUNT_ACCESS_CLIENT_ID";
 const ACCESS_SECRET_VAR: &str = "HUNT_ACCESS_CLIENT_SECRET";
+/// One person's hunt's password, for a hunt that has one (HUNT_PASSWORD on
+/// both sides).
+const PASSWORD_VAR: &str = "HUNT_PASSWORD";
+/// Behind a sign-in proxy, from an address hunt trusts as the proxy's (the
+/// same machine, say): its header (HUNT_AUTH_HEADER), saying who's asking
+/// (HUNT_USER).
+const AUTH_HEADER_VAR: &str = "HUNT_AUTH_HEADER";
+const USER_VAR: &str = "HUNT_USER";
 
 pub struct Client {
     base: String,
     agent: Agent,
     access: Option<(String, String)>,
+    password: Option<String>,
+    user: Option<(String, String)>,
 }
 
 impl Client {
@@ -34,11 +44,26 @@ impl Client {
             base: base.trim_end_matches('/').to_string(),
             agent,
             access,
+            password: std::env::var(PASSWORD_VAR).ok().filter(|p| !p.is_empty()),
+            user: match (std::env::var(AUTH_HEADER_VAR), std::env::var(USER_VAR)) {
+                (Ok(h), Ok(u)) if !h.is_empty() && !u.is_empty() => Some((h, u)),
+                _ => None,
+            },
         }
     }
 
-    /// A request to the API, with the service token if there is one.
+    /// A request to the API, with the service token if there is one, the
+    /// password if there's one of those, and who's asking, behind a sign-in
+    /// proxy.
     fn with_access<B>(&self, req: ureq::RequestBuilder<B>) -> ureq::RequestBuilder<B> {
+        let req = match &self.password {
+            Some(p) => req.header("Authorization", format!("Bearer {p}")),
+            None => req,
+        };
+        let req = match &self.user {
+            Some((header, user)) => req.header(header.as_str(), user.as_str()),
+            None => req,
+        };
         match &self.access {
             Some((id, secret)) => req
                 .header("CF-Access-Client-Id", id.as_str())

@@ -43,7 +43,8 @@ fn shared_hunt() -> Router {
     hunt::api::router_tenants(db, tenants)
 }
 
-/// A shared hunt run for others by Arabesque Labs: with its legal pages.
+/// A shared hunt run for others by Arabesque Labs: with careerhunt.app's
+/// terms to agree to, and its legal pages linked.
 fn hosted_hunt() -> Router {
     let db = Arc::new(Mutex::new(test_db()));
     let tenants = Tenants::open(
@@ -52,8 +53,9 @@ fn hosted_hunt() -> Router {
         IdentitySource::Header("x-hunt-user".into()),
     )
     .unwrap();
-    let site = hunt::legal::Site {
-        operator: Some(hunt::legal::Legal::arabesque_labs()),
+    let site = hunt::site::Site {
+        url: Some("https://careerhunt.app".into()),
+        operator: Some("Arabesque Labs Ltd".into()),
         ..Default::default()
     };
     hunt::api::router_run_by(db, tenants, site)
@@ -693,37 +695,39 @@ async fn asking_needs_agreeing_to_the_terms() {
     let agreed = bob["agreed_terms"]
         .as_str()
         .unwrap_or_else(|| panic!("{bob}"));
-    assert!(agreed.starts_with(hunt::legal::UPDATED), "{agreed}");
+    assert!(agreed.starts_with(hunt::site::UPDATED), "{agreed}");
 }
 
 #[tokio::test]
-async fn the_privacy_notice_and_terms_need_no_sign_in() {
+async fn the_website_has_the_legal_pages_and_the_app_links_them() {
     let app = hosted_hunt();
-    for (path, title) in [
-        ("/privacy", "Privacy notice"),
-        ("/terms", "Terms of use"),
-        ("/data-deletion", "Deleting your data"),
+    // The pages hunt once served, at the website now, Arabic and all.
+    for (path, to) in [
+        ("/privacy", "https://careerhunt.app/privacy/"),
+        ("/terms", "https://careerhunt.app/terms/"),
+        ("/data-deletion", "https://careerhunt.app/data-deletion/"),
+        ("/docs", "https://careerhunt.app/docs/"),
+        ("/ar/", "https://careerhunt.app/ar/"),
+        ("/ar/privacy", "https://careerhunt.app/ar/privacy/"),
     ] {
         let res = app
             .clone()
             .oneshot(Request::builder().uri(path).body(Body::empty()).unwrap())
             .await
             .unwrap();
-        assert_eq!(res.status(), StatusCode::OK, "{path}");
-        let body = res.into_body().collect().await.unwrap().to_bytes();
-        let page = String::from_utf8_lossy(&body);
-        assert!(page.contains(&format!("<h1>{title}</h1>")), "{path}");
-        // The company's registered details: on its notice and terms.
-        if path != "/data-deletion" {
-            assert!(page.contains("company number 16408080"), "{path}");
-        }
+        assert_eq!(res.status(), StatusCode::PERMANENT_REDIRECT, "{path}");
+        assert_eq!(res.headers()["location"], to, "{path}");
     }
-    // And the app's page carries the footer, with the company's details.
+    let meta = ok(&app, BOB, "GET", "/api/meta", None).await;
+    assert_eq!(meta["terms"], true);
+    assert_eq!(meta["site"], "https://careerhunt.app");
+    assert_eq!(meta["operator"], "Arabesque Labs Ltd");
+    // The app's page carries the footer, linking the website's pages.
     let res = app
         .clone()
         .oneshot(
             Request::builder()
-                .uri("/app")
+                .uri("/")
                 .header("x-hunt-user", ADMIN)
                 .body(Body::empty())
                 .unwrap(),
@@ -732,47 +736,14 @@ async fn the_privacy_notice_and_terms_need_no_sign_in() {
         .unwrap();
     let body = res.into_body().collect().await.unwrap().to_bytes();
     let page = String::from_utf8_lossy(&body);
-    assert!(page.contains(r#"<a href="/privacy" data-reload>Privacy notice</a>"#));
+    assert!(page.contains(r#"href="https://careerhunt.app/privacy/" target="_blank" rel="noopener">Privacy notice</a>"#));
     assert!(page.contains("Made with"));
-    // The home page too: public, inviting people to sign in.
+    // The front page is the app's.
     let res = app
         .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
-    let body = res.into_body().collect().await.unwrap().to_bytes();
-    assert!(String::from_utf8_lossy(&body).contains("Join the early access list"));
-}
-
-#[tokio::test]
-async fn the_site_in_arabic_needs_no_sign_in() {
-    let app = hosted_hunt();
-    for (path, heading) in [
-        ("/ar/", "انضم إلى قائمة الوصول المبكر"),
-        ("/ar/docs", "<h1>التوثيق</h1>"),
-        ("/ar/screenshots", "<h1>لقطات الشاشة</h1>"),
-        ("/ar/privacy", "<h1>إشعار الخصوصية</h1>"),
-        ("/ar/terms", "<h1>شروط الاستخدام</h1>"),
-        ("/ar/data-deletion", "<h1>حذف بياناتك</h1>"),
-    ] {
-        let res = app
-            .clone()
-            .oneshot(Request::builder().uri(path).body(Body::empty()).unwrap())
-            .await
-            .unwrap();
-        assert_eq!(res.status(), StatusCode::OK, "{path}");
-        let body = res.into_body().collect().await.unwrap().to_bytes();
-        let page = String::from_utf8_lossy(&body);
-        assert!(page.contains(r#"<html lang="ar" dir="rtl">"#), "{path}");
-        assert!(page.contains(heading), "{path}");
-    }
-    // /ar on its own is the Arabic home page.
-    let res = app
-        .oneshot(Request::builder().uri("/ar").body(Body::empty()).unwrap())
-        .await
-        .unwrap();
-    assert_eq!(res.status(), StatusCode::PERMANENT_REDIRECT);
-    assert_eq!(res.headers()["location"], "/ar/");
 }
 
 #[tokio::test]
@@ -805,7 +776,7 @@ async fn someones_own_hunt_has_no_terms_but_links_its_source() {
     let res = app
         .oneshot(
             Request::builder()
-                .uri("/app")
+                .uri("/")
                 .header("x-hunt-user", ADMIN)
                 .body(Body::empty())
                 .unwrap(),
@@ -816,7 +787,7 @@ async fn someones_own_hunt_has_no_terms_but_links_its_source() {
     let page = String::from_utf8_lossy(&body);
     assert!(page.contains("Made with"), "the footer says who made hunt");
     assert!(
-        page.contains(hunt::legal::SOURCE),
+        page.contains(hunt::site::SOURCE),
         "the footer links the source"
     );
     assert!(!page.contains("/privacy"));
@@ -1468,4 +1439,55 @@ async fn each_new_account_gets_its_own_lanes() {
             "{who}"
         );
     }
+}
+
+/// A shared hunt behind a sign-in proxy, which names people in
+/// `Remote-Email`, from `trusted` addresses.
+fn proxied_hunt(trusted: &[&str]) -> Router {
+    let db = Arc::new(Mutex::new(test_db()));
+    let identity = IdentitySource::Proxy {
+        header: "Remote-Email".into(),
+        trusted: trusted
+            .iter()
+            .map(|t| hunt::auth::Cidr::parse(t).unwrap())
+            .collect(),
+    };
+    let tenants = Tenants::open(db.clone(), &[ADMIN.to_string()], identity).unwrap();
+    hunt::api::router_tenants(db, tenants)
+}
+
+/// A request for `/api/meta` from `peer`, naming `who` in the proxy's header.
+async fn meta_from(app: &Router, peer: Option<&str>, who: &str) -> Value {
+    let mut req = Request::builder()
+        .uri("/api/meta")
+        .header("remote-email", who)
+        .body(Body::empty())
+        .unwrap();
+    if let Some(peer) = peer {
+        req.extensions_mut()
+            .insert(axum::extract::ConnectInfo::<std::net::SocketAddr>(
+                peer.parse().unwrap(),
+            ));
+    }
+    let res = app.clone().oneshot(req).await.unwrap();
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    serde_json::from_slice(&body).unwrap()
+}
+
+#[tokio::test]
+async fn a_sign_in_proxys_header_counts_only_from_the_proxy() {
+    let app = proxied_hunt(&["10.0.0.0/8"]);
+    // From the proxy: who it says.
+    let meta = meta_from(&app, Some("10.1.2.3:5000"), ADMIN).await;
+    assert_eq!(meta["tenancy"]["signed_in"], true, "{meta}");
+    assert_eq!(meta["tenancy"]["account"]["email"], ADMIN);
+    // From anywhere else, or not knowing where: nobody, whatever it says.
+    for peer in [Some("192.168.1.9:5000"), None] {
+        let meta = meta_from(&app, peer, ADMIN).await;
+        assert_eq!(meta["tenancy"]["signed_in"], false, "{peer:?}: {meta}");
+    }
+    // Unless told otherwise, only this machine is the proxy.
+    let local = proxied_hunt(&["127.0.0.1", "::1"]);
+    let meta = meta_from(&local, Some("[::1]:5000"), ADMIN).await;
+    assert_eq!(meta["tenancy"]["signed_in"], true, "{meta}");
 }

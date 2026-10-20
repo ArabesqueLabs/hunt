@@ -28,5 +28,9 @@ don't degrade the hosted service while testing.
 - **`--identity-header`** trusts a request header to say who someone is.
   It's for trying hunt out on your own machine, never for a hunt others can
   reach.
-- **One person's hunt** has no sign-in of its own: keep it on your machine,
-  or put it behind something that has one.
+- **One person's hunt** needs no sign-in on your own machine. Anywhere
+  else, give it a password (`HUNT_PASSWORD`), behind HTTPS, or put a
+  sign-in in front of it.
+- **`--auth-header`** takes a sign-in proxy's word for who someone is, only
+  from `--trusted-proxies`: keep that list to the proxy, and hunt's own port
+  off the internet.

@@ -59,6 +59,20 @@ enum Command {
         /// asking. Only for trying hunt out, never where others can reach it
         #[arg(long, env = "HUNT_IDENTITY_HEADER", hide = true)]
         identity_header: Option<String>,
+        /// One person's hunt, with a sign-in: this password, at /login (the
+        /// CLI sends its own HUNT_PASSWORD). 8 characters or more
+        #[arg(long, env = "HUNT_PASSWORD", hide_env_values = true)]
+        password: Option<String>,
+        /// With --tenants, instead of Access: a sign-in proxy (Authelia,
+        /// Authentik, oauth2-proxy, Tailscale) names who's asking in this
+        /// header (e.g. Remote-Email), taken only from --trusted-proxies
+        #[arg(long, env = "HUNT_AUTH_HEADER")]
+        auth_header: Option<String>,
+        /// With --auth-header: the addresses the sign-in proxy's requests come
+        /// from, or ranges (10.0.0.0/8), comma-separated [default: this
+        /// machine, 127.0.0.1 and ::1]
+        #[arg(long, env = "HUNT_TRUSTED_PROXIES", value_delimiter = ',')]
+        trusted_proxies: Vec<String>,
         /// Turn on an experiment, a feature still being tried out: `name`
         /// for everyone, or `name=you@example.com,…` for those accounts.
         /// Repeat it for several (in HUNT_EXPERIMENTS, separate them with
@@ -367,6 +381,9 @@ pub fn run() -> Result<()> {
             access_team,
             access_aud,
             identity_header,
+            password,
+            auth_header,
+            trusted_proxies,
             experiments,
         } => {
             // Several people: who the admins are, and how to tell who's asking.
@@ -380,6 +397,21 @@ pub fn run() -> Result<()> {
                     bail!("--tenants needs an admin: --admins you@example.com (or HUNT_ADMINS)");
                 }
                 let identity = match (identity_header, access_team, access_aud) {
+                    _ if auth_header.is_some() => {
+                        let trusted = if trusted_proxies.is_empty() {
+                            hunt::auth::Cidr::local()
+                        } else {
+                            trusted_proxies
+                                .iter()
+                                .filter(|t| !t.trim().is_empty())
+                                .map(|t| hunt::auth::Cidr::parse(t))
+                                .collect::<hunt::Result<Vec<_>>>()?
+                        };
+                        hunt::tenants::IdentitySource::Proxy {
+                            header: auth_header.clone().unwrap_or_default(),
+                            trusted,
+                        }
+                    }
                     (Some(h), _, _) => {
                         eprintln!(
                             "hunt: trusting the {h} header to say who's asking: only for trying hunt out"
@@ -390,8 +422,9 @@ pub fn run() -> Result<()> {
                         hunt::tenants::IdentitySource::access(&team, &aud)
                     }
                     _ => bail!(
-                        "--tenants needs Cloudflare Access to say who's asking: --access-team and \
-                         --access-aud (or HUNT_ACCESS_TEAM and HUNT_ACCESS_AUD)"
+                        "--tenants needs to know who's asking: Cloudflare Access (--access-team \
+                         and --access-aud, or HUNT_ACCESS_TEAM and HUNT_ACCESS_AUD), or a sign-in \
+                         proxy's header (--auth-header, or HUNT_AUTH_HEADER)"
                     ),
                 };
                 Some(hunt::api::TenancyConfig { admins, identity })
@@ -422,7 +455,21 @@ pub fn run() -> Result<()> {
                     ""
                 }
             );
-            hunt::api::serve(db, &addr, tenancy, experiments)?;
+            let password = match password.filter(|p| !p.is_empty()) {
+                Some(_) if tenancy.is_some() => bail!(
+                    "HUNT_PASSWORD is for one person's hunt: with --tenants, people sign in \
+                     through Cloudflare Access or a sign-in proxy (HUNT_AUTH_HEADER)"
+                ),
+                Some(p) => Some(hunt::auth::Password::new(&p)?),
+                None => None,
+            };
+            if auth_header.is_some() && tenancy.is_none() {
+                bail!(
+                    "HUNT_AUTH_HEADER is for several people (--tenants): for one person's hunt \
+                     behind a sign-in proxy, hunt needs nothing"
+                );
+            }
+            hunt::api::serve(db, &addr, tenancy, experiments, password)?;
         }
         Command::Board { all } => {
             let since = time::date(

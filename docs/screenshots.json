@@ -1,0 +1,170 @@
+[
+  {
+    "name": "board",
+    "title": "Tracking board",
+    "about": "Applications by stage, with what's next on each; the cycles running side by side.",
+    "phone": false
+  },
+  {
+    "name": "swimlanes",
+    "title": "Swimlanes, sub stages and folding",
+    "about": "The board's rows: what's active, the offers, and what's closed, each stage a column. Interviewing divided into sub stages; Backlog's Other, and the closed, folded into piles.",
+    "phone": false
+  },
+  {
+    "name": "table",
+    "title": "Tracking board, as a table",
+    "about": "Every application, sortable, with the board's filters.",
+    "phone": false
+  },
+  {
+    "name": "new-application",
+    "title": "Adding an application",
+    "about": "From a posting's link, or by hand, onto the board.",
+    "phone": false
+  },
+  {
+    "name": "application",
+    "title": "An application",
+    "about": "What's next, its timeline, and its pay, details, prep, links and people beside.",
+    "phone": false
+  },
+  {
+    "name": "cycles",
+    "title": "Cycles",
+    "about": "Job searches, several at once; one that has ended keeps its board.",
+    "phone": false
+  },
+  {
+    "name": "past-cycle",
+    "title": "A cycle that ended",
+    "about": "Its board, read-only, as it was when it ended.",
+    "phone": false
+  },
+  {
+    "name": "prep",
+    "title": "Prep",
+    "about": "What to read, practise and rehearse, around the interviews coming up.",
+    "phone": false
+  },
+  {
+    "name": "calendar",
+    "title": "Calendar",
+    "about": "Interviews, next actions and deadlines.",
+    "phone": false
+  },
+  {
+    "name": "calendar-week",
+    "title": "Calendar: a week",
+    "about": "Each event at its time, around what is coming up this week.",
+    "phone": false
+  },
+  {
+    "name": "companies",
+    "title": "Contacts: companies",
+    "about": "",
+    "phone": false
+  },
+  {
+    "name": "company",
+    "title": "A company",
+    "about": "Its details, its applications with their stages and tags, and its people.",
+    "phone": false
+  },
+  {
+    "name": "people",
+    "title": "Contacts: people",
+    "about": "",
+    "phone": false
+  },
+  {
+    "name": "person",
+    "title": "A person",
+    "about": "",
+    "phone": false
+  },
+  {
+    "name": "files",
+    "title": "Files",
+    "about": "Resumes, cover letters, offers and more, each with its versions.",
+    "phone": false
+  },
+  {
+    "name": "file",
+    "title": "A file",
+    "about": "Its versions, with a preview.",
+    "phone": false
+  },
+  {
+    "name": "notes",
+    "title": "Notes",
+    "about": "",
+    "phone": false
+  },
+  {
+    "name": "stats",
+    "title": "Interview stats",
+    "about": "How the search is going.",
+    "phone": false
+  },
+  {
+    "name": "take-home",
+    "title": "Take-home pay",
+    "about": "What a salary leaves after income tax and National Insurance, and what it costs the employer.",
+    "phone": false
+  },
+  {
+    "name": "take-home-compare",
+    "title": "Take-home pay, three ways",
+    "about": "A day rate as an employee, and as a contractor inside and outside IR35, side by side.",
+    "phone": false
+  },
+  {
+    "name": "activity",
+    "title": "Audit Log",
+    "about": "Every change, newest first.",
+    "phone": false
+  },
+  {
+    "name": "settings",
+    "title": "Settings",
+    "about": "",
+    "phone": false
+  },
+  {
+    "name": "settings-board",
+    "title": "Settings: the board",
+    "about": "Swimlanes, their stages and the stages' sub stages: which stages close a process, which start folded, and where a card goes by default.",
+    "phone": false
+  },
+  {
+    "name": "board-ar",
+    "title": "In Arabic: the board",
+    "about": "Right to left, with Arabic-Indic digits; what people wrote stays as written.",
+    "phone": false
+  },
+  {
+    "name": "application-ar",
+    "title": "In Arabic: an application",
+    "about": "",
+    "phone": false
+  },
+  {
+    "name": "celebrate",
+    "title": "An offer accepted",
+    "about": "The home page celebrates it, with the search that led there below.",
+    "phone": false
+  },
+  {
+    "name": "phone-board",
+    "title": "On a phone: the board",
+    "about": "",
+    "phone": true
+  },
+  {
+    "name": "phone-application",
+    "title": "On a phone: an application",
+    "about": "",
+    "phone": true
+  }
+]

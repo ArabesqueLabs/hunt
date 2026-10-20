@@ -764,9 +764,8 @@ async fn suggestions_and_search() {
 async fn the_web_ui_is_served() {
     let app = app();
     for path in [
-        "/app",
-        "/app/companies/1",
         "/",
+        "/companies/1",
         "/app.js",
         "/cycles.js",
         "/prep.js",
@@ -3770,7 +3769,7 @@ async fn the_page_is_served_in_the_language_chosen() {
         }
     };
     // English, left to right, unless another is chosen.
-    assert!(html("/app").await.contains(r#"<html lang="en" dir="ltr">"#));
+    assert!(html("/").await.contains(r#"<html lang="en" dir="ltr">"#));
     ok(
         &app,
         "PATCH",
@@ -3778,7 +3777,7 @@ async fn the_page_is_served_in_the_language_chosen() {
         Some(json!({"language": "ar"})),
     )
     .await;
-    for path in ["/app", "/app/companies", "/app/applications/1"] {
+    for path in ["/", "/companies", "/applications/1"] {
         assert!(
             html(path).await.contains(r#"<html lang="ar" dir="rtl">"#),
             "{path}"
@@ -3791,7 +3790,7 @@ async fn the_page_is_served_in_the_language_chosen() {
         Some(json!({"language": "en"})),
     )
     .await;
-    assert!(html("/app").await.contains(r#"<html lang="en" dir="ltr">"#));
+    assert!(html("/").await.contains(r#"<html lang="en" dir="ltr">"#));
 }
 
 #[tokio::test]
@@ -3805,28 +3804,37 @@ async fn the_dashboard_lives_under_app_and_old_addresses_lead_there() {
                 .unwrap()
         }
     };
-    // The home page is at /, for one person's own hunt too; /about, where it was, leads there.
+    // The front page is the app's board, and each of its pages is at its own
+    // address; /about, where the home page once was, leads to it.
     assert_eq!(get("/").await.status(), StatusCode::OK);
+    assert_eq!(get("/companies/3?edit=1").await.status(), StatusCode::OK);
     let res = get("/about").await;
     assert_eq!(res.status(), StatusCode::PERMANENT_REDIRECT);
     assert_eq!(res.headers()["location"], "/");
-    // Addresses from before: the same page, under /app, with their query.
-    let res = get("/companies/3?edit=1").await;
+    // Addresses from when it was under /app (a bookmark, the bookmarklet):
+    // the same page, without it, with their query.
+    for (old, new) in [
+        ("/app", "/"),
+        ("/app/", "/"),
+        ("/app/companies/3?edit=1", "/companies/3?edit=1"),
+        ("/app/linkedin?d=%7B%7D", "/linkedin?d=%7B%7D"),
+    ] {
+        let res = get(old).await;
+        assert_eq!(res.status(), StatusCode::PERMANENT_REDIRECT, "{old}");
+        assert_eq!(res.headers()["location"], new, "{old}");
+    }
+    // The website's pages are its own (careerhunt.app's): without one, the
+    // docs are the README on GitHub, and the rest isn't here.
+    let res = get("/docs").await;
     assert_eq!(res.status(), StatusCode::PERMANENT_REDIRECT);
-    assert_eq!(res.headers()["location"], "/app/companies/3?edit=1");
     assert_eq!(
-        get("/screenshots/board-light.png").await.status(),
-        StatusCode::OK
+        res.headers()["location"],
+        format!("{}#readme", hunt::site::SOURCE)
     );
-    // The site's other pages: public, in either kind of hunt.
-    assert_eq!(get("/docs").await.status(), StatusCode::OK);
-    assert_eq!(get("/screenshots").await.status(), StatusCode::OK);
+    assert_eq!(get("/screenshots").await.status(), StatusCode::NOT_FOUND);
+    assert_eq!(get("/privacy").await.status(), StatusCode::NOT_FOUND);
     // Not pages: not found.
     assert_eq!(get("/api/nothing").await.status(), StatusCode::NOT_FOUND);
-    assert_eq!(
-        get("/screenshots/secret.png").await.status(),
-        StatusCode::NOT_FOUND
-    );
 }
 
 #[tokio::test]
@@ -5021,7 +5029,7 @@ async fn scripts_and_styles_are_never_served_stale() {
         }
     };
     // The page names this build's assets by a fingerprint of them.
-    let (_, page) = get("/app").await;
+    let (_, page) = get("/").await;
     let at = page.find("/app.js?v=").expect("app.js is fingerprinted");
     let print: String = page[at + 10..]
         .chars()
@@ -5065,12 +5073,8 @@ async fn pages_are_never_served_stale_and_the_api_never_kept() {
                 .map(|v| v.to_str().unwrap().to_string())
         }
     };
-    // Pages are asked about each time, so they name this build's assets.
-    for path in ["/", "/docs", "/screenshots"] {
-        assert_eq!(cache(path).await.as_deref(), Some("no-cache"), "{path}");
-    }
     // The app's, in the person's language, only by their own browser.
-    for path in ["/app", "/app/", "/app/board"] {
+    for path in ["/", "/board", "/applications/2"] {
         assert_eq!(
             cache(path).await.as_deref(),
             Some("private, no-cache"),
@@ -5526,4 +5530,94 @@ async fn a_stage_has_a_default_sub_stage() {
     )
     .await;
     assert_eq!(patched["lane_id"], Value::Null, "a stage with none");
+}
+
+#[tokio::test]
+async fn a_password_keeps_the_app_and_its_data_to_whoever_signs_in() {
+    let app = hunt::api::router_with_password(
+        test_db(),
+        hunt::auth::Password::new("correct horse").unwrap(),
+    );
+    let send = |req: Request<Body>| {
+        let app = app.clone();
+        async move { app.oneshot(req).await.unwrap() }
+    };
+    let get = |path: &str| Request::get(path).body(Body::empty()).unwrap();
+    // Not signed in: the app sends you to sign in, where you were going kept;
+    // the API says so.
+    let res = send(get("/board?mode=table")).await;
+    assert!(res.status().is_redirection());
+    assert_eq!(
+        res.headers()["location"],
+        "/login?next=/board%3Fmode%3Dtable"
+    );
+    assert_eq!(
+        send(get("/api/meta")).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    // What needs nobody: the sign-in page, the health check, the styles, and
+    // a shared calendar's link (its own secret, so not this).
+    assert_eq!(send(get("/login")).await.status(), StatusCode::OK);
+    assert_eq!(send(get("/healthz")).await.status(), StatusCode::OK);
+    assert_eq!(send(get("/style.css")).await.status(), StatusCode::OK);
+    assert_ne!(
+        send(get("/api/calendar/nothing.ics")).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    let login = |password: &str| {
+        Request::post("/login")
+            .header("content-type", "application/x-www-form-urlencoded")
+            .body(Body::from(format!("password={password}&next=%2Fstats")))
+            .unwrap()
+    };
+    // The wrong password: asked again.
+    assert_eq!(
+        send(login("wrong+one")).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    // The right one: a cookie, and where you were going.
+    let res = send(login("correct+horse")).await;
+    assert!(res.status().is_redirection());
+    assert_eq!(res.headers()["location"], "/stats");
+    let cookie = res.headers()["set-cookie"].to_str().unwrap().to_string();
+    assert!(
+        cookie.contains("HttpOnly") && cookie.contains("SameSite=Lax"),
+        "{cookie}"
+    );
+    let session = cookie.split(';').next().unwrap().to_string();
+    let with = |path: &str, header: (&str, &str)| {
+        Request::get(path)
+            .header(header.0, header.1)
+            .body(Body::empty())
+            .unwrap()
+    };
+    assert_eq!(
+        send(with("/api/meta", ("cookie", &session))).await.status(),
+        StatusCode::OK
+    );
+    assert_eq!(
+        send(with("/", ("cookie", &session))).await.status(),
+        StatusCode::OK
+    );
+    // The CLI: the password itself.
+    assert_eq!(
+        send(with("/api/meta", ("authorization", "Bearer correct horse")))
+            .await
+            .status(),
+        StatusCode::OK
+    );
+    assert_eq!(
+        send(with("/api/meta", ("authorization", "Bearer guess")))
+            .await
+            .status(),
+        StatusCode::UNAUTHORIZED
+    );
+    // Signing out: the cookie, gone.
+    let res = send(get("/logout")).await;
+    assert!(
+        res.headers()["set-cookie"]
+            .to_str()
+            .unwrap()
+            .contains("Max-Age=0")
+    );
 }

@@ -55,36 +55,36 @@
     <!-- On a phone: the logo, where you are (app.js names it), and the menu
          button (the design system's js/sidebar.js). -->
     <div class="al-sidebar__bar">
-      <a class="brand" href="/app" aria-label="hunt, the board"><!-- logo: img/logo.svg, put in when served --></a>
+      <a class="brand" href="/" aria-label="hunt, the board"><!-- logo: img/logo.svg, put in when served --></a>
       <span class="al-sidebar__here" id="sidebar-here"></span>
       <button type="button" class="al-button al-button--icon al-button--quiet al-sidebar__toggle" data-sidebar-menu-toggle aria-controls="sidebar-menu" aria-expanded="false" aria-label="Menu"><svg class="al-icon al-sidebar__open" aria-hidden="true"><use href="/vendor/arabesque/dist/icons.svg#al-icon-menu"></use></svg><svg class="al-icon al-sidebar__close" aria-hidden="true"><use href="/vendor/arabesque/dist/icons.svg#al-icon-close"></use></svg></button>
     </div>
     <!-- The sidebar itself; on a phone, the menu that drops below the bar. -->
     <div class="al-sidebar__menu" id="sidebar-menu">
-    <a class="brand" href="/app" aria-label="hunt, the board">
+    <a class="brand" href="/" aria-label="hunt, the board">
       <!-- logo: img/logo.svg, put in when served -->
       <span class="al-sidebar__label">hunt</span>
     </a>
     <!-- Which cycle the board shows, and the others: drawn by app.js. -->
     <div class="cycle-box" id="cycle-box" hidden></div>
     <nav class="al-sidebar__nav" aria-label="Sections">
-      <a class="al-sidebar__link" href="/app" data-nav="board"><svg class="al-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM8 7v7M12 7v4M16 7v9"/></svg><span class="al-sidebar__label">Tracking board</span></a>
-      <a class="al-sidebar__link" href="/app/cycles" data-nav="cycles"><svg class="al-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 22V4M4 4h12l-2 4 2 4H4"/></svg><span class="al-sidebar__label">Cycles</span></a>
-      <a class="al-sidebar__link" href="/app/calendar" data-nav="calendar"><svg class="al-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM16 2v4M8 2v4M3 10h18"/></svg><span class="al-sidebar__label">Calendar</span></a>
-      <a class="al-sidebar__link" href="/app/prep" data-nav="prep"><svg class="al-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2zM22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z"/></svg><span class="al-sidebar__label">Prep</span></a>
-      <a class="al-sidebar__link" href="/app/contacts" data-nav="contacts"><svg class="al-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM4 21a8 8 0 0 1 16 0"/></svg><span class="al-sidebar__label">Contacts</span></a>
-      <a class="al-sidebar__link" href="/app/files" data-nav="files"><svg class="al-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2z"/></svg><span class="al-sidebar__label">Files</span></a>
-      <a class="al-sidebar__link" href="/app/notes" data-nav="notes"><svg class="al-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M8 13h8M8 17h5"/></svg><span class="al-sidebar__label">Notes</span></a>
-      <a class="al-sidebar__link" href="/app/stats" data-nav="stats"><svg class="al-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v18h18M8 17v-5M13 17V8M18 17v-8"/></svg><span class="al-sidebar__label">Stats</span></a>
-      <a class="al-sidebar__link" href="/app/take-home" data-nav="take-home"><svg class="al-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h12a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zM8 6h8M8 11h.01M12 11h.01M16 11h.01M8 15h.01M12 15h.01M16 15h.01M8 19h.01M12 19h.01M16 19h.01"/></svg><span class="al-sidebar__label">Take-home pay <svg class="uk-flag" viewBox="0 0 60 30" role="img" aria-label="UK only, for now"><title>UK only, for now</title><clipPath id="uk-flag-t"><path d="M30 15h30v15zv15H0zH0V0zV0h30z"/></clipPath><path d="M0 0v30h60V0z" fill="#012169"/><path d="M0 0l60 30m0-30L0 30" stroke="#fff" stroke-width="6"/><path d="M0 0l60 30m0-30L0 30" clip-path="url(#uk-flag-t)" stroke="#c8102e" stroke-width="4"/><path d="M30 0v30M0 15h60" stroke="#fff" stroke-width="10"/><path d="M30 0v30M0 15h60" stroke="#c8102e" stroke-width="6"/></svg></span></a>
-      <a class="al-sidebar__link" href="/app/celebrate" data-nav="celebrate" hidden><svg class="al-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg><span class="al-sidebar__label">Your offer</span></a>
+      <a class="al-sidebar__link" href="/" data-nav="board"><svg class="al-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM8 7v7M12 7v4M16 7v9"/></svg><span class="al-sidebar__label">Tracking board</span></a>
+      <a class="al-sidebar__link" href="/cycles" data-nav="cycles"><svg class="al-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 22V4M4 4h12l-2 4 2 4H4"/></svg><span class="al-sidebar__label">Cycles</span></a>
+      <a class="al-sidebar__link" href="/calendar" data-nav="calendar"><svg class="al-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM16 2v4M8 2v4M3 10h18"/></svg><span class="al-sidebar__label">Calendar</span></a>
+      <a class="al-sidebar__link" href="/prep" data-nav="prep"><svg class="al-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2zM22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z"/></svg><span class="al-sidebar__label">Prep</span></a>
+      <a class="al-sidebar__link" href="/contacts" data-nav="contacts"><svg class="al-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM4 21a8 8 0 0 1 16 0"/></svg><span class="al-sidebar__label">Contacts</span></a>
+      <a class="al-sidebar__link" href="/files" data-nav="files"><svg class="al-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2z"/></svg><span class="al-sidebar__label">Files</span></a>
+      <a class="al-sidebar__link" href="/notes" data-nav="notes"><svg class="al-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M8 13h8M8 17h5"/></svg><span class="al-sidebar__label">Notes</span></a>
+      <a class="al-sidebar__link" href="/stats" data-nav="stats"><svg class="al-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v18h18M8 17v-5M13 17V8M18 17v-8"/></svg><span class="al-sidebar__label">Stats</span></a>
+      <a class="al-sidebar__link" href="/take-home" data-nav="take-home"><svg class="al-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h12a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zM8 6h8M8 11h.01M12 11h.01M16 11h.01M8 15h.01M12 15h.01M16 15h.01M8 19h.01M12 19h.01M16 19h.01"/></svg><span class="al-sidebar__label">Take-home pay <svg class="uk-flag" viewBox="0 0 60 30" role="img" aria-label="UK only, for now"><title>UK only, for now</title><clipPath id="uk-flag-t"><path d="M30 15h30v15zv15H0zH0V0zV0h30z"/></clipPath><path d="M0 0v30h60V0z" fill="#012169"/><path d="M0 0l60 30m0-30L0 30" stroke="#fff" stroke-width="6"/><path d="M0 0l60 30m0-30L0 30" clip-path="url(#uk-flag-t)" stroke="#c8102e" stroke-width="4"/><path d="M30 0v30M0 15h60" stroke="#fff" stroke-width="10"/><path d="M30 0v30M0 15h60" stroke="#c8102e" stroke-width="6"/></svg></span></a>
+      <a class="al-sidebar__link" href="/celebrate" data-nav="celebrate" hidden><svg class="al-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg><span class="al-sidebar__label">Your offer</span></a>
     </nav>
     <div class="al-sidebar__foot">
       <!-- The theme and the language, a click away: drawn by app.js. -->
       <div class="quick-settings" id="quick-settings" role="group" aria-label="Quick settings"></div>
       <nav class="al-sidebar__nav" aria-label="Settings">
-        <a class="al-sidebar__link" href="/app/settings" data-nav="settings"><svg class="al-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg><span class="al-sidebar__label">Settings</span></a>
-        <a class="al-sidebar__link" href="/app/admin" data-nav="admin" hidden><svg class="al-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l7.5 3v5.5c0 4.3-3.1 7.6-7.5 8.5-4.4-.9-7.5-4.2-7.5-8.5V6.5z"/></svg><span class="al-sidebar__label">Admin</span></a>
+        <a class="al-sidebar__link" href="/settings" data-nav="settings"><svg class="al-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg><span class="al-sidebar__label">Settings</span></a>
+        <a class="al-sidebar__link" href="/admin" data-nav="admin" hidden><svg class="al-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l7.5 3v5.5c0 4.3-3.1 7.6-7.5 8.5-4.4-.9-7.5-4.2-7.5-8.5V6.5z"/></svg><span class="al-sidebar__label">Admin</span></a>
         <a class="al-sidebar__link" href="/cdn-cgi/access/logout" id="logout" hidden><svg class="al-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 4.5h5v15h-5M10 8l-4 4 4 4M6 12h10"/></svg><span class="al-sidebar__label">Log out</span></a>
       </nav>
       <button type="button" class="al-sidebar__link al-sidebar__collapse" id="sidebar-toggle" aria-expanded="true"><svg class="al-icon al-mirror" aria-hidden="true"><use href="/vendor/arabesque/dist/icons.svg#al-icon-sidebar"></use></svg><span class="al-sidebar__label">Collapse sidebar</span></button>

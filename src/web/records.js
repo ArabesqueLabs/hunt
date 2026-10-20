@@ -209,7 +209,7 @@ async function showRecordPage(page, id, { editing = false, versionId = null } = 
       body);
     const show = (x) => {
       docData.shown = x;
-      history.replaceState(null, "", appPath(`/${page}/${id}?version=${x.id}`));
+      history.replaceState(null, "", `/${page}/${id}?version=${x.id}`);
       lastUrl = here();
       render();
     };

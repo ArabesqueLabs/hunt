@@ -40,6 +40,13 @@ pub enum IdentitySource {
     /// A header naming the person (`X-Hunt-User: me@example.com`), trusted
     /// as it is: for trying hunt out and for tests, never behind a network.
     Header(String),
+    /// A sign-in proxy's header naming the person (`Remote-Email`), taken
+    /// only from the proxy's addresses: Authelia, Authentik, oauth2-proxy,
+    /// Tailscale (see [`crate::auth`]).
+    Proxy {
+        header: String,
+        trusted: Vec<crate::auth::Cidr>,
+    },
 }
 
 impl IdentitySource {
@@ -284,13 +291,37 @@ impl Tenants {
 
     // ---- who's asking ----------------------------------------------------------------
 
-    /// Who a request is from, from its headers (or Access's cookie).
+    /// Who a request is from, from its headers (or Access's cookie), and,
+    /// behind a sign-in proxy, the address it came from (`peer`).
     /// Blocking: Access's keys may need fetching.
     pub fn identify(
         &self,
         headers: &axum::http::HeaderMap,
+        peer: Option<std::net::IpAddr>,
     ) -> std::result::Result<Identity, Denied> {
         match &self.identity {
+            IdentitySource::Proxy { header, trusted } => {
+                // From anywhere else, the header could say anyone.
+                if !peer.is_some_and(|ip| trusted.iter().any(|c| c.contains(ip))) {
+                    return Err(Denied::NotSignedIn(
+                        "not through the sign-in proxy: this address isn't one of HUNT_TRUSTED_PROXIES"
+                            .into(),
+                    ));
+                }
+                headers
+                    .get(header.as_str())
+                    .and_then(|v| v.to_str().ok())
+                    .and_then(|v| clean(Some(v)))
+                    .map(|email| Identity {
+                        email: Some(email.to_lowercase()),
+                        token: None,
+                    })
+                    .ok_or_else(|| {
+                        Denied::NotSignedIn(format!(
+                            "the sign-in proxy didn't say who's asking (no {header} header)"
+                        ))
+                    })
+            }
             // The header, or (in a browser, which can't send one) the
             // cookie /dev/as sets.
             IdentitySource::Header(name) => headers
@@ -352,8 +383,9 @@ impl Tenants {
     pub fn active(
         &self,
         headers: &axum::http::HeaderMap,
+        peer: Option<std::net::IpAddr>,
     ) -> std::result::Result<(Identity, Account), Denied> {
-        let who = self.identify(headers)?;
+        let who = self.identify(headers, peer)?;
         match self.account_of(&who) {
             Ok(Some(a)) if a.status == "active" => {
                 self.note_seen(&a);
@@ -849,7 +881,7 @@ impl Tenants {
 // ---- Cloudflare Access's tokens -------------------------------------------------------------
 
 /// A cookie's value, from the Cookie header.
-fn cookie(headers: &axum::http::HeaderMap, name: &str) -> Option<String> {
+pub(crate) fn cookie(headers: &axum::http::HeaderMap, name: &str) -> Option<String> {
     headers
         .get_all(axum::http::header::COOKIE)
         .iter()

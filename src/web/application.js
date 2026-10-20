@@ -1316,7 +1316,7 @@ async function showApplication(id, { processId = null, editing = false, readLink
       ] : h("p.muted.small", {}, "Nothing to prepare yet."),
       ended() ? null : h("button.al-button.al-button--quiet.al-button--sm.app-panel-add", { type: "button", onclick: () => {
         store("prep", JSON.stringify({ ...prepState(), tab: "tasks", for: String(p.id), step: "" }));
-        history.pushState(null, "", appPath("/prep"));
+        history.pushState(null, "", "/prep");
         lastUrl = here();
         showPrep({ adding: true, for: String(p.id) });
       } }, icon("plus"), h("span", {}, `Add prep for ${s.company.name}`)));

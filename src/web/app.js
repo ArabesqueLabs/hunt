@@ -15,16 +15,11 @@ let META = null;
 let BOARD = null;
 
 /** Build an element: h("li.card.mine", {onclick, dataset}, ...children). */
-// The dashboard lives under /app: the rest of the site (the home page, the
-// legal pages) is public. hunt's own pages are written without it, here
-// and in links, and get it as they're drawn or visited.
-const APP = "/app";
-const OUTSIDE = /^\/(api|cdn-cgi|dev|app)(\/|$)|^\/(about|privacy|terms|data-deletion)$|\.[a-z0-9]+$/i;
-/** A page of hunt's, at its address under /app ("/stats" → "/app/stats"). */
-const appPath = (p) => (typeof p === "string" && p.startsWith("/") && !p.startsWith("//") && !OUTSIDE.test(p.split(/[?#]/)[0])
-  ? APP + (p === "/" ? "" : p) : p);
-/** An address under /app, as hunt names the page ("/app/stats" → "/stats"). */
-const appless = (p) => (p === APP ? "/" : p.startsWith(`${APP}/`) ? p.slice(APP.length) : p);
+// The app's pages are real paths (/stats, /applications/2), drawn here as
+// they're visited. A few of hunt's addresses aren't its pages, and load as
+// pages do: the API, files, signing in and out, Cloudflare's own (/cdn-cgi/),
+// and the addresses that lead elsewhere (/app/… from before, the website's).
+const OUTSIDE = /^\/(api|cdn-cgi|dev|app|ar)(\/|$)|^\/(login|logout|healthz|about|docs|screenshots|privacy|terms|data-deletion)$|\.[a-z0-9]+$/i;
 
 /** The input types that are text fields, styled as the design system's. */
 const TEXT_FIELDS = new Set(["text", "email", "url", "search", "password", "number", "tel", "date", "datetime-local", "time", "month", "week"]);
@@ -39,7 +34,7 @@ function h(tag, attrs, ...kids) {
     else if (k === "class") el.classList.add(...String(v).split(/\s+/).filter(Boolean));
     else if (k === "dataset") Object.assign(el.dataset, v);
     else if (k === "value" || k === "checked" || k === "selected") el[k] = v;
-    else if (k === "href") el.setAttribute(k, appPath(v));
+    else if (k === "href") el.setAttribute(k, v);
     else el.setAttribute(k, v === true ? "" : v);
   }
   // Tables are the design system's too. Fields are its: a field's wrapper, text fields, selects,
@@ -205,11 +200,21 @@ const trying = (name) => (META?.experiments || []).includes(name);
 /** Take-home pay works out UK tax: for those who live in the UK (Settings → Location). */
 const takeHomeOn = () => !!PREFS.uk_resident;
 
-/** The sidebar's foot: Log out (behind Cloudflare Access), and the version. */
+/**
+ * A page of this hunt's website (its terms of use, privacy notice…): run
+ * for others, hunt has one (META.site). In English for now: careerhunt.app's
+ * Arabic pages wait for their translation to be reviewed. Once they're
+ * published, give Arabic readers theirs, under /ar.
+ */
+const sitePage = (path) => `${META.site}${path}`;
+
+/** The sidebar's foot: Log out (behind Cloudflare Access, or with a password), and the version. */
 function showSidebarFoot() {
   const out = document.getElementById("logout");
   if (out) {
-    out.hidden = !META.access;
+    // Behind Cloudflare Access, its log out; with a password, hunt's own.
+    out.hidden = !META.access && !META.password;
+    if (META.password && !META.access) out.href = "/logout";
     out.title = META.access?.email ? `Signed in as ${META.access.email}` : "";
   }
   // The version, linked to its release on GitHub (tagged v0.2.0 …).
@@ -1946,7 +1951,7 @@ function newApplication({ stageId = null } = {}) {
         if (await attempt(() => del(`applications/${card.application_id}`))) { toast("Undone"); route(); }
       } });
       await loadCycles();
-      const page = appless(location.pathname).split("/")[1] || "";
+      const page = location.pathname.split("/")[1] || "";
       if (page === "" || page === "applications") route(); else go("/");
     },
   },
@@ -2390,7 +2395,7 @@ function openImport({ url = "", current = {}, apply, kind = companyImport, found
 async function importSentProfile() {
   const data = new URLSearchParams(location.search).get("d");
   // Off the address bar, so going back or reloading doesn't import it again.
-  history.replaceState(null, "", appPath("/people"));
+  history.replaceState(null, "", "/people");
   await showList("people");
   let page;
   try { page = JSON.parse(data || ""); } catch { toast("The bookmark sent nothing hunt can read", "error"); return; }
@@ -2493,7 +2498,7 @@ const c=document.querySelector('[aria-label^="Current company"]');
 const d={url:location.href.split("?")[0],title:document.title,name:t(n),top:t(top).slice(0,3000),
 about:t(sec("about")).slice(0,4000),experience:t(sec("experience")).slice(0,2500),
 company:c?c.getAttribute("aria-label")||"":"",photo:ph.s};
-window.open(H+"/app/linkedin?d="+encodeURIComponent(JSON.stringify(d)),"_blank")})()`;
+window.open(H+"/linkedin?d="+encodeURIComponent(JSON.stringify(d)),"_blank")})()`;
   return `javascript:${encodeURIComponent(code.replace(/\n/g, ""))}`;
 }
 
@@ -3443,7 +3448,6 @@ const here = () => location.pathname + location.search;
 
 /** Go to a page of hunt. */
 function go(path, { replace = false } = {}) {
-  path = appPath(path);
   if (replace) history.replaceState(null, "", path);
   else if (path !== here()) history.pushState(null, "", path);
   route();
@@ -3611,14 +3615,14 @@ const BASE_TITLE = document.title;
 async function route() {
   if (typeof leaveGuard === "function" && leaveGuard() && here() !== lastUrl) {
     if (!confirm("Leave without saving your changes?")) {
-      history.pushState(null, "", lastUrl || APP);
+      history.pushState(null, "", lastUrl || "/");
       return;
     }
   }
   leaveGuard = null;
   window.onbeforeunload = null;
   lastUrl = here();
-  const path = appless(location.pathname);
+  const path = location.pathname;
   if (path === "/linkedin") { await importSentProfile(); return; }
   const [, page = "", arg] = path.split("/");
   const query = new URLSearchParams(location.search);
@@ -3694,14 +3698,14 @@ document.addEventListener("click", (e) => {
   if (!a || a.target || a.hasAttribute("download") || a.hasAttribute("data-reload")) return;
   const url = new URL(a.href, location.href);
   // Cloudflare's own pages (/cdn-cgi/: Access's log out and identity) aren't hunt's.
-  // Only the dashboard's own pages: the rest of the site loads as pages do.
-  if (url.origin !== location.origin || !(url.pathname === APP || url.pathname.startsWith(`${APP}/`))) return;
+  // Only the app's own pages: the rest loads as pages do.
+  if (url.origin !== location.origin || OUTSIDE.test(url.pathname)) return;
   e.preventDefault();
   go(url.pathname + url.search);
 });
 
 // An old address, with the page after #: the same page, at its new address.
-if (location.hash.startsWith("#/")) history.replaceState(null, "", appPath(location.hash.slice(1)));
+if (location.hash.startsWith("#/")) history.replaceState(null, "", location.hash.slice(1));
 
 // The theme (Settings → Appearance): auto follows the system; light or
 // dark is remembered, in this browser.
