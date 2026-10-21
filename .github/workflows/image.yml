@@ -25,6 +25,9 @@ jobs:
       - run: make ci
 
   image:
+    permissions:
+      contents: read
+      packages: write
     needs: test
     runs-on: ubuntu-latest
     steps:
