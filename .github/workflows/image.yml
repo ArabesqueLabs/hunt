@@ -27,7 +27,7 @@ jobs:
   image:
     permissions:
       contents: read
-      packages: write
+      packages: read|write
     needs: test
     runs-on: ubuntu-latest
     steps:
