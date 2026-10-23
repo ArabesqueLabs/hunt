@@ -16,9 +16,14 @@ Please report security problems privately instead: see
 
 ## Changing hunt
 
-hunt is a Rust service (`src/`) with a web UI in plain JavaScript
+hunt is a Rust service (`src/`) with a web UI in React and TypeScript
 (`src/web/`) and a CLI, sharing one JSON API. [`README.md`](README.md) and
 [`docs/design.md`](docs/design.md) explain how it fits together.
+
+The web UI is built with Node (20.19, or 22.12 and later) into
+`src/web/dist`, which the binary compiles in: `make` builds it before
+hunt (`make web` on its own), so building with `cargo` alone needs it built
+first.
 
 ```sh
 make demo     # a throwaway database in target/, with made-up data
@@ -38,7 +43,9 @@ done twice. Then:
 - Match the code around yours: its naming, its comments, and its plain
   wording in what people read (no jargon on screen).
 - Anything people see works in light and dark, on a phone, and right to
-  left (Arabic): add new phrases to `src/web/i18n-ar.js`.
+  left (Arabic): add new phrases to `src/web/src/lib/i18n-ar.ts`. Write a
+  phrase as one string (`` `Add to ${name}` ``, not "Add to " beside a
+  name), so the page can find it to translate.
 - Describe what changed and how you checked it, with a screenshot for
   anything visible.
 

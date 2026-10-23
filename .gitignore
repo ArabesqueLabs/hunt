@@ -4,3 +4,7 @@ research.md
 
 # The global gitignore ignores dist/; the vendored design system ships its icons there
 !src/web/vendor/arabesque/dist/
+
+# The web UI's packages, and what it's built into (npm run build, in src/web)
+/src/web/node_modules/
+/src/web/dist/

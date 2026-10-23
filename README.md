@@ -10,12 +10,12 @@ has these docs, screenshots (also in [`docs/screenshots.md`](docs/screenshots.md
 and the hosted hunt's legal pages; it's a repository of its own,
 [ArabesqueLabs/careerhunt.app](https://github.com/ArabesqueLabs/careerhunt.app).
 
-To try it on your own machine, with Docker or with Rust, then open
-http://localhost:4848:
+To try it on your own machine, with Docker, or with Rust and Node (its web
+UI is built with Node first), then open http://localhost:4848:
 
 ```sh
 docker run -p 4848:4848 -v hunt-data:/data ghcr.io/arabesquelabs/hunt
-cargo install --git https://github.com/ArabesqueLabs/hunt && hunt serve
+git clone https://github.com/ArabesqueLabs/hunt && cd hunt && make install && hunt serve
 ```
 
 One person's hunt needs no sign-in on your own machine. To reach it from
@@ -527,15 +527,14 @@ the same sections).
 
 ### Adding a language
 
-1. Copy `src/web/i18n-ar.js` to `src/web/i18n-<code>.js`, change its
-   code, name, direction (`ltr` or `rtl`) and digits, and translate each
-   phrase. Patterns fill `{names}` with the parts that vary; `{n}`, `{m}`,
-   `{n1}` … match numbers only. A phrase left out shows in English.
-2. Add it to `LANGUAGES` in `src/service.rs`, serve it next to
-   `/i18n-ar.js` in `src/api.rs`, and load it in `src/web/index.html`
-   after `i18n.js`.
+1. Copy `src/web/src/lib/i18n-ar.ts` to `src/web/src/lib/i18n-<code>.ts`,
+   change its name, direction (`ltr` or `rtl`) and digits, and translate
+   each phrase. Patterns fill `{names}` with the parts that vary; `{n}`,
+   `{m}`, `{n1}` … match numbers only. A phrase left out shows in English.
+2. Add it to `CATALOGS` in `src/web/src/lib/i18n.ts`, by its code, and to
+   `LANGUAGES` in `src/service.rs`.
 
-The page is translated as it's drawn (`src/web/i18n.js`): the code writes
+The page is translated as it's drawn (`src/web/src/lib/i18n.ts`): the code writes
 English, and each text, placeholder, title, aria-label and alt found in
 the catalog is swapped for its translation. Anything inside
 `translate="no"`, or in the user-content list there, is left alone.
@@ -620,7 +619,8 @@ The names "hunt" and "Arabesque Labs", and their logos (`docs/logo/`,
 name or brand your copy without Arabesque Labs' written permission. The
 bundled fonts (Jost, Newsreader, IBM Plex Sans Arabic and Amiri) are under
 the SIL Open Font License 1.1: each one's licence and copyright are in
-`src/web/fonts/` (see its README).
+`src/web/fonts/` (see its README). The rich text editor, TinyMCE, is
+bundled under the GNU GPL, version 2 or later.
 
 ---
 

@@ -46,7 +46,7 @@ const SHOTS = [
     about: "The board's rows: what's active, the offers, and what's closed, each stage a column. Interviewing divided into sub stages; Backlog's Other, and the closed, folded into piles.",
     path: "/", full: true, act: `document.querySelectorAll("details.swimlane").forEach((d) => { d.open = true; })` },
   { name: "table", title: "Tracking board, as a table", about: "Every application, sortable, with the board's filters.", path: "/applications" },
-  { name: "new-application", title: "Adding an application", about: "From a posting's link, or by hand, onto the board.", path: "/", act: "newApplication()" },
+  { name: "new-application", title: "Adding an application", about: "From a posting's link, or by hand, onto the board.", path: "/", act: `document.querySelector('[aria-keyshortcuts="n"]').click()` },
   { name: "application", title: "An application", about: "What's next, its timeline, and its pay, details, prep, links and people beside.",
     path: (ids) => `/applications/${ids.app}`, full: true,
     // Opened: the email thread, and the postings and company, folded at first.

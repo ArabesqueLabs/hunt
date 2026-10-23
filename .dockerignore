@@ -6,3 +6,5 @@ target
 src/web/img/*.jpeg
 src/web/img/*.png
 src/web/img/.DS_Store
+src/web/node_modules
+src/web/dist

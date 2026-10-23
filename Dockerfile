@@ -5,6 +5,16 @@
 #   docker build --platform linux/amd64 -t hunt .
 #   docker run -p 4848:4848 -v hunt-data:/data hunt
 
+# The web UI (React, in src/web), built into src/web/dist, which hunt
+# compiles in. Its packages are a layer of their own too, kept while
+# package-lock.json is the same.
+FROM node:22-bookworm-slim AS web
+WORKDIR /web
+COPY src/web/package.json src/web/package-lock.json ./
+RUN npm ci
+COPY src/web ./
+RUN npm run build
+
 # Dependencies are built in a layer of their own, from cargo-chef's recipe:
 # what hunt depends on, with its own version left out. A release (a new
 # version) or a code change reuses that layer from the cache; only a change
@@ -24,6 +34,7 @@ COPY --from=planner /src/recipe.json recipe.json
 RUN cargo chef cook --release --locked --recipe-path recipe.json
 COPY Cargo.toml Cargo.lock README.md ./
 COPY src ./src
+COPY --from=web /web/dist ./src/web/dist
 RUN cargo build --release --locked \
     && strip target/release/hunt && mkdir /data
 

@@ -767,9 +767,9 @@ async fn the_web_ui_is_served() {
         "/",
         "/companies/1",
         "/app.js",
-        "/cycles.js",
-        "/prep.js",
+        "/editor.js",
         "/style.css",
+        "/vendor/arabesque/dist/icons.svg",
     ] {
         let res = app
             .clone()
@@ -5037,18 +5037,13 @@ async fn scripts_and_styles_are_never_served_stale() {
         .collect();
     assert_eq!(print.len(), 12, "{print}");
     assert!(page.contains(&format!("/style.css?v={print}")));
-    assert!(page.contains(&format!("/vendor/arabesque/js/datepicker.js?v={print}")));
-    assert!(page.contains(&format!("/vendor/arabesque/js/sidebar.js?v={print}")));
-    // What the sidebar's menu, and the public pages' header, import.
-    let (_, menu) = get("/vendor/arabesque/js/nav-menu.js").await;
-    assert!(menu.contains("export function wireNavMenu"), "{menu}");
     // Fingerprinted, kept a year; plain, asked about each time.
     let (cache, _) = get(&format!("/app.js?v={print}")).await;
     assert_eq!(
         cache.as_deref(),
         Some("public, max-age=31536000, immutable")
     );
-    for path in ["/app.js", "/style.css", "/vendor/arabesque/js/format.js"] {
+    for path in ["/app.js", "/style.css", "/vendor/arabesque/dist/icons.svg"] {
         let (cache, _) = get(path).await;
         assert_eq!(cache.as_deref(), Some("no-cache"), "{path}");
     }

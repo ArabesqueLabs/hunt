@@ -93,18 +93,17 @@ input.al-input, select.al-select:not([multiple]) { block-size: var(--al-field-he
 .field > .al-error { font-size: var(--al-text-xs); }
 
 /* page heads, as the studio sets its section titles */
-.page { max-width: 76rem; margin: 0 auto; display: flex; flex-direction: column; gap: 1.25rem; }
+/* Every page, the board, Settings and Admin among them, has the whole width,
+   from the start of the space, up to --page-max on a large screen; lines of
+   prose and forms keep their own measure. */
+:root { --page-max: 120rem; }
+.page, .board { max-width: var(--page-max); margin: 0; }
+.page { display: flex; flex-direction: column; gap: 1.25rem; }
 /* Page heads, panels and the application's card are the design system's
    (.al-page-head, .al-panel, .al-card); hunt keeps their insides' layout. */
 .page > .al-page-head { margin-block-end: 0; }
-/* A section's page, as Cycles and Prep are: from the start of the space, no
-   wider than reads well, its title and a line about it, then what's in it. */
-.cycles-page, .prep-page, .list-page, .notes-page, .stats-page, .page.celebrate { max-width: 66rem; margin: 0; gap: var(--al-space-6); }
-/* Cycles, Prep, Contacts, Files, Notes, Stats and Take-home pay have the
-   whole width, as the board and the calendar do: room for more cycles,
-   columns, notes, charts and figures side by side. Their lines of prose keep
-   their own measure. */
-.page:is(.cycles-page, .prep-page, .list-page, .notes-page, .stats-page, .take-home) { max-width: none; margin: 0; }
+/* A section's page, as Cycles and Prep are: its title and a line about it, then what's in it. */
+.cycles-page, .prep-page, .list-page, .notes-page, .stats-page, .page.celebrate { gap: var(--al-space-6); }
 .page-head h1 { margin-inline-end: auto; }
 .page-head .al-search { width: min(20rem, 100%); }
 .page-head select { width: auto; max-width: min(14rem, 100%); }
@@ -120,10 +119,11 @@ input.al-input, select.al-select:not([multiple]) { block-size: var(--al-field-he
 .board-empty { padding-block: var(--al-space-10); }
 .board-empty .al-empty__title { margin: 0; }
 
-/* Every column the same width, in every swimlane however many it has; more
-   than fit, and they scroll. */
+/* Every column the same width, in every swimlane however many it has: the
+   page's width over the board's --board-columns (3, 4 or 5); more than fit,
+   and they scroll. */
 .columns {
-  --column-width: 16rem;
+  --column-width: calc((100% - (var(--board-columns, 4) - 1) * var(--al-space-4)) / var(--board-columns, 4));
   display: grid; grid-auto-flow: column; grid-auto-columns: var(--column-width); justify-content: start;
   gap: var(--al-space-4); overflow-x: auto; align-items: start; padding-bottom: var(--al-space-2);
   scroll-snap-type: x proximity;
@@ -481,7 +481,6 @@ fieldset.group > legend { padding: 0; padding-inline-end: 0.5rem; font-size: 0.8
 .cal-now { position: absolute; inset-inline: 0; border-top: 2px solid var(--al-color-danger); pointer-events: none; }
 .cal-day-none { margin-top: 0.75rem; }
 /* The whole width, as the Tracking board has: a week wants room. */
-.page.calendar { max-width: none; margin: 0; }
 .page.calendar, .cal-body { min-inline-size: 0; max-inline-size: 100%; }
 /* Settings: working hours and other time zones. */
 .work-hours { display: flex; flex-direction: column; gap: var(--al-space-3); margin-block-start: var(--al-space-3); }
@@ -616,7 +615,7 @@ fieldset.group > legend { padding: 0; padding-inline-end: 0.5rem; font-size: 0.8
 .tag-colour-name:hover, .tag-colour-name[aria-expanded="true"] { background: var(--al-color-surface-sunk); color: var(--al-color-text); }
 .tag-colour-name:focus-visible { outline: var(--al-border-focus) solid var(--al-color-focus); }
 
-/* A tag that opens its colours (colourTagChip in app.js): its name is the button. */
+/* A tag that opens its colours (ColourTagChip, src/components/tags.tsx): its name is the button. */
 .tag-colour { all: unset; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tag-colour:hover { text-decoration: underline dotted; text-underline-offset: 0.2em; }
 .tag-colour:focus-visible { outline: var(--al-border-focus) solid var(--al-color-focus); outline-offset: 2px; border-radius: var(--al-radius-sm); }
@@ -707,7 +706,7 @@ fieldset.group > legend { padding: 0; padding-inline-end: 0.5rem; font-size: 0.8
 
 /* ---- the application page ------------------------------------------------------------- */
 
-.page.application { max-width: 58rem; gap: 0.75rem; }
+.page.application { gap: 0.75rem; }
 .crumbs { font-size: 0.85rem; color: var(--al-color-text-muted); }
 .crumbs a { color: var(--al-color-text-muted); }
 .al-card.app { display: block; padding: 2rem 2.25rem 2.5rem; }
@@ -867,6 +866,8 @@ fieldset.group > legend { padding: 0; padding-inline-end: 0.5rem; font-size: 0.8
 .note-card footer { display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; }
 .note-card footer time { margin-inline-start: auto; }
 .note-card.editing { cursor: auto; border-color: var(--al-color-accent); column-span: all; }
+/* With no notes, the empty state spans the columns rather than being split across them. */
+.notes-grid > .al-empty { column-span: all; break-inside: avoid; }
 .note-card.editing textarea { font-family: var(--al-font-serif); font-size: 1rem; line-height: 1.6; width: 100%; }
 .note-card .actions { display: flex; gap: 0.5rem; align-items: center; }
 .note-card .actions .spacer { flex: 1; }
@@ -996,7 +997,10 @@ fieldset.group > legend { padding: 0; padding-inline-end: 0.5rem; font-size: 0.8
 .filter-search { flex: 1 1 16rem; max-inline-size: 22rem; }
 .filter-search .al-search { width: 100%; }
 .filter-row > .filter-mode { width: auto; }
-.filter-clear[hidden] { display: none; }
+/* The filters that are on, as chips to take off; how many pass; and Clear all. */
+.filter-chips { display: flex; flex-wrap: wrap; gap: var(--al-space-2) var(--al-space-3); align-items: center; }
+.filter-chips ul { display: flex; flex-wrap: wrap; gap: var(--al-space-2); list-style: none; margin: 0; padding: 0; }
+.filter-chips .filter-count { font-size: var(--al-text-sm); font-variant-numeric: tabular-nums; }
 .filter-row select, .filter-row input[type="search"] { width: auto; max-width: 14rem; font-size: 0.875rem; padding-block: 0.3rem; }
 .filter-row input[type="search"] { width: 16rem; }
 .filter-more .al-search { flex: none; width: 16rem; }
@@ -1186,6 +1190,33 @@ body.no-account .al-sidebar__nav, body.no-account #logout + * { display: none; }
 .account-form textarea { width: 100%; resize: vertical; }
 .account-form .agree { font-family: var(--al-font-serif); font-size: 1rem; line-height: 1.5; color: var(--al-color-text-muted); }
 .admin-page { gap: 1.75rem; }
+/* Settings and the admin centre: their own sections in the sidebar in place
+   of the app's, and their own colour for hunt's teal (Settings a plum, the
+   admin centre a slate blue), so it's plain which you're in. */
+:root {
+  --admin-accent: oklch(51% 0.095 255); --admin-accent-hover: oklch(43% 0.08 255);
+  --settings-accent: oklch(51% 0.095 320); --settings-accent-hover: oklch(43% 0.08 320);
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --admin-accent: oklch(83% 0.07 255); --admin-accent-hover: oklch(91% 0.04 255);
+  --settings-accent: oklch(83% 0.07 320); --settings-accent-hover: oklch(91% 0.04 320);
+} }
+:root[data-theme="dark"] {
+  --admin-accent: oklch(83% 0.07 255); --admin-accent-hover: oklch(91% 0.04 255);
+  --settings-accent: oklch(83% 0.07 320); --settings-accent-hover: oklch(91% 0.04 320);
+}
+body.admin-mode { --area-accent: var(--admin-accent); --area-accent-hover: var(--admin-accent-hover); }
+body.settings-mode { --area-accent: var(--settings-accent); --area-accent-hover: var(--settings-accent-hover); }
+body:is(.admin-mode, .settings-mode) {
+  --al-color-accent: var(--area-accent);
+  --al-color-accent-hover: var(--area-accent-hover);
+  --al-color-accent-wash: color-mix(in oklch, var(--area-accent) 12%, var(--al-color-surface));
+}
+body:is(.admin-mode, .settings-mode) .al-sidebar { background: color-mix(in oklch, var(--area-accent) 9%, var(--al-color-surface-sunk)); }
+body:is(.admin-mode, .settings-mode) .al-sidebar__bar { background: transparent; }
+body:not(.admin-mode, .settings-mode) .section-nav,
+body:is(.admin-mode, .settings-mode) :is(.app-nav, #cycle-box) { display: none; }
+.section-nav .section-back { margin-block-end: var(--al-space-3); }
 .admin-section h2 { font-size: 1.3rem; display: flex; align-items: baseline; gap: 0.5rem; margin: 0 0 0.6rem; }
 .admin-section .count { margin-inline-start: 0; }
 .admin-section select { width: auto; font-size: 0.85rem; padding-block: 0.2rem; }
@@ -1348,6 +1379,12 @@ body.no-account .al-sidebar__nav, body.no-account #logout + * { display: none; }
 .prep-daily { align-self: end; }
 .prep-add-actions { grid-column: 1 / -1; display: flex; gap: var(--al-space-2); justify-content: flex-end; align-items: center; }
 .prep-group { display: flex; flex-direction: column; }
+/* In progress, Next and Done: one under another, or side by side as a board when chosen. */
+.prep-groups { display: flex; flex-direction: column; gap: var(--al-space-6); }
+.prep-groups.as-columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); align-items: start; }
+.prep-groups.as-columns .prep-group-head { flex-wrap: wrap; }
+.prep-groups.as-columns .prep-group-head .al-hint { flex-basis: 100%; margin-inline-start: 0; }
+.prep-columns { align-self: center; }
 .prep-group-head { display: flex; align-items: baseline; gap: var(--al-space-2); padding-block-end: var(--al-space-2); border-block-end: 1px solid var(--al-color-line-strong); }
 .prep-group-head .al-hint { margin-inline-start: auto; }
 .prep-list { list-style: none; margin: 0; padding: 0; }
@@ -1386,7 +1423,7 @@ body.no-account .al-sidebar__nav, body.no-account #logout + * { display: none; }
 .table-overdue { color: var(--al-color-warning); font-weight: 500; }
 
 /* ---- an application, as it reads: what's next and the timeline, the facts beside ------ */
-.page.application.reading { max-width: 72rem; margin: 0; gap: var(--al-space-5); }
+.page.application.reading { gap: var(--al-space-5); }
 .al-back-link { align-self: flex-start; }
 .app-page-head { align-items: center; margin: 0; }
 .app-page-head > .logo { inline-size: 3rem; block-size: 3rem; margin: 0; }
@@ -1494,17 +1531,9 @@ body.no-account .al-sidebar__nav, body.no-account #logout + * { display: none; }
 .th-apps-head h2 { margin: 0; }
 .th-app { display: flex; flex-direction: column; }
 
-/* ---- Settings: tabs down the side, sections that say who they're for ------------------ */
-.page.settings { max-width: 66rem; margin: 0; gap: var(--al-space-6); }
-.settings-layout { display: flex; flex-wrap: wrap; gap: var(--al-space-6) var(--al-space-8); align-items: flex-start; }
-.settings-nav { flex: 1 1 12rem; max-inline-size: 14rem; display: flex; flex-direction: column; gap: 2px; position: sticky; inset-block-start: var(--al-space-6); }
-.settings-nav a { display: flex; flex-direction: column; gap: 1px; padding: var(--al-space-2) var(--al-space-3); border-inline-start: 2px solid transparent;
-  color: var(--al-color-text); text-decoration: none; border-start-end-radius: var(--al-radius-sm); border-end-end-radius: var(--al-radius-sm); }
-.settings-nav a:hover { background: var(--al-color-surface-sunk); }
-.settings-nav a[aria-current="page"] { border-inline-start-color: var(--al-color-accent); font-weight: 500; background: var(--al-color-surface-sunk); }
-.settings-nav-hint { font-size: var(--al-text-xs); color: var(--al-color-text-muted); font-weight: 400; }
-.settings-nav-hint:empty { display: none; }
-.settings-content { flex: 999 1 30rem; min-inline-size: 0; display: flex; flex-direction: column; gap: var(--al-space-6); }
+/* ---- Settings: tabs in the sidebar, sections that say who they're for ----------------- */
+.page.settings { gap: var(--al-space-6); }
+.settings-content { display: flex; flex-direction: column; gap: var(--al-space-6); }
 .settings-content .settings-panel { border-top: 0; padding-top: 0; }
 .settings-content .panel-head { justify-content: flex-start; flex-wrap: wrap; gap: var(--al-space-2) var(--al-space-3); align-items: baseline; }
 .settings-content .panel-head h2 { margin: 0; font-size: var(--al-text-lg); }
@@ -1515,7 +1544,6 @@ body.no-account .al-sidebar__nav, body.no-account #logout + * { display: none; }
 .settings-copy { display: flex; flex-wrap: wrap; gap: var(--al-space-2); }
 .settings-copy > input { flex: 1 1 18rem; }
 .settings-mono { font-family: var(--al-font-mono); font-size: var(--al-text-sm); }
-@media (max-width: 52rem) { .settings-nav { position: static; max-inline-size: none; flex-direction: row; flex-wrap: wrap; } .settings-nav-hint { display: none; } }
 /* Switchers as tall as the fields and selects beside them: the segments
    inside the switcher's border. */
 .al-segmented > label, .al-segmented > button { min-block-size: calc(var(--al-field-height) - 2 * var(--al-border-hairline)); }
@@ -1554,7 +1582,7 @@ body.no-account .al-sidebar__nav, body.no-account #logout + * { display: none; }
 .list-tools { display: flex; flex-wrap: wrap; align-items: center; gap: var(--al-space-3); }
 .list-tools > .al-search { flex: 1 1 16rem; max-inline-size: 22rem; }
 .list-tools > select { inline-size: auto; }
-.page.record-page.reading { max-width: 72rem; margin: 0; gap: var(--al-space-5); }
+.page.record-page.reading { gap: var(--al-space-5); }
 .profile-prose { font-size: 1rem; }
 .profile-picture { display: flex; align-items: center; gap: var(--al-space-3); flex-wrap: wrap; }
 .profile-picture > .logo { margin: 0; }
@@ -1597,3 +1625,17 @@ body.no-account .al-sidebar__nav, body.no-account #logout + * { display: none; }
 .quick-settings .al-sidebar__link:hover { color: var(--al-color-text); }
 @media (max-width: 52rem) { .quick-settings { flex-direction: row; border: 0; padding: 0; } }
 .board-welcome .al-empty { border: 0; background: none; padding-inline: 0; align-items: flex-start; text-align: start; }
+
+/* ---- rich text ------------------------------------------------------------------------- */
+/* What's written with the editor (its HTML), shown: paragraphs and lists as
+   the page's own, wherever it shows (notes, About, stories). Last, so it
+   wins over the plain text's pre-wrap. */
+.rich { white-space: normal; }
+.rich > :first-child { margin-block-start: 0; }
+.rich > :last-child { margin-block-end: 0; }
+.rich :is(p, ul, ol, blockquote, h2, h3, h4) { margin-block: 0 0.6em; }
+.rich :is(ul, ol) { padding-inline-start: 1.4em; }
+.rich blockquote { padding-inline-start: var(--al-space-3); border-inline-start: 2px solid var(--al-color-line-strong); color: var(--al-color-text-muted); }
+/* The editor (TinyMCE): in the system's hairline and radius. */
+.rich-editor .tox-tinymce { border: var(--al-border-hairline) solid var(--al-color-line-strong); border-radius: var(--al-radius-sm); }
+.rich-editor .tox-tinymce:focus-within { border-color: var(--al-color-focus); }

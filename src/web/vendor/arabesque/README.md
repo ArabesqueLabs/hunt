@@ -6,15 +6,20 @@ From the design system at **0.6.0** (https://design.arabesquelabs.com/,
 bar with a menu button on a phone, in `arabesque.css` and `js/sidebar.js`,
 the menu button being `js/nav-menu.js`.) Don't edit these:
 to update, copy the new version's files over them and change the version
-here. The sidebar's markup is hunt's own, in `../../index.html`: a new
-version may ask for it to change too (its changelog says).
+here. The sidebar's markup is hunt's own, in
+`../../src/components/Sidebar.tsx`: a new version may ask for it to change
+too (its changelog says).
 
-| File | From | Served as |
+The web UI's build (`../../vite.config.ts`) takes the stylesheet and the
+scripts into its own (`/style.css` and `/app.js`); the service serves the
+sprite as it is.
+
+| File | From | In |
 |---|---|---|
 | `arabesque.css` | `dist/arabesque.css`: the tokens, base, layout, components and utilities, in cascade layers | first in `/style.css` |
-| `js/datepicker.js`, `js/format.js`, `js/position.js` | `js/`: the date picker and what it imports | `/vendor/arabesque/js/…` |
-| `js/tooltip.js`, `js/chart.js` | `js/`: the charts' tooltips, and their marks from the keyboard (Stats) | `/vendor/arabesque/js/…` |
-| `js/sidebar.js`, `js/nav-menu.js` | `js/`: the sidebar's menu, under the md width, and its menu button | `/vendor/arabesque/js/…` |
+| `js/datepicker.js`, `js/format.js`, `js/position.js` | `js/`: the date picker and what it imports | `/app.js` |
+| `js/tooltip.js`, `js/chart.js` | `js/`: the charts' tooltips, and their marks from the keyboard (Stats) | `/app.js` |
+| `js/sidebar.js`, `js/nav-menu.js` | `js/`: the sidebar's menu, under the md width, and its menu button | `/app.js` |
 | `dist/icons.svg` | `dist/icons.svg`: the icon sprite (the date picker's chevrons, the sidebar's toggle, search, notices, the menu) | `/vendor/arabesque/dist/icons.svg` |
 
 The lattice (`../../tokens.css`) is the system's pattern tile,
