@@ -10,20 +10,35 @@ PG_URL    ?= postgres://postgres:hunt@127.0.0.1:55432/postgres
 MYSQL_URL ?= mysql://root:hunt@127.0.0.1:53306/
 
 CARGO ?= cargo
+NPM   ?= npm
+
+# The web UI (React, in src/web) is built into src/web/dist, which the
+# binary compiles in: anything that builds hunt builds it first. Needs Node
+# (20.19 or 22.12 and later).
+WEB_SRC := $(shell find src/web/src -type f) $(wildcard src/web/*.css src/web/vendor/arabesque/*.css src/web/vendor/arabesque/js/*.js) \
+  src/web/img/logo.svg src/web/package.json src/web/vite.config.ts src/web/vite.editor.config.ts src/web/tsconfig.json
 
 .DEFAULT_GOAL := help
-.PHONY: help build release serve serve-release dev dev-tenants dev-hosted watch demo screenshots cli-docs logo test test-postgres test-mysql test-all db-up db-down check lint fmt fmt-check ci doc install uninstall clean
+.PHONY: help web build release serve serve-release dev dev-tenants dev-hosted watch demo screenshots cli-docs logo test test-postgres test-mysql test-all db-up db-down check lint fmt fmt-check ci doc install uninstall clean
 
 help: ## List the targets
 	@awk 'BEGIN { FS = ":.*## " } /^[a-z-]+:.*## / { printf "  \033[1m%-14s\033[0m %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
 
-build: ## Build (debug)
+web: src/web/dist/app.js ## Build the web UI into src/web/dist (needs Node)
+
+src/web/node_modules/.package-lock.json: src/web/package-lock.json
+	cd src/web && $(NPM) ci
+
+src/web/dist/app.js: src/web/node_modules/.package-lock.json $(WEB_SRC)
+	cd src/web && $(NPM) run build
+
+build: web ## Build (debug)
 	$(CARGO) build
 
-release: ## Build optimised, into target/release/hunt
+release: web ## Build optimised, into target/release/hunt
 	$(CARGO) build --release
 
-serve: ## Run the service and web UI (ADDR, DB) for several people, as dev-tenants does: never where others can reach it
+serve: web ## Run the service and web UI (ADDR, DB) for several people, as dev-tenants does: never where others can reach it
 	@echo "be the admin:  http://$(ADDR)/dev/as?email=$(firstword $(subst $(comma), ,$(ADMINS)))"
 	@echo "be someone new: http://$(ADDR)/dev/as?email=someone@example.test"
 	$(CARGO) run -- serve --addr $(ADDR) --db "$(DB)" $(TENANTS_FLAGS)
@@ -31,7 +46,7 @@ serve: ## Run the service and web UI (ADDR, DB) for several people, as dev-tenan
 serve-release: release ## Run the optimised build (ADDR, DB)
 	./target/release/hunt serve --addr $(ADDR) --db "$(DB)"
 
-dev: ## Serve a throwaway database in target/, for trying things out
+dev: web ## Serve a throwaway database in target/, for trying things out
 	$(CARGO) run -- serve --addr $(ADDR) --db target/dev.db
 
 # Several people, locally: no Cloudflare Access, so who's asking is taken on
@@ -40,7 +55,7 @@ ADMINS ?= admin@example.test
 comma := ,
 TENANTS_FLAGS = --tenants --admins $(ADMINS) --identity-header X-Hunt-User
 
-dev-tenants: ## Like dev, for several people (ADMINS); be someone at /dev/as?email=…
+dev-tenants: web ## Like dev, for several people (ADMINS); be someone at /dev/as?email=…
 	@echo "be the admin:  http://$(ADDR)/dev/as?email=$(firstword $(subst $(comma), ,$(ADMINS)))"
 	@echo "be someone new: http://$(ADDR)/dev/as?email=someone@example.test"
 	$(CARGO) run -- serve --addr $(ADDR) --db target/dev.db $(TENANTS_FLAGS)
@@ -48,16 +63,18 @@ dev-tenants: ## Like dev, for several people (ADMINS); be someone at /dev/as?ema
 # Arabesque Labs' own: their hosted hunt, with careerhunt.app's terms.
 HOSTED_ENV = HUNT_SITE_URL=https://careerhunt.app HUNT_OPERATOR="Arabesque Labs Ltd"
 
-dev-hosted: ## Like dev-tenants, as the hosted hunt: terms to agree to, and careerhunt.app's legal pages linked
+dev-hosted: web ## Like dev-tenants, as the hosted hunt: terms to agree to, and careerhunt.app's legal pages linked
 	@echo "be the admin:   http://$(ADDR)/dev/as?email=$(firstword $(subst $(comma), ,$(ADMINS)))"
 	@echo "be someone new: http://$(ADDR)/dev/as?email=someone@example.test"
 	$(HOSTED_ENV) $(CARGO) run -- serve --addr $(ADDR) --db target/dev.db $(TENANTS_FLAGS)
 
-watch: ## Like dev-tenants, rebuilt and restarted on every change (needs cargo-watch)
+# The web UI is rebuilt as it changes (vite build --watch), and hunt with it.
+watch: web ## Like dev-tenants, rebuilt and restarted on every change (needs cargo-watch)
 	@command -v cargo-watch >/dev/null || { echo "install it with: cargo install cargo-watch"; exit 1; }
 	@echo "be the admin:  http://$(ADDR)/dev/as?email=$(firstword $(subst $(comma), ,$(ADMINS)))"
 	@echo "be someone new: http://$(ADDR)/dev/as?email=someone@example.test"
-	$(CARGO) watch -w src -x 'run -- serve --addr $(ADDR) --db target/dev.db $(TENANTS_FLAGS)'
+	(cd src/web && $(NPM) run watch) & \
+	$(CARGO) watch -w src -i 'src/web/src/**' -i 'src/web/node_modules/**' -x 'run -- serve --addr $(ADDR) --db target/dev.db $(TENANTS_FLAGS)'
 
 demo: build ## Fill target/dev.db (what dev and watch serve) with demo data, replacing it
 	scripts/demo.sh target/dev.db
@@ -72,7 +89,7 @@ cli-docs: build ## Write each CLI command's help into its page, docs/cli/<comman
 logo: ## The logo as PNGs, in the app's colours, into docs/logo (needs Chrome and Node)
 	node scripts/logo.mjs
 
-test: ## Run all tests (on SQLite)
+test: web ## Run all tests (on SQLite)
 	$(CARGO) test
 
 db-up: ## Start PostgreSQL and MySQL in Docker, for test-postgres and test-mysql
@@ -84,18 +101,18 @@ db-up: ## Start PostgreSQL and MySQL in Docker, for test-postgres and test-mysql
 db-down: ## Remove the test databases' containers
 	-docker rm -f hunt-pg hunt-mysql
 
-test-postgres: ## Run the API tests on PostgreSQL (PG_URL; see db-up)
+test-postgres: web ## Run the API tests on PostgreSQL (PG_URL; see db-up)
 	HUNT_TEST_DB=$(PG_URL) $(CARGO) test --test api
 
-test-mysql: ## Run the API tests on MySQL (MYSQL_URL; see db-up)
+test-mysql: web ## Run the API tests on MySQL (MYSQL_URL; see db-up)
 	HUNT_TEST_DB=$(MYSQL_URL) $(CARGO) test --test api
 
 test-all: test test-postgres test-mysql ## Tests on SQLite, PostgreSQL and MySQL
 
-check: ## Type-check without building
+check: web ## Type-check without building
 	$(CARGO) check --all-targets
 
-lint: ## Clippy, with warnings as errors
+lint: web ## Clippy, with warnings as errors
 	$(CARGO) clippy --all-targets -- -D warnings
 
 fmt: ## Format the code
@@ -104,12 +121,12 @@ fmt: ## Format the code
 fmt-check: ## Fail if the code isn't formatted
 	$(CARGO) fmt --check
 
-ci: fmt-check lint test ## What CI should run: format check, lint, tests
+ci: web fmt-check lint test ## What CI should run: the web UI built (and type-checked), format check, lint, tests
 
 doc: ## Build and open the API docs
 	$(CARGO) doc --no-deps --open
 
-install: ## Install `hunt` into ~/.cargo/bin
+install: web ## Install `hunt` into ~/.cargo/bin
 	$(CARGO) install --path . --locked
 
 uninstall: ## Remove the installed `hunt`
@@ -117,3 +134,4 @@ uninstall: ## Remove the installed `hunt`
 
 clean: ## Remove build output
 	$(CARGO) clean
+	rm -rf src/web/dist

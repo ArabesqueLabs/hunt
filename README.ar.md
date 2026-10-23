@@ -9,11 +9,12 @@ hunt برمجيات حرة، بموجب رخصة [GNU AGPL v3](LICENSE): شغّ�
 المستضاف؛ وهو مستودع مستقل،
 [ArabesqueLabs/careerhunt.app](https://github.com/ArabesqueLabs/careerhunt.app).
 
-لتجرّبه على جهازك، بـDocker أو بـRust، ثم افتح http://localhost:4848:
+لتجرّبه على جهازك، بـDocker، أو بـRust وNode (تُبنى واجهة الويب بـNode أولًا)، ثم افتح
+http://localhost:4848:
 
 ```sh
 docker run -p 4848:4848 -v hunt-data:/data ghcr.io/arabesquelabs/hunt
-cargo install --git https://github.com/ArabesqueLabs/hunt && hunt serve
+git clone https://github.com/ArabesqueLabs/hunt && cd hunt && make install && hunt serve
 ```
 
 لا يحتاج hunt الخاص بشخص واحد إلى تسجيل دخول على جهازك. ولتصل إليه من مكان آخر، أعطه كلمة مرور
@@ -476,13 +477,12 @@ PAYE)، وبدل الزواج، وقروض الطلاب، ومعاش مكان ا
 
 ### إضافة لغة
 
-1. انسخ `src/web/i18n-ar.js` إلى `src/web/i18n-<code>.js`، وغيّر رمزه واسمه واتجاهه (`ltr` أو
-   `rtl`) وأرقامه، وترجم كل عبارة. والأنماط تملأ `{names}` بالأجزاء المتغيّرة؛ و`{n}` و`{m}`
-   و`{n1}` … لا تطابق إلا الأرقام. والعبارة المتروكة تظهر بالإنجليزية.
-2. أضفها إلى `LANGUAGES` في `src/service.rs`، وقدّمها بجانب `/i18n-ar.js` في `src/api.rs`،
-   وحمّلها في `src/web/index.html` بعد `i18n.js`.
+1. انسخ `src/web/src/lib/i18n-ar.ts` إلى `src/web/src/lib/i18n-<code>.ts`، وغيّر اسمه واتجاهه
+   (`ltr` أو `rtl`) وأرقامه، وترجم كل عبارة. والأنماط تملأ `{names}` بالأجزاء المتغيّرة؛ و`{n}`
+   و`{m}` و`{n1}` … لا تطابق إلا الأرقام. والعبارة المتروكة تظهر بالإنجليزية.
+2. أضفها إلى `CATALOGS` في `src/web/src/lib/i18n.ts` برمزها، وإلى `LANGUAGES` في `src/service.rs`.
 
-تُترجم الصفحة أثناء رسمها (`src/web/i18n.js`): الشيفرة تكتب بالإنجليزية، وكل نص وعنصر نائب وعنوان
+تُترجم الصفحة أثناء رسمها (`src/web/src/lib/i18n.ts`): الشيفرة تكتب بالإنجليزية، وكل نص وعنصر نائب وعنوان
 وaria-label وalt موجود في الفهرس يُستبدل بترجمته. وما داخل `translate="no"`، أو في قائمة محتوى
 المستخدم هناك، يُترك كما هو.
 

@@ -4,7 +4,7 @@
 
 ```
 hunt serve ─┬─ /api/*      JSON API  (src/api.rs)
-            └─ /, app.js   web UI    (src/web/), a client of /api
+            └─ /, app.js   web UI    (src/web/, React), a client of /api
 hunt <cmd>  ─── HTTP ──►   /api/*    (src/cli.rs via src/client.rs)
 ```
 
@@ -28,7 +28,9 @@ src/
   client.rs       the API client the CLI uses
   cli.rs          the `hunt` command
   time.rs         stored date forms; friendly dates for the CLI
-  web/            index.html, app.js, style.css, compiled into the binary
+  web/            the web UI: index.html, style.css, and src/ (React and
+                  TypeScript), built into dist/ (npm run build), which the
+                  binary compiles in
 tests/            api.rs (through the router), cli.rs (the binary against a live
                   service), fixtures/schema_v1.sql (for the upgrade test)
 ```
@@ -237,7 +239,19 @@ compared in a canonical form (`posting::canonical`):
 
 ## The web UI
 
-- Plain JavaScript, with no build step and no dependencies.
+- React and TypeScript (`src/web/src/`), built with Vite into one script
+  and one stylesheet (`src/web/dist/`), which the binary compiles in and
+  serves as `/app.js` and `/style.css`. `make` builds it before hunt; it
+  needs Node.
+- Pages are components, each drawn afresh as it's visited (`src/lib/router.ts`);
+  what the whole app shares (the settings, tags, cycles, the board last
+  loaded) is in `src/lib/state.ts`. Records' forms and views are built from
+  `/api/meta` (`src/components/fields.tsx`).
+- Prose people write themselves (notes, About, stories) uses TinyMCE
+  (`src/components/RichText.tsx`), loaded on first use as `/editor.js`,
+  writing in the page's direction. It's kept as HTML and cleaned
+  (DOMPurify) before it's shown; plain text from before shows as written
+  (`src/lib/rich.ts`).
 - A sidebar holds the sections, with Settings at its foot. On narrow
   screens it becomes a scrolling bar across the top.
 - Drag and drop uses the browser's own (HTML5) drag events. That works with

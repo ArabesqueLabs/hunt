@@ -417,21 +417,7 @@ fn routes(state: AppState) -> Router {
         .route("/app/", get(drop_app))
         .route("/app/{*rest}", get(drop_app))
         .route("/app.js", get(script))
-        .route("/application.js", get(application_script))
-        .route("/notes.js", get(notes_script))
-        .route("/cycles.js", get(cycles_script))
-        .route("/prep.js", get(prep_script))
-        .route("/stats.js", get(stats_script))
-        .route("/table.js", get(table_script))
-        .route("/filters.js", get(filters_script))
-        .route("/records.js", get(records_script))
-        .route("/settings.js", get(settings_script))
-        .route("/celebrate.js", get(celebrate_script))
-        .route("/bulk.js", get(bulk_script))
-        .route("/account.js", get(account_script))
-        .route("/takehome.js", get(takehome_script))
-        .route("/i18n.js", get(i18n_script))
-        .route("/i18n-ar.js", get(arabic_script))
+        .route("/editor.js", get(editor_script))
         .route("/style.css", get(style))
         .route("/logo.svg", get(icon))
         .route("/fonts/{name}", get(font))
@@ -879,22 +865,16 @@ async fn to_site(State(app): State<AppState>, uri: axum::http::Uri) -> Response 
 
 const LOGO: &str = include_str!("web/img/logo.svg");
 
-/// The page, with the logo inline so it takes the theme's colours (its
-/// tick is drawn in the paper colour, to show on the accent in both themes),
-/// and in the language chosen in Settings: its `lang` and direction are set
-/// here, so it's drawn the right way round from the start (English, left to
-/// right, unless another is chosen).
+/// The page, in the language chosen in Settings: its `lang` and direction
+/// are set here, so it's drawn the right way round from the start (English,
+/// left to right, unless another is chosen). The app draws the rest (the
+/// web UI, built into web/dist: see web/vite.config.ts).
 async fn page(v: Viewer) -> impl IntoResponse {
     static PAGE: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
-        let logo = LOGO.trim().replace(
-            r##"stroke="#fff""##,
-            r#"style="stroke: var(--al-color-bg)""#,
-        );
-        // Each build's scripts and styles at addresses of their own, so
-        // no cache (the browser's, or Cloudflare's) serves an older one.
+        // Each build's script and styles at addresses of their own, so no
+        // cache (the browser's, or Cloudflare's) serves an older one.
         let v = format!("?v={}", asset_fingerprint());
-        let mut page = include_str!("web/index.html")
-            .replace("<!-- logo: img/logo.svg, put in when served -->", &logo);
+        let mut page = include_str!("web/index.html").to_string();
         for name in ASSET_NAMES {
             page = page.replace(&format!("\"{name}\""), &format!("\"{name}{v}\""));
         }
@@ -938,72 +918,36 @@ async fn icon() -> impl IntoResponse {
     )
 }
 
+/// The web UI, built (`npm run build` in web/): React, in one script.
 async fn script() -> impl IntoResponse {
     (
         [(header::CONTENT_TYPE, "text/javascript; charset=utf-8")],
-        include_str!("web/app.js"),
+        include_str!("web/dist/app.js"),
     )
 }
 
-/// The page's own scripts and styles, as it names them.
-const ASSET_NAMES: &[&str] = &[
-    "/style.css",
-    "/i18n.js",
-    "/i18n-ar.js",
-    "/app.js",
-    "/application.js",
-    "/notes.js",
-    "/cycles.js",
-    "/prep.js",
-    "/stats.js",
-    "/table.js",
-    "/filters.js",
-    "/records.js",
-    "/settings.js",
-    "/celebrate.js",
-    "/bulk.js",
-    "/account.js",
-    "/takehome.js",
-    "/vendor/arabesque/js/datepicker.js",
-    "/vendor/arabesque/js/tooltip.js",
-    "/vendor/arabesque/js/chart.js",
-    "/vendor/arabesque/js/sidebar.js",
-];
+/// The rich text editor (TinyMCE), a script of its own: app.js loads it,
+/// at its own fingerprint, the first time an editor opens.
+async fn editor_script() -> impl IntoResponse {
+    (
+        [(header::CONTENT_TYPE, "text/javascript; charset=utf-8")],
+        include_str!("web/dist/editor.js"),
+    )
+}
 
-/// A fingerprint of the page's scripts and styles: the same while they are,
-/// different once any changes.
+/// The page's own script and styles, as it names them.
+const ASSET_NAMES: &[&str] = &["/style.css", "/app.js"];
+
+/// A fingerprint of the page's scripts and styles: the same while they
+/// are, different once any changes.
 fn asset_fingerprint() -> &'static str {
     static PRINT: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
         use std::hash::{Hash, Hasher};
         let mut h = std::hash::DefaultHasher::new();
         for part in [
-            include_str!("web/vendor/arabesque/arabesque.css"),
-            include_str!("web/tokens.css"),
-            include_str!("web/style.css"),
-            include_str!("web/footer.css"),
-            include_str!("web/i18n.js"),
-            include_str!("web/i18n-ar.js"),
-            include_str!("web/app.js"),
-            include_str!("web/application.js"),
-            include_str!("web/notes.js"),
-            include_str!("web/cycles.js"),
-            include_str!("web/prep.js"),
-            include_str!("web/stats.js"),
-            include_str!("web/table.js"),
-            include_str!("web/filters.js"),
-            include_str!("web/records.js"),
-            include_str!("web/settings.js"),
-            include_str!("web/celebrate.js"),
-            include_str!("web/bulk.js"),
-            include_str!("web/account.js"),
-            include_str!("web/takehome.js"),
-            include_str!("web/vendor/arabesque/js/datepicker.js"),
-            include_str!("web/vendor/arabesque/js/tooltip.js"),
-            include_str!("web/vendor/arabesque/js/chart.js"),
-            include_str!("web/vendor/arabesque/js/format.js"),
-            include_str!("web/vendor/arabesque/js/position.js"),
-            include_str!("web/vendor/arabesque/js/sidebar.js"),
-            include_str!("web/vendor/arabesque/js/nav-menu.js"),
+            include_str!("web/dist/app.css"),
+            include_str!("web/dist/app.js"),
+            include_str!("web/dist/editor.js"),
         ] {
             part.hash(&mut h);
         }
@@ -1055,179 +999,26 @@ async fn caching(uri: axum::http::Uri, mut res: Response) -> Response {
     res
 }
 
-/// The application page.
-async fn application_script() -> impl IntoResponse {
-    (
-        [(header::CONTENT_TYPE, "text/javascript; charset=utf-8")],
-        include_str!("web/application.js"),
-    )
-}
-
-/// General notes.
-async fn notes_script() -> impl IntoResponse {
-    (
-        [(header::CONTENT_TYPE, "text/javascript; charset=utf-8")],
-        include_str!("web/notes.js"),
-    )
-}
-
-/// Cycles: the sidebar's box, their page, starting and ending one.
-async fn cycles_script() -> impl IntoResponse {
-    (
-        [(header::CONTENT_TYPE, "text/javascript; charset=utf-8")],
-        include_str!("web/cycles.js"),
-    )
-}
-
-/// The Prep page: tasks and stories.
-async fn prep_script() -> impl IntoResponse {
-    (
-        [(header::CONTENT_TYPE, "text/javascript; charset=utf-8")],
-        include_str!("web/prep.js"),
-    )
-}
-
-/// The take-home pay experiment's page.
-async fn takehome_script() -> impl IntoResponse {
-    (
-        [(header::CONTENT_TYPE, "text/javascript; charset=utf-8")],
-        include_str!("web/takehome.js"),
-    )
-}
-
-/// Several people: asking for an account, and the admin centre.
-async fn account_script() -> impl IntoResponse {
-    (
-        [(header::CONTENT_TYPE, "text/javascript; charset=utf-8")],
-        include_str!("web/account.js"),
-    )
-}
-
-/// Many at once: selecting, and acting on what's selected.
-async fn bulk_script() -> impl IntoResponse {
-    (
-        [(header::CONTENT_TYPE, "text/javascript; charset=utf-8")],
-        include_str!("web/bulk.js"),
-    )
-}
-
-/// An offer accepted: wrapping up, and the celebration.
-async fn celebrate_script() -> impl IntoResponse {
-    (
-        [(header::CONTENT_TYPE, "text/javascript; charset=utf-8")],
-        include_str!("web/celebrate.js"),
-    )
-}
-
-/// Translating the page, and setting its direction.
-async fn i18n_script() -> impl IntoResponse {
-    (
-        [(header::CONTENT_TYPE, "text/javascript; charset=utf-8")],
-        include_str!("web/i18n.js"),
-    )
-}
-
-/// Arabic: the catalog of phrases.
-async fn arabic_script() -> impl IntoResponse {
-    (
-        [(header::CONTENT_TYPE, "text/javascript; charset=utf-8")],
-        include_str!("web/i18n-ar.js"),
-    )
-}
-
-/// The Settings page.
-async fn settings_script() -> impl IntoResponse {
-    (
-        [(header::CONTENT_TYPE, "text/javascript; charset=utf-8")],
-        include_str!("web/settings.js"),
-    )
-}
-
-/// Pages for companies, people and documents.
-async fn records_script() -> impl IntoResponse {
-    (
-        [(header::CONTENT_TYPE, "text/javascript; charset=utf-8")],
-        include_str!("web/records.js"),
-    )
-}
-
-/// The Tracking Board's filters.
-async fn filters_script() -> impl IntoResponse {
-    (
-        [(header::CONTENT_TYPE, "text/javascript; charset=utf-8")],
-        include_str!("web/filters.js"),
-    )
-}
-
-/// The Tracking Board's table view.
-async fn table_script() -> impl IntoResponse {
-    (
-        [(header::CONTENT_TYPE, "text/javascript; charset=utf-8")],
-        include_str!("web/table.js"),
-    )
-}
-
-/// The Stats page.
-async fn stats_script() -> impl IntoResponse {
-    (
-        [(header::CONTENT_TYPE, "text/javascript; charset=utf-8")],
-        include_str!("web/stats.js"),
-    )
-}
-
+/// The styles: the design system's, then hunt's own, built with the web UI.
 async fn style() -> impl IntoResponse {
     (
         [(header::CONTENT_TYPE, "text/css; charset=utf-8")],
-        concat!(
-            include_str!("web/vendor/arabesque/arabesque.css"),
-            include_str!("web/tokens.css"),
-            include_str!("web/style.css"),
-            include_str!("web/footer.css")
-        ),
+        include_str!("web/dist/app.css"),
     )
 }
 
-/// The design system's scripts that hunt uses (the date picker, the charts'
-/// tooltips and keys, the sidebar's menu on a phone, and what they import)
-/// and its icon sprite, as vendored: see
-/// web/vendor/arabesque/README.md.
+/// The design system's icon sprite (the date picker's chevrons, the
+/// sidebar's toggle, search, notices, the menu), as vendored: see
+/// web/vendor/arabesque/README.md. Its scripts are built into the app.
 async fn vendored(Path(path): Path<String>) -> Response {
-    let (kind, body): (&str, &'static str) = match path.as_str() {
-        "js/datepicker.js" => (
-            "text/javascript; charset=utf-8",
-            include_str!("web/vendor/arabesque/js/datepicker.js"),
-        ),
-        "js/chart.js" => (
-            "text/javascript; charset=utf-8",
-            include_str!("web/vendor/arabesque/js/chart.js"),
-        ),
-        "js/tooltip.js" => (
-            "text/javascript; charset=utf-8",
-            include_str!("web/vendor/arabesque/js/tooltip.js"),
-        ),
-        "js/sidebar.js" => (
-            "text/javascript; charset=utf-8",
-            include_str!("web/vendor/arabesque/js/sidebar.js"),
-        ),
-        "js/nav-menu.js" => (
-            "text/javascript; charset=utf-8",
-            include_str!("web/vendor/arabesque/js/nav-menu.js"),
-        ),
-        "js/format.js" => (
-            "text/javascript; charset=utf-8",
-            include_str!("web/vendor/arabesque/js/format.js"),
-        ),
-        "js/position.js" => (
-            "text/javascript; charset=utf-8",
-            include_str!("web/vendor/arabesque/js/position.js"),
-        ),
+    match path.as_str() {
         "dist/icons.svg" => (
-            "image/svg+xml",
+            [(header::CONTENT_TYPE, "image/svg+xml")],
             include_str!("web/vendor/arabesque/dist/icons.svg"),
-        ),
-        _ => return StatusCode::NOT_FOUND.into_response(),
-    };
-    ([(header::CONTENT_TYPE, kind)], body).into_response()
+        )
+            .into_response(),
+        _ => StatusCode::NOT_FOUND.into_response(),
+    }
 }
 
 /// The UI's typefaces, compiled in, so the app makes no outside requests.
