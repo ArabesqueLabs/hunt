@@ -1,6 +1,7 @@
-// The Settings page (/settings): its sections in the sidebar, each a panel
-// that reads first. A section's Edit (or a row's edit, remove, or "+ Add
-// …") opens it for changes; Done, Save or Cancel closes it again.
+// The Settings page (/settings): one person's settings, kept with their
+// account, its sections in the sidebar. Most are changed where they are,
+// each saved as it's changed, with Undo; a few panels read first, and their
+// Edit opens them for changes.
 
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { api, attempt, del, get, patch, post } from "../lib/api";
@@ -12,28 +13,24 @@ import { sectionNav } from "../lib/shell";
 import { S, changed, useShared } from "../lib/state";
 import { store, stored } from "../lib/storage";
 import { tagPaint } from "../lib/tags";
-import { currentTheme, setTheme } from "../lib/theme";
+import { chooseTheme, currentTheme } from "../lib/theme";
 import { toast } from "../lib/toast";
 import type { Row, Tag } from "../lib/types";
 import { ask, confirmDelete } from "../components/dialogs";
 import { useFilePicker } from "../components/files";
 import { profileBookmarklet } from "../components/importer";
 import { openTagColours } from "../components/tags";
-import { Facts, Field, Icon, Input, Label, Select } from "../components/ui";
+import { Facts, Field, Icon, Input, Label, LoadingBlock, Select } from "../components/ui";
 import { GMAIL, GmailSettings } from "./Mail";
-import { money, takeHomeNumber } from "./TakeHome";
+import { takeHomeNumber } from "./TakeHome";
 
-/** Settings are your account's; a section kept in this browser instead says so. */
-const FOR: Record<string, string> = { browser: "This browser" };
-
-/** A section: its title, who it's for, and Edit (or Done) beside it when it can be changed. */
-export function SettingsPanel({ title, editing = false, onToggle, intro, done = "Done", who, className, list, children }: {
-  title?: string; editing?: boolean; onToggle?: (on: boolean) => void; intro?: ReactNode; done?: string; who?: string; className?: string; list?: string; children?: ReactNode;
+/** A section: its title, and Edit (or Done) beside it when it's edited as a whole. */
+export function SettingsPanel({ title, editing = false, onToggle, intro, done = "Done", className, list, children }: {
+  title?: string; editing?: boolean; onToggle?: (on: boolean) => void; intro?: ReactNode; done?: string; className?: string; list?: string; children?: ReactNode;
 }) {
   return (
     <section className={`al-panel panel settings-panel${editing ? " editing" : ""}${className ? ` ${className}` : ""}`} data-list={list}>
       <div className="panel-head">{title ? <h2>{title}</h2> : <span />}
-        {who && FOR[who] ? <span className="al-badge al-badge--outline">{FOR[who]}</span> : null}
         {onToggle ? <button className="al-button al-button--sm al-button--quiet settings-edit" type="button" onClick={() => onToggle(!editing)}>{editing ? done : "Edit"}</button> : null}
       </div>
       {intro ? <p className="muted">{intro}</p> : null}
@@ -162,16 +159,23 @@ function CalendarFeedSettings() {
 
 /** Every change made, newest first: on a page of its own. */
 const AuditSettings = () => (
-  <SettingsPanel title="Audit log" who="everyone" intro="Every change you've made, newest first: what, when and to what.">
+  <SettingsPanel title="Audit log" intro="Every change you've made, newest first: what, when and to what.">
     <a className="al-link al-link--arrow" href="/activity">Open the audit log</a>
   </SettingsPanel>
 );
 
+/** Where to write to this hunt's admins, when they've said. */
+export function ContactLine() {
+  const to = S.META.about?.contact;
+  return to ? <p className="muted small contact-line"><span>Questions, or something not right? Write to</span>{" "}<a href={`mailto:${to}`} translate="no">{to}</a></p> : null;
+}
+
 /** Signed in through Cloudflare Access, with no account here: who, and signing out. */
 const SignInSettings = () => (
-  <SettingsPanel title="Your account" who="you">
+  <SettingsPanel title="Your account">
     <Facts rows={[["Signed in as", <span translate="no">{S.META.access?.email || "—"}</span>], ["Sign-in", "Cloudflare Access"]]} />
     <div className="actions"><a className="al-button" href="/cdn-cgi/access/logout">Sign out</a></div>
+    <ContactLine />
   </SettingsPanel>
 );
 
@@ -180,7 +184,7 @@ const SignInSettings = () => (
 function AccountSettings() {
   const me = myAccount();
   return (
-    <SettingsPanel title="Your account" who="you">
+    <SettingsPanel title="Your account">
       <p><b translate="no">{me.email}</b></p>
       <p className="muted">Deleting your account deletes everything in it, at once and for good: applications, companies, people, notes, files and settings. Download a backup first if you might want any of it.
         {S.META.terms ? <>{" "}<a href={sitePage("/data-deletion/")} target="_blank" rel="noopener">More about deleting your data</a></> : null}</p>
@@ -198,24 +202,110 @@ function AccountSettings() {
           location.href = tenancy()?.trying_out ? "/" : "/cdn-cgi/access/logout";
         }
       }}>Delete my account…</button></div>
+      <ContactLine />
     </SettingsPanel>
   );
 }
 
+// ---- settings changed where they are ---------------------------------------------------
+
+/**
+ * Change some of your settings, saved at once: said, with Undo putting
+ * back what they were. False when it didn't save.
+ */
+export async function saveSettings(change: Row, message = "Saved") {
+  const was = Object.fromEntries(Object.keys(change).map((k) => [k, S.PREFS[k] ?? null]));
+  const saved = await attempt(() => patch("settings", change));
+  if (!saved) return false;
+  S.PREFS = saved;
+  changed();
+  toast(message, "info", { label: "Undo", onclick: async () => {
+    const back = await attempt(() => patch("settings", was));
+    if (back) { S.PREFS = back; changed(); toast("Undone"); }
+  } });
+  return true;
+}
+
+/** Another language, or other digits: saved, and everything drawn again in them. */
+async function relanguage(change: Row) {
+  const saved = await attempt(() => patch("settings", change));
+  if (!saved) return false;
+  S.PREFS = saved;
+  setLanguage(saved.language, saved.numerals);
+  location.reload();
+  return true;
+}
+
+/** A setting: its name and what it's for, and beside them what changes it, saved as it's changed. */
+export const SettingRow = ({ id, label, hint, children }: { id?: string; label: string; hint?: ReactNode; children: ReactNode }) => (
+  <div className="settings-row">
+    <div className="settings-row-label">
+      {id ? <Label htmlFor={id}>{label}</Label> : <span className="al-label">{label}</span>}
+      {hint ? <span className="al-hint">{hint}</span> : null}
+    </div>
+    <div className="settings-row-control">{children}</div>
+  </div>
+);
+
+/** A select saved as it's changed: the choice shown at once, and put back if it can't be saved. */
+export function ChoiceSetting({ value, options, save, ...rest }: { value: string; options: [string, string][]; save: (v: string) => Promise<boolean> }
+  & Omit<React.ComponentProps<"select">, "value" | "onChange">) {
+  const [now, setNow] = useState(value);
+  useEffect(() => setNow(value), [value]);
+  return (
+    <Select value={now} {...rest} onChange={async (e) => {
+      const v = e.target.value;
+      setNow(v);
+      if (!(await save(v))) setNow(value);
+    }}>{options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</Select>
+  );
+}
+
+/**
+ * A field saved when it's left, or on Enter; Escape puts it back. What
+ * can't be saved stays, marked, to put right.
+ */
+export function TextSetting({ value, save, ...rest }: { value: string; save: (v: string) => Promise<boolean> }
+  & Omit<React.ComponentProps<"input">, "value" | "onChange">) {
+  const [now, setNow] = useState(value);
+  const [wrong, setWrong] = useState(false);
+  useEffect(() => { setNow(value); setWrong(false); }, [value]);
+  const commit = async () => {
+    if (now.trim() === value.trim()) { setNow(value); setWrong(false); return; }
+    setWrong(!(await save(now.trim())));
+  };
+  return (
+    <Input value={now} aria-invalid={wrong ? "true" : undefined} {...rest} onChange={(e) => setNow(e.target.value)} onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); }
+        else if (e.key === "Escape") { setNow(value); setWrong(false); const el = e.currentTarget; requestAnimationFrame(() => el.blur()); }
+      }} />
+  );
+}
+
+/** A switch saved as it's changed. */
+const SwitchSetting = ({ id, checked, label, save }: { id: string; checked: boolean; label: string; save: (on: boolean) => Promise<boolean> }) => (
+  <label className="switch al-label al-choice" htmlFor={id}>
+    <Input type="checkbox" role="switch" id={id} checked={checked} onChange={(e) => save(e.target.checked)} />{label}
+  </label>
+);
+
 // ---- appearance -----------------------------------------------------------------------
 
+const THEMES: [string, string][] = [["light", "Light"], ["dark", "Dark"], ["auto", "Match the system"]];
+
 function ThemeSettings() {
-  const [now, setNow] = useState(currentTheme());
+  const now = currentTheme();
   return (
-    <SettingsPanel title="Appearance" who="browser">
-      <div className="settings-row">
-        <div className="settings-row-label"><span className="al-label">Theme</span><span className="al-hint">Each device keeps its own.</span></div>
+    <SettingsPanel title="Appearance">
+      <SettingRow label="Theme" hint="The same on every device you sign in on.">
         <div className="al-segmented" role="group" aria-label="Theme">
-          {([["light", "Light"], ["dark", "Dark"], ["auto", "Match the system"]] as [string, string][]).map(([v, l]) => (
-            <button key={v} type="button" aria-pressed={String(now === v) as "true" | "false"} onClick={() => { setTheme(v); setNow(v); changed(); toast("Theme changed"); }}>{l}</button>
+          {THEMES.map(([v, l]) => (
+            <button key={v} type="button" aria-pressed={String(now === v) as "true" | "false"}
+              onClick={async () => { if (v !== now && (await chooseTheme(v))) toast("Theme changed"); }}>{l}</button>
           ))}
         </div>
-      </div>
+      </SettingRow>
     </SettingsPanel>
   );
 }
@@ -237,62 +327,37 @@ export function currencyName(code: string) {
   try { return `${new Intl.DisplayNames(LOC(), { type: "currency" }).of(code)} (${code})`; } catch { return code; }
 }
 
-/** A select, uncontrolled, of [value, label] options. */
-const Choose = ({ id, options, value, ...rest }: { id: string; options: [string, string][]; value: string } & React.ComponentProps<"select">) => (
-  <Select id={id} defaultValue={value} {...rest}>{options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</Select>
-);
-const SetField = ({ id, label, children, help }: { id: string; label: string; children: ReactNode; help?: string }) => (
-  <Field><Label htmlFor={id}>{label}</Label>{children}{help ? <p className="muted small">{help}</p> : null}</Field>
-);
-/** The values of a form's controls, by id. */
-const valuesOf = (el: HTMLElement | null) => Object.fromEntries([...(el?.querySelectorAll<HTMLInputElement | HTMLSelectElement>("[id]") || [])].map((c) => [c.id, c.value]));
+/** A choice list's {value, label}s, as a select's options. */
+const optionsOf = (choices: Row[]): [string, string][] => choices.map((o) => [o.value, o.label]);
 
 function LocaleSettings() {
-  const [editing, setEditing] = useEditing();
-  const form = useRef<HTMLDivElement>(null);
   const P = S.PREFS;
-  useEffect(() => { if (editing) document.getElementById("set-language")?.focus(); }, [editing]);
   const region = (code: string | null) => (code ? REGIONS.find(([v]) => v === code)?.[1] || code
     : LANG !== "en" ? `The language's (${LANG})` : `The browser's (${navigator.language})`);
-  const sample = () => `${zonedNow().toLocaleDateString(LOC(), { weekday: "short", day: "numeric", month: "short", year: "numeric" })}, ${fmtTime("14:30")} · ${homeK(150000)} a year`;
-  const rate = P.currency !== "GBP" && P.currency_rate
-    ? <span className="muted small">{` · pay is converted through GBP: 1 ${P.currency} = ${P.currency_rate.toFixed(4)} GBP, the rate on ${fmtDay(P.currency_rate_on)}`}</span>
-    : null;
+  const sample = `${zonedNow().toLocaleDateString(LOC(), { weekday: "short", day: "numeric", month: "short", year: "numeric" })}, ${fmtTime("14:30")} · ${homeK(150000)} a year`;
   return (
-    <SettingsPanel title="Language and region" editing={editing} onToggle={setEditing} done="Cancel" who="everyone"
+    <SettingsPanel title="Language and region"
       intro="How hunt speaks, how dates, times and numbers are written, and the currency pay is compared in. Your time zone is in Calendar.">
-      {!editing ? (
-        <Facts rows={[
-          ["Language", <span lang={P.language || "en"}>{choiceLabel(S.META.languages, P.language || "en")}</span>],
-          ["Region", region(P.locale)],
-          ["Numbers", choiceLabel(S.META.numerals, P.numerals || "auto")],
-          ["Times", choiceLabel(S.META.clocks, P.clock)],
-          ["Currency", <>{currencyName(P.currency)}{rate}</>],
-          ["Looks like", sample()],
-        ]} />
-      ) : <>
-        <div className="fields two" ref={form}>
-          <SetField id="set-language" label="Language" help="The words, and which way the page reads."><Choose id="set-language" options={S.META.languages.map((o) => [o.value, o.label])} value={P.language || "en"} /></SetField>
-          <SetField id="set-region" label="Region" help="Dates, numbers, and the names of days and months."><Choose id="set-region" options={[["", region(null)], ...REGIONS]} value={P.locale || ""} /></SetField>
-          <SetField id="set-numerals" label="Numbers" help="Which digits numbers are written in."><Choose id="set-numerals" options={S.META.numerals.map((o: Row) => [o.value, o.label])} value={P.numerals || "auto"} /></SetField>
-          <SetField id="set-clock" label="Times"><Choose id="set-clock" options={S.META.clocks.map((o: Row) => [o.value, o.label])} value={P.clock} /></SetField>
-          <SetField id="set-currency" label="Currency" help="Pay is shown in it, converted at today's rate where a posting gives another."><Choose id="set-currency" options={CURRENCIES.map((c) => [c, currencyName(c)])} value={P.currency} /></SetField>
-        </div>
-        <SaveCancel cancel={() => setEditing(false)} save={async () => {
-          const v = valuesOf(form.current);
-          const saved = await attempt(() => patch("settings", {
-            language: v["set-language"], locale: v["set-region"], numerals: v["set-numerals"], clock: v["set-clock"], currency: v["set-currency"],
-          }));
-          if (!saved) return;
-          // Another language or script redraws everything, in it.
-          const relanguage = saved.language !== S.PREFS.language || saved.numerals !== S.PREFS.numerals;
-          S.PREFS = saved;
-          if (relanguage) { setLanguage(saved.language, saved.numerals); location.reload(); return; }
-          changed();
-          toast("Saved");
-          setEditing(false);
-        }} />
-      </>}
+      <SettingRow id="set-language" label="Language" hint="The words, and which way the page reads.">
+        <ChoiceSetting id="set-language" options={optionsOf(S.META.languages)} value={P.language || "en"} save={(v) => relanguage({ language: v })} />
+      </SettingRow>
+      <SettingRow id="set-region" label="Region" hint="Dates, numbers, and the names of days and months.">
+        <ChoiceSetting id="set-region" options={[["", region(null)], ...REGIONS]} value={P.locale || ""} save={(v) => saveSettings({ locale: v })} />
+      </SettingRow>
+      <SettingRow id="set-numerals" label="Numbers" hint="Which digits numbers are written in.">
+        <ChoiceSetting id="set-numerals" options={optionsOf(S.META.numerals)} value={P.numerals || "auto"} save={(v) => relanguage({ numerals: v })} />
+      </SettingRow>
+      <SettingRow id="set-clock" label="Times">
+        <ChoiceSetting id="set-clock" options={optionsOf(S.META.clocks)} value={P.clock} save={(v) => saveSettings({ clock: v })} />
+      </SettingRow>
+      <SettingRow id="set-currency" label="Currency" hint={<>
+        <span>Pay is shown in it, converted at today's rate where a posting gives another.</span>
+        {P.currency !== "GBP" && P.currency_rate
+          ? <>{" "}<span>{`Pay is converted through GBP: 1 ${P.currency} = ${P.currency_rate.toFixed(4)} GBP, the rate on ${fmtDay(P.currency_rate_on)}.`}</span></> : null}
+      </>}>
+        <ChoiceSetting id="set-currency" options={CURRENCIES.map((c) => [c, currencyName(c)])} value={P.currency} save={(v) => saveSettings({ currency: v })} />
+      </SettingRow>
+      <SettingRow label="Looks like"><span aria-live="polite">{sample}</span></SettingRow>
     </SettingsPanel>
   );
 }
@@ -308,147 +373,128 @@ function zoneName(zone: string) {
   } catch { return city; }
 }
 
+/** Every time zone, as a select's options. */
+const zoneOptions = (): [string, string][] => TIME_ZONES.map((z) => [z, z.replaceAll("_", " ")]);
+
 /**
  * The calendar: your time zone (hunt's, and the one interview times are
  * in), the week's first day, working hours (shaded outside in the day and
  * week), and other time zones shown beside its hours.
  */
 function CalendarSettings() {
-  const [editing, setEditing] = useEditing();
   const P = S.PREFS;
-  const zone = (name: string | null) => name || `The machine's (${P.server_timezone})`;
-  const work = P.work_hours;
-  const dayNames = (days: string[]) => {
-    // Monday to Friday reads as a range; anything else, day by day.
-    const all = S.META.weekdays.map((d: Row) => d.value);
-    const i = all.indexOf(days[0]);
-    const run = days.length > 2 && i >= 0 && days.every((d, n) => all[i + n] === d);
-    const name = (d: string) => new Date(2024, 0, 1 + all.indexOf(d)).toLocaleDateString(LOC(), { weekday: "short" });
-    return run ? `${name(days[0])}–${name(days[days.length - 1])}` : days.map(name).join(", ");
-  };
   return (
-    <SettingsPanel title="Time and hours" editing={editing} onToggle={setEditing} done="Cancel"
+    <SettingsPanel title="Time and hours"
       intro="Your time zone and working hours, and other time zones to see beside yours in the calendar's day and week.">
-      {!editing ? (
-        <Facts rows={[
-          ["Time zone", zone(P.timezone)],
-          ["Weeks start on", choiceLabel(S.META.week_starts, P.week_start)],
-          ["Working hours", work ? `${fmtTime(work.start)}–${fmtTime(work.end)}, ${dayNames(work.days)}` : <span className="muted">Not set</span>],
-          ["Other time zones", P.calendar_zones.length ? P.calendar_zones.map(zoneName).join(" · ") : <span className="muted">None</span>],
-        ]} />
-      ) : <CalendarForm zone={zone} done={() => setEditing(false)} />}
+      <SettingRow id="set-timezone" label="Time zone" hint="What “today” and “now” are, for hunt and its calendar feed; interview times are in it.">
+        <ChoiceSetting id="set-timezone" options={[["", `The machine's (${P.server_timezone})`], ...zoneOptions()]} value={P.timezone || ""}
+          save={(v) => saveSettings({ timezone: v })} />
+      </SettingRow>
+      <SettingRow id="set-week" label="Weeks start on">
+        <ChoiceSetting id="set-week" options={optionsOf(S.META.week_starts)} value={P.week_start} save={(v) => saveSettings({ week_start: v })} />
+      </SettingRow>
+      <SettingRow label="Working hours" hint="The hours outside them are shaded in the calendar's day and week."><WorkHours /></SettingRow>
+      <SettingRow label="Other time zones" hint={`Their hours beside yours in the day and week, to see when an interview elsewhere falls; up to ${S.META.max_calendar_zones}.`}>
+        <OtherZones />
+      </SettingRow>
     </SettingsPanel>
   );
 }
 
-function CalendarForm({ zone, done }: { zone: (n: string | null) => string; done: () => void }) {
-  const P = S.PREFS;
-  const work = P.work_hours;
-  const zones: [string, string][] = TIME_ZONES.map((z) => [z, z.replaceAll("_", " ")]);
-  const [timezone, setTimezone] = useState(P.timezone || "");
-  const [week, setWeek] = useState(P.week_start);
-  const [hoursOn, setHoursOn] = useState(!!work);
-  const [start, setStart] = useState(work?.start || "09:00");
-  const [end, setEnd] = useState(work?.end || "17:30");
-  const [days, setDays] = useState<string[]>(work?.days || ["monday", "tuesday", "wednesday", "thursday", "friday"]);
-  const [others, setOthers] = useState<string[]>([...P.calendar_zones]);
+const WORK_HOURS = { start: "09:00", end: "17:30", days: ["monday", "tuesday", "wednesday", "thursday", "friday"] };
+
+/** Working hours: on or off; from, to, and on which days; each saved as it's changed. */
+function WorkHours() {
+  const work = S.PREFS.work_hours;
+  // Off and on again: the hours they were.
+  const last = useRef(work || WORK_HOURS);
+  if (work) last.current = work;
+  const [start, setStart] = useState(last.current.start);
+  const [end, setEnd] = useState(last.current.end);
+  useEffect(() => { setStart(last.current.start); setEnd(last.current.end); }, [work?.start, work?.end]);
+  const hours = (o: Row) => saveSettings({ work_hours: { ...last.current, ...o } });
+  // A time, saved once it's left: put back if it can't be.
+  const time = (key: "start" | "end", value: string, set: (v: string) => void) => async () => {
+    if (value === work?.[key]) return;
+    if (!value || !(await hours({ [key]: value }))) set(work?.[key] || "");
+  };
+  return <>
+    <SwitchSetting id="set-work-on" checked={!!work} label={work ? "On" : "Off"} save={(on) => saveSettings({ work_hours: on ? last.current : null }, on ? "Working hours on" : "Working hours off")} />
+    {work ? (
+      <div className="work-hours">
+        <div className="work-times">
+          <Field><Label htmlFor="set-work-start">From</Label>
+            <Input type="time" id="set-work-start" value={start} step={900} onChange={(e) => setStart(e.target.value)} onBlur={time("start", start, setStart)} /></Field>
+          <Field><Label htmlFor="set-work-end">To</Label>
+            <Input type="time" id="set-work-end" value={end} step={900} onChange={(e) => setEnd(e.target.value)} onBlur={time("end", end, setEnd)} /></Field>
+        </div>
+        <fieldset className="work-days"><legend>On</legend>
+          {S.META.weekdays.map((d: Row) => {
+            const on = work.days.includes(d.value);
+            // At least one day: the last can't be taken off.
+            const only = on && work.days.length === 1;
+            return (
+              <label key={d.value} className="check al-choice" title={only ? "Working hours need at least one day" : undefined}>
+                <input type="checkbox" value={d.value} checked={on} disabled={only}
+                  onChange={(e) => hours({ days: S.META.weekdays.map((x: Row) => x.value).filter((x: string) => (x === d.value ? e.target.checked : work.days.includes(x))) })} />{d.label}
+              </label>
+            );
+          })}
+        </fieldset>
+      </div>
+    ) : null}
+  </>;
+}
+
+/** Zones a new one starts as, the first not already shown. */
+const LIKELY_ZONES = ["Europe/London", "America/New_York", "Asia/Tokyo", "America/Los_Angeles", "Asia/Dubai", "Australia/Sydney"];
+
+/** Other time zones: a select each, saved as it's changed, added and removed. */
+function OtherZones() {
+  const others: string[] = S.PREFS.calendar_zones;
   const box = useRef<HTMLDivElement>(null);
   const focusLast = useRef(false);
-  useEffect(() => { document.getElementById("set-timezone")?.focus(); }, []);
   useEffect(() => {
     if (focusLast.current) { box.current?.querySelector<HTMLElement>(".other-zone:last-of-type select")?.focus(); focusLast.current = false; }
   }, [others.length]);
-  return <>
-    <div className="fields two">
-      <SetField id="set-timezone" label="Time zone" help="What “today” and “now” are, for hunt and its calendar feed; interview times are in it.">
-        <Select id="set-timezone" value={timezone} onChange={(e) => setTimezone(e.target.value)}>
-          {([["", zone(null)], ...zones] as [string, string][]).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</Select>
-      </SetField>
-      <SetField id="set-week" label="Weeks start on">
-        <Select id="set-week" value={week} onChange={(e) => setWeek(e.target.value)}>{S.META.week_starts.map((o: Row) => <option key={o.value} value={o.value}>{o.label}</option>)}</Select>
-      </SetField>
-    </div>
-    <Field>
-      <label className="switch al-label al-choice" htmlFor="set-work-on"><Input type="checkbox" role="switch" id="set-work-on" checked={hoursOn} onChange={(e) => setHoursOn(e.target.checked)} />Working hours</label>
-      <p className="muted small">The hours outside them are shaded in the calendar's day and week.</p>
-      {/* Working hours: on or off; from, to, and on which days. */}
-      <div className="work-hours" hidden={!hoursOn}>
-        <div className="work-times">
-          <SetField id="set-work-start" label="From"><Input type="time" id="set-work-start" value={start} step={900} onChange={(e) => setStart(e.target.value)} /></SetField>
-          <SetField id="set-work-end" label="To"><Input type="time" id="set-work-end" value={end} step={900} onChange={(e) => setEnd(e.target.value)} /></SetField>
+  const set = (next: string[], message?: string) => saveSettings({ calendar_zones: next }, message);
+  const options = zoneOptions();
+  return (
+    <div className="other-zones" ref={box}>
+      {others.map((z, i) => (
+        <div key={`${i}-${z}`} className="other-zone">
+          <ChoiceSetting id={`set-zone-${i}`} aria-label={`Other time zone ${i + 1}`} value={z} options={options} save={(v) => set(others.map((x, j) => (j === i ? v : x)))} />
+          <button className="al-button al-button--sm al-button--quiet al-button--danger" type="button" aria-label={`Remove ${zoneName(z)}`}
+            onClick={() => set(others.filter((_, j) => j !== i), `Removed ${zoneName(z)}`)}>remove</button>
         </div>
-        <fieldset className="work-days"><legend>On</legend>
-          {S.META.weekdays.map((d: Row) => (
-            <label key={d.value} className="check al-choice"><input type="checkbox" value={d.value} checked={days.includes(d.value)}
-              onChange={(e) => setDays(e.target.checked ? S.META.weekdays.map((x: Row) => x.value).filter((x: string) => x === d.value || days.includes(x)) : days.filter((x) => x !== d.value))} />{d.label}</label>
-          ))}
-        </fieldset>
-      </div>
-    </Field>
-    <Field>
-      <span className="al-label">Other time zones</span>
-      <p className="muted small">{`Their hours beside yours in the day and week, to see when an interview elsewhere falls; up to ${S.META.max_calendar_zones}.`}</p>
-      {/* Other time zones: a select each, added and removed. */}
-      <div className="other-zones" ref={box}>
-        {others.map((z, i) => (
-          <div key={i} className="other-zone">
-            <Select aria-label={`Other time zone ${i + 1}`} value={z} onChange={(e) => setOthers(others.map((x, j) => (j === i ? e.target.value : x)))}>
-              {zones.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</Select>
-            <button className="al-button al-button--sm al-button--quiet al-button--danger" type="button" onClick={() => setOthers(others.filter((_, j) => j !== i))}>remove</button>
-          </div>
-        ))}
-        {others.length < S.META.max_calendar_zones
-          ? <AddLink label="Add a time zone" onClick={() => { focusLast.current = true; setOthers([...others, others.length ? "America/New_York" : "Europe/London"]); }} /> : null}
-      </div>
-    </Field>
-    <SaveCancel cancel={done} save={async () => {
-      const saved = await attempt(() => patch("settings", {
-        timezone, week_start: week,
-        work_hours: hoursOn ? { start, end, days } : null,
-        calendar_zones: others,
-      }));
-      if (!saved) return;
-      S.PREFS = saved;
-      changed();
-      toast("Saved");
-      done();
-    }} />
-  </>;
+      ))}
+      {others.length < S.META.max_calendar_zones ? <AddLink label="Add a time zone" onClick={() => {
+        const pick = [...LIKELY_ZONES, ...TIME_ZONES].find((z) => !others.includes(z) && z !== S.PREFS.timezone) || "UTC";
+        focusLast.current = true;
+        set([...others, pick], `Added ${zoneName(pick)}`);
+      }} /> : null}
+    </div>
+  );
 }
 
 // ---- location ---------------------------------------------------------------------------
 
 /** Where you live: a UK resident has take-home pay (where it's on), for their part of the UK. */
 function LocationSettings() {
-  const [editing, setEditing] = useEditing();
-  const [uk, setUk] = useState(!!S.PREFS.uk_resident);
-  const [region, setRegion] = useState(S.PREFS.uk_region || S.META.uk_regions?.[0]?.value);
-  useEffect(() => { if (editing) { setUk(!!S.PREFS.uk_resident); document.getElementById("set-uk")?.focus(); } }, [editing]);
-  const what = <p className="muted small">{S.PREFS.uk_resident
-    ? "Take-home pay is on, and on applications that give their pay."
-    : "Take-home pay works out UK tax, so it's for those who live in the UK: what you'd keep of a salary or a contractor's rate, and of applications' pay."}</p>;
+  const P = S.PREFS;
   return (
-    <SettingsPanel title="Where you live" editing={editing} onToggle={setEditing} done="Cancel" who="you" intro="For working out tax on your pay.">
-      {!editing ? <>
-        <Facts rows={[["UK resident", S.PREFS.uk_resident ? "Yes" : "No"], ...(S.PREFS.uk_resident ? [["Part of the UK", choiceLabel(S.META.uk_regions, S.PREFS.uk_region)] as [string, string]] : [])]} />
-        {what}
-      </> : <>
-        <div className="location-fields">
-          <label className="check al-choice"><input id="set-uk" type="checkbox" checked={uk} onChange={(e) => setUk(e.target.checked)} /><span>I live in the UK (a UK resident, for tax)</span></label>
-          <Field hidden={!uk}><Label htmlFor="set-uk-region">Part of the UK</Label>
-            <Select id="set-uk-region" value={region} onChange={(e) => setRegion(e.target.value)}>{S.META.uk_regions.map((o: Row) => <option key={o.value} value={o.value}>{o.label}</option>)}</Select>
-            <p className="muted small">Scotland has its own income tax bands.</p></Field>
-        </div>
-        {what}
-        <SaveCancel cancel={() => setEditing(false)} save={async () => {
-          const saved = await attempt(() => patch("settings", { uk_resident: uk, uk_region: region }));
-          if (!saved) return;
-          S.PREFS = saved;
-          changed();
-          toast("Saved");
-          setEditing(false);
-        }} />
-      </>}
+    <SettingsPanel title="Where you live" intro="For working out tax on your pay.">
+      <SettingRow label="UK resident" hint={P.uk_resident
+        ? "Take-home pay is on, and on applications that give their pay."
+        : "Take-home pay works out UK tax, so it's for those who live in the UK: what you'd keep of a salary or a contractor's rate, and of applications' pay."}>
+        <SwitchSetting id="set-uk" checked={!!P.uk_resident} label="I live in the UK (a UK resident, for tax)"
+          save={(on) => saveSettings({ uk_resident: on }, on ? "Take-home pay is on" : "Take-home pay is off")} />
+      </SettingRow>
+      {P.uk_resident ? (
+        <SettingRow id="set-uk-region" label="Part of the UK" hint="Scotland has its own income tax bands.">
+          <ChoiceSetting id="set-uk-region" options={optionsOf(S.META.uk_regions)} value={P.uk_region} save={(v) => saveSettings({ uk_region: v })} />
+        </SettingRow>
+      ) : null}
     </SettingsPanel>
   );
 }
@@ -457,43 +503,22 @@ function LocationSettings() {
 
 /** The take-home pay you want, in your currency: Take-home pay sets its figures against it. */
 function DesiredSettings() {
-  const [editing, setEditing] = useEditing();
-  const want = S.PREFS.desired_take_home;
-  const [amount, setAmount] = useState("");
-  const [per, setPer] = useState("month");
-  useEffect(() => {
-    if (!editing) return;
-    setAmount(want == null ? "" : String(want));
-    setPer(S.PREFS.desired_take_home_per || "month");
-    requestAnimationFrame(() => document.getElementById("set-desired")?.focus());
-  }, [editing]);
-  const words: Record<string, string> = { week: "a week", month: "a month", year: "a year" };
+  const P = S.PREFS;
+  const want = P.desired_take_home;
   return (
-    <SettingsPanel title="What you want to take home" editing={editing} onToggle={setEditing} done="Cancel" who="you"
+    <SettingsPanel title="What you want to take home"
       intro="Take-home pay, and every application's pay, compare with this. Take-home pay starts from it when you work back from what you want.">
-      {!editing ? (
-        <Facts rows={[["Desired net take-home pay", want == null ? <span className="muted">Not set</span>
-          : <>{money(want, HOME())}{" "}<span>{words[S.PREFS.desired_take_home_per] || "a month"}</span></>]]} />
-      ) : <>
-        <div className="fields two">
-          <Field><Label htmlFor="set-desired">Desired net take-home pay</Label>
-            <Input id="set-desired" type="text" inputMode="decimal" autoComplete="off" placeholder="e.g. 4,000" value={amount} onChange={(e) => setAmount(e.target.value)} />
-            <p className="muted small"><span>After tax, in</span>{" "}{currencyName(HOME())}{". "}<span>Leave it empty for none.</span></p></Field>
-          <Field><Label htmlFor="set-desired-per">Pay period</Label>
-            <Select id="set-desired-per" value={per} onChange={(e) => setPer(e.target.value)}>
-              {([["week", "Weekly"], ["month", "Monthly"], ["year", "Annually"]] as [string, string][]).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</Select></Field>
-        </div>
-        <SaveCancel cancel={() => setEditing(false)} save={async () => {
-          const n = takeHomeNumber(amount);
-          if (Number.isNaN(n)) { toast("That isn't a number hunt can read: try 4000 or 4k.", "error"); return; }
-          const saved = await attempt(() => patch("settings", { desired_take_home: n, desired_take_home_per: per }));
-          if (!saved) return;
-          S.PREFS = saved;
-          changed();
-          toast("Saved");
-          setEditing(false);
+      <SettingRow id="set-desired" label="Desired net take-home pay" hint={<><span>After tax, in</span>{" "}{currencyName(HOME())}{". "}<span>Leave it empty for none.</span></>}>
+        <TextSetting id="set-desired" inputMode="decimal" autoComplete="off" placeholder="e.g. 4,000" value={want == null ? "" : String(want)} save={(v) => {
+          const n = takeHomeNumber(v);
+          if (Number.isNaN(n)) { toast("That isn't a number hunt can read: try 4000 or 4k.", "error"); return Promise.resolve(false); }
+          return saveSettings({ desired_take_home: n });
         }} />
-      </>}
+      </SettingRow>
+      <SettingRow id="set-desired-per" label="Pay period">
+        <ChoiceSetting id="set-desired-per" options={[["week", "Weekly"], ["month", "Monthly"], ["year", "Annually"]]} value={P.desired_take_home_per || "month"}
+          save={(v) => saveSettings({ desired_take_home_per: v })} />
+      </SettingRow>
     </SettingsPanel>
   );
 }
@@ -509,11 +534,11 @@ function LinkedinSettings() {
   const [version, setVersion] = useState(0);
   useEffect(() => { get("settings").then((p) => { setPrefs(p); setAddress(p.bookmarklet_url || ""); setRule(p.same_name); }).catch(() => {}); }, [version]);
   useEffect(() => { if (editing) setTimeout(() => document.getElementById("bm-url")?.focus(), 0); }, [editing]);
-  if (!prefs) return null;
+  if (!prefs) return <LoadingBlock />;
   const origin = prefs.bookmarklet_url || location.origin;
   const href = profileBookmarklet(origin);
   return (
-    <SettingsPanel title="LinkedIn bookmark" editing={editing} onToggle={setEditing} done="Cancel" who="browser" className="linkedin"
+    <SettingsPanel title="LinkedIn bookmark" editing={editing} onToggle={setEditing} done="Cancel" className="linkedin"
       intro="LinkedIn only shows profiles to people signed in, so hunt can't read them itself. This bookmark reads the profile open in your browser instead, and brings it here to choose what to keep.">
       <ol className="steps-help">
         <li>Drag{" "}<a className="al-button al-button--sm bookmarklet" title="Drag me to your bookmarks bar"
@@ -804,7 +829,7 @@ function OrderedSettings({ list, title, intro, items, noun, focus, redraw, renam
 /** A list in a panel of its own; or bare, in another's row (nest). */
 function SettingsShell({ bare, title, intro, list, children }: { bare: boolean; title?: string; intro?: string; list: string; children: ReactNode }) {
   if (bare) return <div className="nested-list" data-list={list}>{children}</div>;
-  return <SettingsPanel title={title} intro={intro} who="everyone" list={list}>{children}</SettingsPanel>;
+  return <SettingsPanel title={title} intro={intro} list={list}>{children}</SettingsPanel>;
 }
 
 /** A sub stage's name, being added under its stage. */
@@ -871,7 +896,7 @@ function BoardSettings() {
       setData({ swimlanes, stages, lanes });
     })().catch((e) => toast(e.message, "error"));
   }, [version]);
-  if (!data) return null;
+  if (!data) return <LoadingBlock lines={8} />;
   const again: Redraw = (o) => (boardRedraw || redraw)(o);
   const { swimlanes, stages, lanes } = data;
   // By swimlane, as the board has them (a stage in none, in the first).
@@ -1049,7 +1074,7 @@ function TagsSettings() {
     if (await attempt(() => del(`tags/${t.id}`))) { toast(`Deleted ${t.name}`); await reloadTags(); }
   };
   return (
-    <SettingsPanel title="Tags" who="everyone" intro="Add them from any application, company, person or file, or here. Renaming a tag renames it everywhere.">
+    <SettingsPanel title="Tags" intro="Add them from any application, company, person or file, or here. Renaming a tag renames it everywhere.">
       {S.TAGS.length ? (
         <ul className="setting-list tag-rows">
           {/* A row: the tag, its name edited in place; its colour, which opens its colours; remove. */}

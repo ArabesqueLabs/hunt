@@ -1,4 +1,4 @@
-// Filters for the Tracking Board, shared by its two views (board and
+// Filters for Applications, shared by its two views (board and
 // table). They live in the address (/?mode=remote&pay=120000), so a filtered
 // view can be bookmarked and Back undoes a change; the last ones used are
 // remembered.

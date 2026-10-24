@@ -18,8 +18,9 @@ It reads first, top to bottom:
 - your notes;
 - About the job: its postings, each laid out like an email (where it's
   from, when it was posted and closes, or last read, then headings, lists
-  and links in its own box; Open ↗, Refresh, and Remove for all but the
-  main one);
+  and links in its own box; Remove for all but the main one). Their links
+  are under Links, beside; Refresh from the posting is in the menu at the
+  top;
 - people, with their email and phone to click (to write or call); emails,
   as threads (by Gmail's thread, or by subject), folded until opened, each
   message with its time; files sent;

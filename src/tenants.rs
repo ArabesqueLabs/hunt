@@ -159,6 +159,17 @@ const DEFAULTS: &[&str] = &[
     "locale.currency",
 ];
 
+/// What admins say of this hunt (General, in the admin centre), each with
+/// the most characters it may have.
+const SITE: &[(&str, usize)] = &[("name", 40), ("announcement", 280), ("contact", 254)];
+
+/// An email address, near enough: someone, an @, and somewhere with a dot.
+fn looks_like_email(s: &str) -> bool {
+    s.split_once('@').is_some_and(|(who, at)| {
+        !who.is_empty() && at.contains('.') && !s.contains(char::is_whitespace)
+    })
+}
+
 fn clean(s: Option<&str>) -> Option<String> {
     s.map(str::trim).filter(|s| !s.is_empty()).map(String::from)
 }
@@ -449,6 +460,56 @@ impl Tenants {
         })
     }
 
+    fn clear_shared_setting(&self, name: &str) -> Result<()> {
+        self.with(|db| {
+            db.exec(
+                "DELETE FROM setting /* all owners */ WHERE owner_id = 0 AND name = ?1",
+                args![name],
+            )
+            .map(drop)
+        })
+    }
+
+    /// What admins say of this hunt, to everyone who opens it: its name
+    /// (hunt's own, unless named), a notice on every page, and an address
+    /// to write to for help. Each null when not set.
+    pub fn site(&self) -> Result<Value> {
+        let mut out = Map::new();
+        for (k, _) in SITE {
+            out.insert(
+                k.to_string(),
+                self.shared_setting(&format!("site.{k}"))?
+                    .map_or(Value::Null, Value::from),
+            );
+        }
+        Ok(Value::Object(out))
+    }
+
+    /// Change what admins say of this hunt; those left out stay, and an
+    /// empty one goes back to none.
+    pub fn set_site(&self, v: &Value) -> Result<Value> {
+        for (k, most) in SITE {
+            let Some(x) = v.get(k) else {
+                continue;
+            };
+            let value = x.as_str().map(str::trim).unwrap_or("");
+            if value.chars().count() > *most {
+                return Err(invalid(format!("{k}: at most {most} characters")));
+            }
+            if *k == "contact" && !value.is_empty() && !looks_like_email(value) {
+                return Err(invalid(format!(
+                    "contact: an email address, like help@example.com, not {value:?}"
+                )));
+            }
+            if value.is_empty() {
+                self.clear_shared_setting(&format!("site.{k}"))?;
+            } else {
+                self.set_shared_setting(&format!("site.{k}"), value)?;
+            }
+        }
+        self.site()
+    }
+
     /// Whether new people may ask for an account (admins can close it, so
     /// hunt isn't swamped). Open unless closed.
     pub fn signups_open(&self) -> Result<bool> {
@@ -495,18 +556,9 @@ impl Tenants {
             {
                 return Err(invalid(format!("currency: {value:?} isn't a currency")));
             }
-            self.with(|db| {
-                if value.is_empty() {
-                    db.exec(
-                        "DELETE FROM setting /* all owners */ WHERE owner_id = 0 AND name = ?1",
-                        args![format!("default.{k}")],
-                    )
-                    .map(drop)
-                } else {
-                    Ok(())
-                }
-            })?;
-            if !value.is_empty() {
+            if value.is_empty() {
+                self.clear_shared_setting(&format!("default.{k}"))?;
+            } else {
                 self.set_shared_setting(&format!("default.{k}"), value)?;
             }
         }
@@ -846,6 +898,7 @@ impl Tenants {
         Ok(json!({
             "signups_open": self.signups_open()?,
             "defaults": self.defaults()?,
+            "site": self.site()?,
             "accounts": rows,
             "totals": {
                 "active": count("active"), "pending": count("pending"),

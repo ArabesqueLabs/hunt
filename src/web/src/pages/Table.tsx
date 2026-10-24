@@ -1,4 +1,4 @@
-// The Tracking Board's table view (/applications): every application, with
+// The Applications table view (/applications): every application, with
 // where it stands, in sortable columns. The board itself is the other view
 // (/); ViewSwitch moves between them.
 
@@ -15,7 +15,7 @@ import { BulkBar, ProcessActions, SelectAllCell, SelectCell } from "../component
 import { useColumns } from "../components/columns";
 import { FilterBar } from "../components/FilterBar";
 import { TagChip } from "../components/tags";
-import { Logo, Table } from "../components/ui";
+import { LoadingPage, Logo, Table } from "../components/ui";
 import { BoardContext, BoardHead, NextLabel, NoCycle } from "./Board";
 
 const TABLE_DEFAULTS = { sort: "stage", desc: false };
@@ -50,7 +50,7 @@ export function TablePage() {
     if (stored("hiddenColumns:board-table") == null) store("hiddenColumns:board-table", JSON.stringify(["source", "location", "updated", "tags"]));
     loadBoard().then(setBoard).catch((e) => toast(e.message, "error"));
   }, []);
-  if (!board) return null;
+  if (!board) return <LoadingPage kind="table" />;
   if (!runningCycles().length && !board.read_only) return <div className="board"><NoCycle /></div>;
   return <ApplicationsTable board={board} reload={() => { setBoard(null); loadBoard().then(setBoard); }} />;
 }

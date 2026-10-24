@@ -1261,6 +1261,13 @@ pub const CLOCKS: &[(&str, &str)] = &[
     ("12", "12-hour (2:30 pm)"),
 ];
 
+/// How hunt looks: light, dark, or as the system is.
+pub const THEMES: &[(&str, &str)] = &[
+    ("light", "Light"),
+    ("dark", "Dark"),
+    ("auto", "Match the system"),
+];
+
 /// The day weeks start on, in the calendar.
 pub const WEEK_STARTS: &[(&str, &str)] = &[("monday", "Monday"), ("sunday", "Sunday")];
 
@@ -1344,8 +1351,9 @@ pub const NUMERALS: &[(&str, &str)] = &[
 ];
 
 impl Db {
-    /// Settings kept by the service: where the bookmark sends profiles, and
-    /// what to do about a name already here.
+    /// Settings kept by the service, one account's: how hunt looks and
+    /// speaks, the calendar, pay, where the bookmark sends profiles, and what
+    /// to do about a name already here.
     pub fn settings(&self) -> Result<Value> {
         let currency = self
             .setting("locale.currency")?
@@ -1367,6 +1375,8 @@ impl Db {
             "currency_rate_on": rate.map(|r| r.1).filter(|d| !d.is_empty()),
             "language": self.setting("locale.language")?.unwrap_or_else(|| "en".into()),
             "numerals": self.setting("locale.numerals")?.unwrap_or_else(|| "auto".into()),
+            // Light, dark or as the system is: the same on every device.
+            "theme": self.setting("appearance.theme")?.unwrap_or_else(|| "auto".into()),
             // The zone hunt keeps time in: chosen, or the machine's own.
             "timezone": self.setting("locale.timezone")?,
             "server_timezone": jiff::tz::TimeZone::system().iana_name().unwrap_or("UTC"),
@@ -1458,6 +1468,7 @@ impl Db {
             ("week_start", "locale.week_start", WEEK_STARTS),
             ("language", "locale.language", languages.as_slice()),
             ("numerals", "locale.numerals", NUMERALS),
+            ("theme", "appearance.theme", THEMES),
         ] {
             if let Some(value) = v.get(key) {
                 let value = value.as_str().unwrap_or("");

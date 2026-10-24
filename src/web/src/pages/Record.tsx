@@ -10,7 +10,7 @@ import { fmtDay, fmtSize, fmtStamp } from "../lib/format";
 import { LISTS } from "../lib/lists";
 import { R, closedWhy, optionLabel, reloadTags } from "../lib/meta";
 import { go, route, setLeaveGuard, settle } from "../lib/router";
-import { BASE_TITLE } from "../lib/shell";
+import { baseTitle } from "../lib/shell";
 import { store, stored } from "../lib/storage";
 import { tagNames } from "../lib/tags";
 import { toast } from "../lib/toast";
@@ -21,7 +21,7 @@ import { FieldControl, RecordView, fieldLayout } from "../components/fields";
 import { FileDrop, Preview, uploadVersion, useFilePicker } from "../components/files";
 import { applyToCompany, applyToPerson, companyImport, openImport, personImport, refreshFromLinkedIn } from "../components/importer";
 import { ColourTagChip, TagChip, TagEditor } from "../components/tags";
-import { Icon, Input, Logo, Notice, Photo } from "../components/ui";
+import { Icon, Input, LoadingPage, Logo, Notice, Photo } from "../components/ui";
 import { RichView } from "../components/RichText";
 import { VersionsPanel } from "../components/VersionsPanel";
 
@@ -57,11 +57,11 @@ export function RecordPage({ page, id, editing = false, versionId = null }: { pa
         profile = { company };
       }
       setData({ rec, profile, doc });
-      document.title = `${rec.label} · ${BASE_TITLE}`;
+      document.title = `${rec.label} · ${baseTitle()}`;
     })().catch((e) => toast(e.message, "error"));
   }, [r.name, r.entity, id]);
   if (error) return <div className="page"><Notice kind="danger" role="alert">{error}</Notice><a href={`/${page}`}>{`← ${r.title}`}</a></div>;
-  if (!data) return null;
+  if (!data) return <LoadingPage kind="detail" />;
   return <Record page={page} id={id} r={r} loaded={data} editing={editing} versionId={versionId} />;
 }
 

@@ -39,13 +39,13 @@ function chrome() {
  * `full` takes the whole page, not just the window; `phone` is 390 wide.
  */
 const SHOTS = [
-  { name: "board", title: "Tracking board", about: "Applications by stage, with what's next on each; the cycles running side by side.", path: "/", detailed: true },
+  { name: "board", title: "Applications", about: "Applications by stage, with what's next on each; the cycles running side by side.", path: "/", detailed: true },
   // Every swimlane open, Terminated Processes too: its stages' cards folded
   // into piles, as they start.
   { name: "swimlanes", title: "Swimlanes, sub stages and folding",
     about: "The board's rows: what's active, the offers, and what's closed, each stage a column. Interviewing divided into sub stages; Backlog's Other, and the closed, folded into piles.",
     path: "/", full: true, act: `document.querySelectorAll("details.swimlane").forEach((d) => { d.open = true; })` },
-  { name: "table", title: "Tracking board, as a table", about: "Every application, sortable, with the board's filters.", path: "/applications" },
+  { name: "table", title: "Applications, as a table", about: "Every application, sortable, with the board's filters.", path: "/applications" },
   { name: "new-application", title: "Adding an application", about: "From a posting's link, or by hand, onto the board.", path: "/", act: `document.querySelector('[aria-keyshortcuts="n"]').click()` },
   { name: "application", title: "An application", about: "What's next, its timeline, and its pay, details, prep, links and people beside.",
     path: (ids) => `/applications/${ids.app}`, full: true,

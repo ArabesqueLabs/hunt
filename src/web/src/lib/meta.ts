@@ -46,6 +46,9 @@ export const tenancy = () => S.META.tenancy || null;
 export const myAccount = () => tenancy()?.account || null;
 export const isAdmin = () => myAccount()?.role === "admin" && myAccount()?.status === "active";
 
+/** This hunt's name: as its admins name it, or hunt's own. */
+export const siteName = () => S.META?.about?.name || "hunt";
+
 /** Reload what the forms offer: archive reasons, tags. */
 export async function reloadMeta() {
   S.META = await get("meta");

@@ -1,7 +1,7 @@
 [
   {
     "name": "board",
-    "title": "Tracking board",
+    "title": "Applications",
     "about": "Applications by stage, with what's next on each; the cycles running side by side.",
     "phone": false
   },
@@ -13,7 +13,7 @@
   },
   {
     "name": "table",
-    "title": "Tracking board, as a table",
+    "title": "Applications, as a table",
     "about": "Every application, sortable, with the board's filters.",
     "phone": false
   },

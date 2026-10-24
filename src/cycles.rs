@@ -182,14 +182,15 @@ impl Db {
             if !cycle["ended_on"].is_null() {
                 return Err(invalid(format!("{} has already ended", label(&cycle))));
             }
-            let outcome = input.outcome.as_str();
-            if crate::resource::option_label(crate::resource::CYCLE_OUTCOMES, outcome).is_none() {
-                return Err(invalid(format!(
-                    "How it ended: {outcome:?} isn't one of offer, break, stopped, other"
-                )));
+            // One of offer, break, stopped and other, or in your own words.
+            let outcome = input.outcome.trim();
+            if outcome.is_empty() {
+                return Err(invalid(
+                    "How it ended: say which (offer, break, stopped, other), or in your own words",
+                ));
             }
             let mut note = crate::resource::option_label(crate::resource::CYCLE_OUTCOMES, outcome)
-                .unwrap_or("Ended")
+                .unwrap_or(outcome)
                 .to_string();
             if outcome == "offer" {
                 note = "Accepted an offer from outside the board".into();

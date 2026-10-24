@@ -35,7 +35,7 @@
 //! | `GET /docs`, `/screenshots`, `/privacy`, `/terms`, `/data-deletion`, `/ar/…` | the website's pages, which hunt once served: redirected there (`HUNT_SITE_URL`); without a website, the docs on GitHub |
 //! | `DELETE /api/account` | delete your own account and everything in it (`{confirm: your email}`) |
 //! | `GET /api/account`, `POST /api/account/request` | with several people (`--tenants`): who's asking and their account; ask for one (`{name, reason, provider, agrees}`: agreeing to the terms of use) |
-//! | `PATCH /api/admin/settings` | admins: `{signups_open}`, whether new people may ask for an account; `{defaults}`, the language, region, time zone and currency new accounts start with |
+//! | `PATCH /api/admin/settings` | admins: `{site}`, this hunt's `name`, an `announcement` on every page and a `contact` address for help; `{signups_open}`, whether new people may ask for an account; `{defaults}`, the language, region, time zone and currency new accounts start with |
 //! | `POST /api/admin/invites` | admins: `{email, name?}`, an account for someone, open for sign-ups or not |
 //! | `GET /api/admin/usage` | admins: each account's use of hunt (counts and sizes; no names or addresses) |
 //! | `GET /api/admin/overview`, `POST /api/admin/accounts/{id}/decide`, `PATCH, DELETE /api/admin/accounts/{id}?data=` | admins: every account; approve, reject, disable or enable (`{status, note}`); change role, name or CLI token; remove (with `data=1`, everything of theirs) |
@@ -43,7 +43,7 @@
 //! | `GET /api/stats` | numbers for the Stats page: totals, how far processes got, the weeks, outcomes, sources, pay, time, what's gone quiet |
 //! | `GET /api/backup` | everything tracked, files included, as a JSON download (the Gmail connection left out) |
 //! | `POST /api/backup?confirm=replace` | a backup as the body: replaces everything with it; how many rows each table now has |
-//! | `GET/PATCH /api/settings` | `{bookmarklet_url, same_name: ask\|merge\|new}`: where the LinkedIn bookmark sends profiles; what to do about a name already here |
+//! | `GET/PATCH /api/settings` | one account's: `{theme: light\|dark\|auto, language, locale, numerals, clock, currency, timezone, week_start, work_hours, calendar_zones, uk_resident, uk_region, desired_take_home, desired_take_home_per, calendar_feed, bookmarklet_url, same_name: ask\|merge\|new}` |
 //! | `GET/PUT/DELETE /api/mail` | the Gmail account (`{address, password, interval}`; signs in to check), the last sync, how much waits in triage |
 //! | `PUT/DELETE /api/mail/google/client` | your Google OAuth client (the JSON file from Google Cloud), for signing in with Google |
 //! | `GET /api/mail/google/start` | where to sign in with Google: `{url, redirect}`; Google returns to `/api/mail/google/callback` |
@@ -1069,9 +1069,15 @@ async fn meta(v: Viewer, headers: HeaderMap) -> ApiResult {
             })),
         })
     });
+    // What the admins say of this hunt, to everyone (signed in or not).
+    let about = match &v.app.tenants {
+        Some(t) => t.site()?,
+        None => json!({ "name": null, "announcement": null, "contact": null }),
+    };
     ok(json!({
         "access": access,
         "tenancy": tenancy,
+        "about": about,
         // Run for others, with a website whose terms of use people agree
         // to when asking for an account, and whose docs and legal pages the
         // app links to.
@@ -2389,21 +2395,28 @@ struct AdminSettings {
     signups_open: Option<bool>,
     /// What new accounts start with: `{language, region, timezone, currency}`.
     defaults: Option<Value>,
+    /// What it says of itself, to everyone: `{name, announcement, contact}`.
+    site: Option<Value>,
 }
 
-/// Hunt-wide settings: whether new people may ask for an account, and what
-/// new accounts start with.
+/// Hunt-wide settings: its name, notice and address for help; whether new
+/// people may ask for an account; and what new accounts start with.
 async fn admin_settings(a: Admin, Json(s): Json<AdminSettings>) -> ApiResult {
     ok(tokio::task::spawn_blocking(move || {
+        if let Some(site) = &s.site {
+            a.tenants.set_site(site)?;
+        }
         if let Some(open) = s.signups_open {
             a.tenants.set_signups_open(open)?;
         }
         if let Some(d) = &s.defaults {
             a.tenants.set_defaults(d)?;
         }
-        Ok::<_, Error>(
-            json!({ "signups_open": a.tenants.signups_open()?, "defaults": a.tenants.defaults()? }),
-        )
+        Ok::<_, Error>(json!({
+            "signups_open": a.tenants.signups_open()?,
+            "defaults": a.tenants.defaults()?,
+            "site": a.tenants.site()?,
+        }))
     })
     .await
     .map_err(|e| ApiError(Error::Db(e.to_string())))??)

@@ -16,13 +16,13 @@ import { attempt, get, patch, post } from "../lib/api";
 import { fmtDay, fmtMoney, HOME, homePay, isoToday, nf, parseLocal, zonedNow } from "../lib/format";
 import { fieldOf, optionLabel } from "../lib/meta";
 import { go } from "../lib/router";
-import { BASE_TITLE, offerNav } from "../lib/shell";
+import { baseTitle, offerNav } from "../lib/shell";
 import { S } from "../lib/state";
 import { store, stored } from "../lib/storage";
 import { toast } from "../lib/toast";
 import type { Card, Row } from "../lib/types";
 import { ask, pushDialog } from "../components/dialogs";
-import { Field, Icon, Input, Label, Logo, Photo, Select, Table } from "../components/ui";
+import { Field, Icon, Input, Label, LoadingPage, Logo, Photo, Select, Table } from "../components/ui";
 
 /** The closing reason a job started (or, without an Accepted lane, an accepted offer) is filed under. */
 export const ACCEPTED = "accepted";
@@ -193,10 +193,10 @@ export function Celebration({ offer }: { offer: Card }) {
       const all = await get("board?archived_since=");
       const started = [...all.stages.flatMap((s: Row) => s.cards), ...all.archived].map((c: Row) => c.applied_on || c.created_at.slice(0, 10)).sort()[0];
       setData({ app, st, detail, company, started });
-      document.title = `Congratulations · ${BASE_TITLE}`;
+      document.title = `Congratulations · ${baseTitle()}`;
     })().catch((e) => toast(e.message, "error"));
   }, [offer]);
-  if (!data) return null;
+  if (!data) return <LoadingPage />;
   const { app, st, detail, company, started } = data;
   const pay = (() => {
     const p = homePay(app);

@@ -1,5 +1,5 @@
 // The sidebar, the design system's (.al-sidebar): hunt's name, the cycles,
-// the sections, and settings at its foot. In Settings and the admin centre,
+// what's coming up, the sections, and settings at its foot. In Settings and the admin centre,
 // their sections take the app's place, with the way back to it. Full, or
 // narrowed to its icons (remembered in this browser); on a phone, a bar
 // with a menu.
@@ -13,13 +13,14 @@ import { attempt, patch } from "../lib/api";
 import { boardCycle, cycleWeek, endedCycles, pickCycle, runningCycles, viewedCycle } from "../lib/cycles";
 import { longDate } from "../lib/format";
 import { setLanguage, t } from "../lib/i18n";
-import { isAdmin } from "../lib/meta";
+import { isAdmin, siteName } from "../lib/meta";
 import { go } from "../lib/router";
 import { offerNav, sectionNav } from "../lib/shell";
 import { S, useShared, useStore } from "../lib/state";
 import { store } from "../lib/storage";
-import { currentTheme, setTheme } from "../lib/theme";
+import { currentTheme, chooseTheme } from "../lib/theme";
 import type { Cycle } from "../lib/types";
+import { DueMenu } from "./Due";
 import { FLAG, Icon, PathIcon, SysIcon } from "./ui";
 
 const LOGO = logoSvg.trim().replace(/stroke="#fff"/g, 'style="stroke: var(--al-color-bg)"');
@@ -38,7 +39,7 @@ function NavLink({ href, nav, d, label, current, hidden, mini, children }: {
 }
 
 const SECTIONS: [string, string, string, string][] = [
-  ["/", "board", "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM8 7v7M12 7v4M16 7v9", "Tracking board"],
+  ["/", "board", "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM8 7v7M12 7v4M16 7v9", "Applications"],
   ["/cycles", "cycles", "M4 22V4M4 4h12l-2 4 2 4H4", "Cycles"],
   ["/calendar", "calendar", "M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM16 2v4M8 2v4M3 10h18", "Calendar"],
   ["/prep", "prep", "M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2zM22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z", "Prep"],
@@ -82,7 +83,7 @@ export function Sidebar({ page, section, account }: { page: string; section: str
     <>
       {/* On a phone: the logo, where you are, and the menu button (the design system's js/sidebar.js). */}
       <div className="al-sidebar__bar">
-        <a className="brand" href="/" aria-label="hunt, the board"><Logo /></a>
+        <a className="brand" href="/" aria-label={`${siteName()}, the board`}><Logo /></a>
         <span className="al-sidebar__here" id="sidebar-here">{here}</span>
         <button type="button" className="al-button al-button--icon al-button--quiet al-sidebar__toggle" data-sidebar-menu-toggle aria-controls="sidebar-menu" aria-expanded="false" aria-label="Menu">
           <SysIcon name="menu" className="al-icon al-sidebar__open" /><SysIcon name="close" className="al-icon al-sidebar__close" />
@@ -90,11 +91,12 @@ export function Sidebar({ page, section, account }: { page: string; section: str
       </div>
       {/* The sidebar itself; on a phone, the menu that drops below the bar. */}
       <div className="al-sidebar__menu" id="sidebar-menu">
-        <a className="brand" href="/" aria-label="hunt, the board">
+        <a className="brand" href="/" aria-label={`${siteName()}, the board`}>
           <Logo />
-          <span className="al-sidebar__label">hunt</span>
+          <span className="al-sidebar__label" translate={S.META?.about?.name ? "no" : undefined}>{siteName()}</span>
         </a>
         {account ? null : <CycleBox page={page} />}
+        {account || !S.META ? null : <div className="due-box"><DueMenu mini={mini} /></div>}
         <nav className="al-sidebar__nav app-nav" aria-label="Sections">
           {SECTIONS.map(([href, nav, d, label]) => <NavLink key={nav} href={href} nav={nav} d={d} label={label} current={nav === section} mini={mini} />)}
           <NavLink href="/take-home" nav="take-home" d={TAKE_HOME} label="Take-home pay " current={section === "take-home"} mini={mini}>
@@ -105,7 +107,7 @@ export function Sidebar({ page, section, account }: { page: string; section: str
         {/* In Settings and the admin centre, their sections in the app's place, and the way back to the app. */}
         <nav className="al-sidebar__nav section-nav" id="section-nav" aria-label={own?.label}>
           {own ? <>
-            <a className="al-sidebar__link section-back" href="/"><Icon name="back" className="al-icon al-mirror" /><span className="al-sidebar__label">Back to hunt</span></a>
+            <a className="al-sidebar__link section-back" href="/"><Icon name="back" className="al-icon al-mirror" /><span className="al-sidebar__label">{`Back to ${siteName()}`}</span></a>
             {own.tabs.map(([k, text, hint, ic]) => (
               <a key={k} className="al-sidebar__link" href={`/${own.base}?tab=${k}`} id={`${own.base}-tab-${k}`} title={hint || undefined} aria-current={k === own.tab ? "page" : undefined}>
                 <Icon name={ic} className="al-icon" /><span className="al-sidebar__label">{text}</span>
@@ -140,11 +142,12 @@ export function Sidebar({ page, section, account }: { page: string; section: str
 
 /**
  * In the sidebar's foot, on every page: the theme (light, dark, or as the
- * system is; kept in this browser) and the language (the next one hunt
+ * system is) and the language (the next one hunt
  * speaks, named in itself), each a click away.
  */
 function QuickSettings() {
-  const [now, setNow] = useState(currentTheme());
+  useShared();
+  const now = currentTheme();
   const [busy, setBusy] = useState(false);
   const M = S.META;
   if (!M?.languages) return <div className="quick-settings" id="quick-settings" role="group" aria-label="Quick settings" />;
@@ -156,7 +159,7 @@ function QuickSettings() {
   return (
     <div className="quick-settings" id="quick-settings" role="group" aria-label="Quick settings">
       <button className="al-sidebar__link quick-theme" type="button" title={`Theme: ${themeName[now]}`} aria-label={`Theme: ${themeName[now]}. Change to ${themeName[THEME_NEXT[now]]}`}
-        onClick={() => { setTheme(THEME_NEXT[now]); setNow(THEME_NEXT[now]); }}>
+        onClick={() => chooseTheme(THEME_NEXT[now])}>
         <SysIcon name="theme" /><span className="al-sidebar__label">{themeName[now]}</span>
       </button>
       {other && other.value !== here ? (

@@ -20,7 +20,7 @@ import { FileDrop, acceptFiles, guessKind, stem, uploadVersion, useFileDrop } fr
 import { IMPORTED, logoFromImport, openImport, personFromProfile, refreshFromLinkedIn } from "../components/importer";
 import { newApplication } from "../components/NewApplication";
 import { TagChip, TagFilter } from "../components/tags";
-import { Icon, Input, Logo, Notice, Photo, SearchBox, Select, Table } from "../components/ui";
+import { Icon, Input, LoadingRows, Logo, Notice, Photo, SearchBox, Select, Table } from "../components/ui";
 import { NewRecordPage } from "./Record";
 
 /**
@@ -192,7 +192,7 @@ export function ListPage({ page }: { page: string }) {
             </tr>
           </thead>
           <tbody>
-            {rows == null ? null : rows.length ? rows.map(row)
+            {rows == null ? <LoadingRows cols={cols.length + 4} /> : rows.length ? rows.map(row)
               : <tr><td className="muted" colSpan={cols.length + 4}>{q || tag || kind ? "No matches." : `No ${r.title.toLowerCase()} yet.`}</td></tr>}
           </tbody>
         </Table>
@@ -254,7 +254,7 @@ export function ContactsPage() {
         <Table className="al-table--interactive">
           <thead><tr><th>Name</th><th>Kind</th><th>About</th><th>Where</th><th>Tags</th></tr></thead>
           <tbody>
-            {rows == null ? null : rows.length ? rows.map((x) => (
+            {rows == null ? <LoadingRows cols={5} /> : rows.length ? rows.map((x) => (
               <tr key={x.key} tabIndex={0} onClick={(e) => { if (!(e.target as Element).closest("a")) go(x.href); }} onKeyDown={(e) => { if (e.key === "Enter") go(x.href); }}>
                 <td><span className="with-logo">{x.pic}<a className="table-app" href={x.href} translate="no"><b>{x.name}</b></a></span></td>
                 <td>{x.kind}</td>

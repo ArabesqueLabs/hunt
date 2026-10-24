@@ -14,7 +14,7 @@ import { Combo } from "../components/Combo";
 import { confirmDelete } from "../components/dialogs";
 import { refSource } from "../components/fields";
 import { useFilePicker } from "../components/files";
-import { EmptyState, Facts, Field, Input, Label, Logo, Select } from "../components/ui";
+import { EmptyState, Facts, Field, Input, Label, LoadingPage, Logo, Select } from "../components/ui";
 
 export const GMAIL = false;
 
@@ -73,7 +73,7 @@ export function InboxPage() {
   useEffect(() => { load().catch((e) => toast(e.message, "error")); }, []);
   const MAIL = S.MAIL;
   const done = (id: number, msg: string) => { toast(msg); updateInboxCount(); setWaiting((w) => (w || []).filter((x) => x.id !== id)); };
-  if (waiting == null) return <div className="page inbox" />;
+  if (waiting == null) return <LoadingPage kind="table" />;
   return (
     <div className="page inbox">
       <div className="al-page-head page-head"><h1>Inbox</h1>

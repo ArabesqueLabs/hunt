@@ -38,6 +38,8 @@ export interface Meta {
   password: boolean;
   site: string | null;
   operator: string | null;
+  /** What the admins say of this hunt, to everyone: its name, a notice on every page, an address for help. */
+  about: { name: string | null; announcement: string | null; contact: string | null };
   experiments: string[];
   resources: ResourceDef[];
   archive_reasons: Choice[];

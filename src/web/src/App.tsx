@@ -9,11 +9,12 @@ import { runningCycles, viewedCycle } from "./lib/cycles";
 import { LISTS } from "./lib/lists";
 import { tenancy } from "./lib/meta";
 import { go, opensEditing, useVisit } from "./lib/router";
-import { BASE_TITLE } from "./lib/shell";
-import { useShared } from "./lib/state";
-import { stored } from "./lib/storage";
+import { baseTitle } from "./lib/shell";
+import { S, useShared } from "./lib/state";
+import { store, stored } from "./lib/storage";
 import { toast } from "./lib/toast";
 import { DialogStack, ModalHost } from "./components/dialogs";
+import { SysIcon } from "./components/ui";
 import { importSentProfile } from "./components/importer";
 import { newApplication } from "./components/NewApplication";
 import { Sidebar, sectionOf } from "./components/Sidebar";
@@ -97,6 +98,24 @@ function Page({ page, arg }: { page: string; arg?: string }) {
   return <Elsewhere />;
 }
 
+/**
+ * The admins' notice, over every page, for everyone: until closed, in this
+ * browser (a new notice shows again).
+ */
+function Announcement() {
+  const text = S.META?.about?.announcement;
+  const [closed, setClosed] = useState(() => stored("announcementClosed"));
+  if (!text || closed === text) return null;
+  return (
+    <div className="al-notice al-notice--info announcement" role="status">
+      <SysIcon name="info" />
+      <div className="al-notice__body" translate="no">{text}</div>
+      <button className="al-button al-button--icon al-button--sm al-button--quiet al-notice__dismiss" type="button" aria-label="Close the notice"
+        onClick={() => { store("announcementClosed", text); setClosed(text); }}><SysIcon name="close" className="al-icon al-icon--sm" /></button>
+    </div>
+  );
+}
+
 /** An address that isn't one of hunt's pages: the board. */
 function Elsewhere() {
   useEffect(() => { go("/", { replace: true }); }, []);
@@ -115,7 +134,7 @@ export function App() {
     document.body.classList.toggle("admin-mode", page === "admin");
     document.body.classList.toggle("settings-mode", page === "settings");
     // Pages that put their own title first set it as they draw.
-    if (!(LISTS[page] && arg && arg !== "new")) document.title = BASE_TITLE;
+    if (!(LISTS[page] && arg && arg !== "new")) document.title = baseTitle();
   }, [visit]);
   // N, anywhere but in a field or a dialog: add an application.
   useEffect(() => {
@@ -136,7 +155,7 @@ export function App() {
   return (
     <>
       {createPortal(<Sidebar page={page} section={section} account={account} />, document.getElementById("sidebar")!)}
-      {createPortal(account ? <AccountScreen /> : <Page key={visit} page={page} arg={arg} />, document.getElementById("view")!)}
+      {createPortal(<><Announcement />{account ? <AccountScreen /> : <Page key={visit} page={page} arg={arg} />}</>, document.getElementById("view")!)}
       <ModalHost />
       <DialogStack />
       <Toaster />

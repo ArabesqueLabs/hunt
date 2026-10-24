@@ -5235,6 +5235,68 @@ async fn an_ended_cycle_can_be_resumed() {
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
 }
 
+#[tokio::test]
+async fn a_cycle_can_end_in_your_own_words() {
+    let app = app();
+    let first = ok(&app, "GET", "/api/cycles", None).await[0]["id"].clone();
+    // Your own words are kept as they are; the usual ones by name become their code.
+    let ended = ok(
+        &app,
+        "POST",
+        &format!("/api/cycles/{first}/end"),
+        Some(json!({ "outcome": "  Moved abroad " })),
+    )
+    .await;
+    assert_eq!(ended["outcome"], "Moved abroad");
+    assert_eq!(ended["outcome_note"], "Moved abroad");
+    let (status, _) = call(
+        &app,
+        "POST",
+        "/api/cycles/start",
+        Some(json!({ "name": "Spring" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let spring = ok(&app, "GET", "/api/cycles", None).await[0]["id"].clone();
+    let ended = ok(
+        &app,
+        "POST",
+        &format!("/api/cycles/{spring}/end"),
+        Some(json!({ "outcome": "Taking a break" })),
+    )
+    .await;
+    assert_eq!(ended["outcome"], "break");
+    // Said once, offered again; the usual ones aren't.
+    let own = ok(&app, "GET", "/api/suggest/cycles/outcome?q=", None).await;
+    assert_eq!(own, json!(["Moved abroad"]));
+    // And changed afterwards, either way.
+    let edited = ok(
+        &app,
+        "PATCH",
+        &format!("/api/cycles/{spring}"),
+        Some(json!({ "outcome": "Went back to study" })),
+    )
+    .await;
+    assert_eq!(edited["outcome"], "Went back to study");
+    // Ending needs a reason, of one kind or the other.
+    ok(
+        &app,
+        "POST",
+        "/api/cycles/start",
+        Some(json!({ "name": "Summer" })),
+    )
+    .await;
+    let summer = ok(&app, "GET", "/api/cycles", None).await[0]["id"].clone();
+    let (status, _) = call(
+        &app,
+        "POST",
+        &format!("/api/cycles/{summer}/end"),
+        Some(json!({ "outcome": " " })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+}
+
 /// A new hunt's inactive stages.
 const CLOSED: [&str; 3] = ["My Decision", "Their Decision", "Paused / Stopped"];
 
@@ -5615,4 +5677,33 @@ async fn a_password_keeps_the_app_and_its_data_to_whoever_signs_in() {
             .unwrap()
             .contains("Max-Age=0")
     );
+}
+
+#[tokio::test]
+async fn the_theme_is_kept_with_the_settings() {
+    let app = app();
+    assert_eq!(
+        ok(&app, "GET", "/api/settings", None).await["theme"],
+        "auto"
+    );
+    let s = ok(
+        &app,
+        "PATCH",
+        "/api/settings",
+        Some(json!({ "theme": "dark" })),
+    )
+    .await;
+    assert_eq!(s["theme"], "dark");
+    assert_eq!(
+        ok(&app, "GET", "/api/settings", None).await["theme"],
+        "dark"
+    );
+    let (status, _) = call(
+        &app,
+        "PATCH",
+        "/api/settings",
+        Some(json!({ "theme": "sepia" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
 }
