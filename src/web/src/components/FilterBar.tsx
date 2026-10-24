@@ -1,4 +1,4 @@
-// The Tracking Board's filters, as controls: the common ones in a row, the
+// Applications' filters, as controls: the common ones in a row, the
 // rest under "More filters" (lib/filters.ts says what they mean).
 
 import { useRef, useState, type ReactNode } from "react";

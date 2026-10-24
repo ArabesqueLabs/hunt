@@ -13,7 +13,7 @@ import { tenancy } from "../lib/meta";
 import { go } from "../lib/router";
 import type { Row } from "../lib/types";
 import { initChartKeys } from "../../vendor/arabesque/js/chart.js";
-import { EmptyState, Logo, Notice } from "../components/ui";
+import { EmptyState, LoadingBlock, Logo, Notice } from "../components/ui";
 
 /**
  * A mark on a chart: named by its value and what it is ("12 reached|
@@ -132,7 +132,7 @@ export function StatsPage() {
           ))}
         </div>
       </div>
-      {error ? <Notice kind="danger">{error}</Notice> : st ? <StatsBody st={st} /> : null}
+      {error ? <Notice kind="danger">{error}</Notice> : st ? <StatsBody st={st} /> : <LoadingBlock tall={8} lines={6} />}
     </div>
   );
 }

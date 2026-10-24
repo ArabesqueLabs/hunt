@@ -1,4 +1,4 @@
-# The Tracking Board
+# Applications
 
 Every application, as a board of stages or as a table: the switch at the
 top changes the view, and it opens as you left it.
@@ -31,12 +31,21 @@ Both views share their filters, which carry over between them.
 
 - One column per stage; columns grow with their cards.
 - Cards are compact (role and company) or detailed, by the Detailed switch
-  at the end of the filters' row.
+  at the end of the filters' row. A detailed card shows its first three
+  tags, and how many more (named when you point at it).
 - Drag cards between columns or within one.
 - "+ Add a process" at the foot of a column adds one straight into it:
   see [Adding applications](adding-applications.md).
 - The board's rows are swimlanes, and its columns can be divided into sub
   stages: see [Swimlanes and sub stages](swimlanes-and-sub-stages.md).
+
+## Getting started
+
+A new board starts with a short list above it: adding the first
+application, and the settings that make hunt fit (the board's stages,
+interviews in your calendar app, LinkedIn in one click). Each says whether
+it's done, where hunt can tell. It goes once there are three applications,
+or when you hide it.
 
 ## Hiding a stage
 

@@ -9,7 +9,7 @@ import { here, settle } from "../lib/router";
 import { S } from "../lib/state";
 import { store, stored } from "../lib/storage";
 import type { Row } from "../lib/types";
-import { EmptyState, Input, Logo, SearchBox, SysIcon } from "../components/ui";
+import { EmptyState, Input, LoadingBlock, Logo, SearchBox, SysIcon } from "../components/ui";
 
 /** What the calendar shows: interviews and deadlines, of active processes. */
 const CAL_KINDS = ["step", "closes"];
@@ -170,7 +170,7 @@ export function CalendarPage() {
         </div>
       </div>
       <div className="cal-body" aria-live="polite">
-        {shown == null ? null
+        {shown == null ? <LoadingBlock tall={1} lines={5} />
           : f.view === "month" ? <MonthGrid from={from} to={to} month={month} events={shown} weekends={weekends} />
             : f.view === "week" ? <TimeGrid days={[...Array(7)].map((_, i) => { const d = new Date(from); d.setDate(from.getDate() + i); return d; }).filter((d) => weekends || !isWeekend(d))} events={shown} name="Week" />
               : f.view === "day" ? <TimeGrid days={[at]} events={shown} name="Day" />

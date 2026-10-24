@@ -22,3 +22,10 @@ month, week, day or as an agenda, searched by company, role or title.
 The view and the weekend choice are in the address
 (`/calendar?view=week&weekends=hide`), so Back undoes a change, and
 they're remembered.
+
+## Coming up
+
+"Coming up", in the sidebar on every page, is what's due today and
+tomorrow: reminders (the overdue ones too, in amber), interviews, and
+applications closing. Its count is on the button; each opens its
+application, and "Open the calendar" the agenda.

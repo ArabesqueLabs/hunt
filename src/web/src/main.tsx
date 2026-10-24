@@ -14,6 +14,7 @@ import { setLanguage } from "./lib/i18n";
 import { reloadMeta } from "./lib/meta";
 import { startRouting } from "./lib/router";
 import { S } from "./lib/state";
+import { startTheme } from "./lib/theme";
 
 /**
  * Tooltips (the design system's) on the controls that are only an icon,
@@ -73,6 +74,7 @@ const root = createRoot(document.getElementById("root")!);
   try {
     await reloadMeta();
     setLanguage(S.PREFS.language || "en", S.PREFS.numerals || "auto");
+    if (S.PREFS.theme) startTheme();
   } catch (e) {
     createRoot(document.getElementById("view")!).render(<div className="page"><h1>Can't load hunt</h1><p>{(e as Error).message}</p></div>);
     return;

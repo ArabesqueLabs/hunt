@@ -1,4 +1,4 @@
-// The Tracking Board's data: what it shows (the cycle chosen), its stages
+// Applications' data: what it shows (the cycle chosen), its stages
 // and swimlanes, what's next on a card, and what's remembered in this
 // browser about how it's laid out (hidden stages, folded packs, swimlanes).
 

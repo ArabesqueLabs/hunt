@@ -1,4 +1,4 @@
-// The Tracking Board (/): the cycle's processes as cards, in a column per
+// Applications (/): the cycle's processes as cards, in a column per
 // stage, in swimlanes; filtered, folded, dragged from stage to stage, and
 // selected to act on together. Its other view is the table (Table.tsx).
 
@@ -13,6 +13,7 @@ import { activeFilters, matchesFilters, readFilters, restoreFilters, rowFromCard
 import { fmtDay, longDate, nf } from "../lib/format";
 import { closedWhy, fieldOf, optionLabel } from "../lib/meta";
 import { go } from "../lib/router";
+import { S } from "../lib/state";
 import { store, stored } from "../lib/storage";
 import { tagNames } from "../lib/tags";
 import { toast } from "../lib/toast";
@@ -22,7 +23,7 @@ import { endCycle, resumeCycle, startCycle } from "../components/cycleDialogs";
 import { FilterBar } from "../components/FilterBar";
 import { newApplication } from "../components/NewApplication";
 import { TagChip } from "../components/tags";
-import { Icon, Input, Logo, Notice, Table, dotted } from "../components/ui";
+import { Icon, Input, LoadingPage, Logo, Notice, Table, dotted } from "../components/ui";
 import { celebrating, Celebration } from "./Celebrate";
 
 /** What's next, to show: its title as written, then when, in the page's language. */
@@ -69,7 +70,7 @@ export function BoardHead({ b, current }: { b: Board; current: string }) {
       : run.length > 1 ? `${run.length} cycles · ${total} active · ${b.archived_total} closed` : "";
   return (
     <header className="al-page-head board-head">
-      <h1>Tracking board</h1>
+      <h1>Applications</h1>
       {sub ? <p className="board-count">{sub}</p> : null}
       <div className="al-page-head__end">
         {cur && !b.read_only ? <button className="al-button al-button--quiet" type="button" onClick={() => endCycle(cur)}><Icon name="flag" /><span>End this cycle…</span></button> : null}
@@ -222,7 +223,7 @@ export function BoardPage() {
     document.addEventListener("keydown", onKey);
     return () => { alive = false; setBoardRedraw(null); document.removeEventListener("keydown", onKey); };
   }, []);
-  if (!b) return null;
+  if (!b) return <LoadingPage kind="board" />;
   if (!runningCycles().length && !b.read_only) return <div className="board"><NoCycle /></div>;
   const detail = cardDetail();
   // Filters hide cards (in place, so dragging still lands where it should).
@@ -251,6 +252,7 @@ export function BoardPage() {
     <div className={`board ${detail}${b.read_only ? " read-only" : ""}`} style={{ "--board-columns": across } as React.CSSProperties}>
       <BoardHead b={b} current="board" />
       <BoardContext />
+      <GettingStarted b={b} />
       <FilterBar rows={[...rows.values()]} initial={f} onChange={setF} shown={visible} total={boardStages(b).flatMap((st) => st.cards).length} extra={detailed} />
       <HiddenStagesBar b={b} />
       {lanes.map((g) => <Swimlane key={String(g.lane.id ?? 0)} g={g} ctx={ctx} />)}
@@ -260,6 +262,38 @@ export function BoardPage() {
           actions={<ProcessActions ids={() => [...BOARD_SEL]} stages={b.stages} after={() => { BOARD_SEL.clear(); showBoard(); }} />} />
       )}
     </div>
+  );
+}
+
+/**
+ * A new board's first steps, above it: adding applications, and making hunt
+ * fit (the board's stages, working hours, the calendar in a calendar app,
+ * LinkedIn in one click). Each says whether it's done, where hunt can tell.
+ * Until there are a few applications, or it's hidden.
+ */
+function GettingStarted({ b }: { b: Board }) {
+  const apps = new Set([...b.stages.flatMap((st) => st.cards), ...b.archived].map((c) => c.application_id)).size;
+  if (b.read_only || apps >= 3 || stored("gettingStarted") === "hidden") return null;
+  const done = <span className="al-badge al-badge--success">Done</span>;
+  const optional = <span className="al-badge al-badge--outline">Optional</span>;
+  const task = (name: ReactNode, hint: string, status: ReactNode) => (
+    <li className="al-task-list__item"><span className="al-task-list__name">{name}</span><span className="al-task-list__hint">{hint}</span><span className="al-task-list__status">{status}</span></li>
+  );
+  return (
+    <section className="al-panel getting-started" aria-labelledby="getting-started">
+      <div className="panel-head">
+        <h2 id="getting-started">Getting started</h2>
+        <button className="al-button al-button--sm al-button--quiet" type="button" onClick={() => { store("gettingStarted", "hidden"); showBoard(); }}>Hide this</button>
+      </div>
+      <ol className="al-task-list">
+        {task(<a href="/cycles">Start a cycle</a>, "A job search, from its first application to its end.", done)}
+        {task(<button type="button" onClick={() => newApplication()}>Add your first application</button>,
+          "From a posting's link, which hunt reads, or by hand.", apps ? done : <span className="al-badge al-badge--accent">Next</span>)}
+        {task(<a href="/settings?tab=board">Make the board yours</a>, "Its stages, and the swimlanes that group them.", optional)}
+        {task(<a href="/settings?tab=calendar">Put interviews in your calendar</a>, "Your working hours, and a link your calendar app can follow.", S.PREFS.calendar_feed ? done : optional)}
+        {task(<a href="/settings?tab=connections">Add people from LinkedIn in one click</a>, "A bookmark that sends a profile to hunt.", optional)}
+      </ol>
+    </section>
   );
 }
 
@@ -497,6 +531,9 @@ function CardList({ listKey, cards, label, pack, drop, className = "", ctx }: {
   );
 }
 
+/** How many of a card's tags it shows; the rest are a count. */
+const TAGS_SHOWN = 3;
+
 function CardView({ c, ctx }: { c: Card; ctx: Ctx }) {
   const { ro } = ctx;
   const tags = tagNames(c.tags);
@@ -539,7 +576,13 @@ function CardView({ c, ctx }: { c: Card; ctx: Ctx }) {
           <span className="card-meta">{dotted([c.reached_stage ? `Got to ${c.reached_stage}` : null, fmtDay(c.updated_at.slice(0, 10))])}</span>
         </div>
       ) : null}
-      {ctx.detailed && tags.length ? <div className="card-tags">{tags.map((t) => <TagChip key={t} name={t} />)}</div> : null}
+      {/* A few tags, and how many more (named on hovering it). */}
+      {ctx.detailed && tags.length ? (
+        <div className="card-tags">
+          {tags.slice(0, TAGS_SHOWN).map((t) => <TagChip key={t} name={t} />)}
+          {tags.length > TAGS_SHOWN ? <span className="tag-more" title={tags.slice(TAGS_SHOWN).join(", ")} translate="no">{`+${tags.length - TAGS_SHOWN}`}</span> : null}
+        </div>
+      ) : null}
       {ctx.detailed && meta.length ? <div className="card-meta">{dotted(meta)}</div> : null}
     </li>
   );

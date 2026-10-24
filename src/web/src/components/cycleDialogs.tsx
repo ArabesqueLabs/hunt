@@ -122,7 +122,7 @@ function ResumeCycle({ c }: { c: Cycle }) {
       </div>
       <div className="al-dialog__actions">
         <button className="al-button" type="button" onClick={closeModal}>Cancel</button>
-        <button className="al-button al-button--primary" type="submit" aria-busy={busy ? "true" : undefined}>Resume</button>
+        <button className="al-button al-button--primary" type="submit" aria-busy={busy ? "true" : undefined}>Resume cycle</button>
       </div>
     </form>
   );
@@ -130,18 +130,22 @@ function ResumeCycle({ c }: { c: Cycle }) {
 
 /** End a running cycle: how it ended (with an offer, which), its name, and what happens. */
 export async function endCycle(c: Cycle) {
-  const b: Board = await get(`board?cycle=${c.id}`);
-  openModal(<EndCycle c={c} b={b} />);
+  const [b, own] = await Promise.all([get(`board?cycle=${c.id}`) as Promise<Board>, ownOutcomes()]);
+  openModal(<EndCycle c={c} b={b} own={own} />);
 }
+
+/** How earlier cycles ended in your own words, most used first. */
+export const ownOutcomes = (): Promise<string[]> => get("suggest/cycles/outcome?q=").catch(() => []);
 
 const HOWS: [string, string, string][] = [["offer", "I accepted an offer", "Congratulations"], ["break", "I'm taking a break", "Pick it up again later with a new cycle"],
   ["stopped", "I stopped looking", "Staying where you are, or something else"], ["other", "Something else", ""]];
 
-function EndCycle({ c, b }: { c: Cycle; b: Board }) {
+function EndCycle({ c, b, own }: { c: Cycle; b: Board; own: string[] }) {
   const cards = b.stages.flatMap((s) => s.cards);
   // Offers to choose from: what reached the last two stages, latest first.
   const late = b.stages.slice(-2).reverse().flatMap((s) => s.cards);
   const [outcome, setOutcome] = useState("offer");
+  const [words, setWords] = useState("");
   const [processId, setProcessId] = useState<string>(late[0]?.id != null ? String(late[0].id) : "");
   const [name, setName] = useState(c.name);
   const [busy, setBusy] = useState(false);
@@ -154,7 +158,7 @@ function EndCycle({ c, b }: { c: Cycle; b: Board }) {
       if (busy || !name.trim()) return;
       setBusy(true);
       const ended = await attempt(() => post(`cycles/${c.id}/end`, {
-        outcome, name: name.trim(),
+        outcome: outcome === "other" ? words.trim() || "other" : outcome, name: name.trim(),
         process_id: outcome === "offer" && processId ? Number(processId) : null,
       }));
       setBusy(false);
@@ -169,14 +173,19 @@ function EndCycle({ c, b }: { c: Cycle; b: Board }) {
         <fieldset className="al-fieldset">
           <legend>How did it end?</legend>
           <div className="al-choices">
-            {HOWS.map(([v, l, hint]) => (
+            {[...HOWS.slice(0, -1), ...own.map((v): [string, string, string] => [v, v, ""]), ...HOWS.slice(-1)].map(([v, l, hint]) => (
               <Choice key={v}>
                 <input type="radio" name="end-how" value={v} checked={outcome === v} onChange={() => setOutcome(v)} />
-                <span className="al-choice__text"><span>{l}</span>{hint ? <span className="al-choice__hint">{hint}</span> : null}</span>
+                <span className="al-choice__text"><span translate={HOWS.some(([h]) => h === v) ? undefined : "no"}>{l}</span>{hint ? <span className="al-choice__hint">{hint}</span> : null}</span>
               </Choice>
             ))}
           </div>
         </fieldset>
+        <Field hidden={outcome !== "other"}>
+          <Label htmlFor="end-words">In your own words <Optional /></Label>
+          <Input id="end-words" value={words} placeholder="e.g. Moved abroad" onChange={(e) => setWords(e.target.value)} />
+          <span className="al-hint">Kept as a reason of its own, to pick again next time.</span>
+        </Field>
         <Field hidden={outcome !== "offer"}>
           <Label htmlFor="end-offer">Which offer?</Label>
           <Select id="end-offer" value={processId} onChange={(e) => setProcessId(e.target.value)}>

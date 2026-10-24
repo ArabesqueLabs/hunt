@@ -1491,3 +1491,70 @@ async fn a_sign_in_proxys_header_counts_only_from_the_proxy() {
     let meta = meta_from(&local, Some("[::1]:5000"), ADMIN).await;
     assert_eq!(meta["tenancy"]["signed_in"], true, "{meta}");
 }
+
+#[tokio::test]
+async fn admins_name_the_hunt_and_everyone_sees_what_it_says() {
+    let app = shared_hunt();
+    let about = ok(&app, BOB, "GET", "/api/meta", None).await["about"].clone();
+    assert_eq!(
+        about,
+        json!({ "name": null, "announcement": null, "contact": null })
+    );
+    let set = ok(
+        &app,
+        ADMIN,
+        "PATCH",
+        "/api/admin/settings",
+        Some(json!({ "site": { "name": "  Acme careers ", "announcement": "Down for upkeep at 10pm", "contact": "help@acme.test" } })),
+    )
+    .await;
+    assert_eq!(set["site"]["name"], "Acme careers");
+    // Everyone sees it, an account or not yet.
+    let about = ok(&app, BOB, "GET", "/api/meta", None).await["about"].clone();
+    assert_eq!(
+        (
+            about["name"].as_str(),
+            about["announcement"].as_str(),
+            about["contact"].as_str()
+        ),
+        (
+            Some("Acme careers"),
+            Some("Down for upkeep at 10pm"),
+            Some("help@acme.test")
+        )
+    );
+    for bad in [
+        json!({ "site": { "contact": "not an address" } }),
+        json!({ "site": { "name": "x".repeat(41) } }),
+    ] {
+        let (status, _) = as_(
+            &app,
+            Some(ADMIN),
+            "PATCH",
+            "/api/admin/settings",
+            Some(bad.clone()),
+        )
+        .await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{bad}");
+    }
+    // Only admins say it; emptied, it's gone, the rest as it was.
+    let (status, _) = as_(
+        &app,
+        Some(BOB),
+        "PATCH",
+        "/api/admin/settings",
+        Some(json!({ "site": { "name": "Bob's" } })),
+    )
+    .await;
+    assert!(!status.is_success());
+    let set = ok(
+        &app,
+        ADMIN,
+        "PATCH",
+        "/api/admin/settings",
+        Some(json!({ "site": { "announcement": "" } })),
+    )
+    .await;
+    assert!(set["site"]["announcement"].is_null());
+    assert_eq!(set["site"]["name"], "Acme careers");
+}

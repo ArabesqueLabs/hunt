@@ -12,7 +12,7 @@ import { confirmDelete } from "../components/dialogs";
 import { TagChip, TagEditor, TagFilter } from "../components/tags";
 import { RichText, RichView } from "../components/RichText";
 import { toPlain } from "../lib/rich";
-import { EmptyState, Icon, Input, SearchBox } from "../components/ui";
+import { EmptyState, Icon, Input, LoadingBlock, SearchBox } from "../components/ui";
 
 export function NotesPage() {
   useShared();
@@ -61,7 +61,7 @@ export function NotesPage() {
       </div>
       <div className="notes-grid">
         {editing === "new" ? <NoteEditor note={null} done={done} cancel={() => setEditing(null)} /> : null}
-        {notes == null ? null : list.length || editing === "new"
+        {notes == null ? <LoadingBlock tall={3} lines={0} /> : list.length || editing === "new"
           ? list.map((n) => (editing === n.id ? <NoteEditor key={n.id} note={n} done={done} cancel={() => setEditing(null)} /> : card(n)))
           : query || tag
             ? <EmptyState title="No notes match" text="Try other words, or another tag." />

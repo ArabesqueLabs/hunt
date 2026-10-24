@@ -11,13 +11,13 @@ import { attempt, del, get, patch, post } from "../lib/api";
 import { fmtDay, fmtStamp, nf, parseLocal, zonedNow } from "../lib/format";
 import { CURRENCIES, isAdmin, myAccount, sitePage, tenancy } from "../lib/meta";
 import { settle } from "../lib/router";
-import { BASE_TITLE, sectionNav } from "../lib/shell";
-import { S } from "../lib/state";
+import { baseTitle, sectionNav } from "../lib/shell";
+import { S, changed, useShared } from "../lib/state";
 import { toast } from "../lib/toast";
 import type { Row } from "../lib/types";
 import { ask } from "../components/dialogs";
-import { Facts, Field, Input, Label, Notice, SearchBox, Select, Table, TextArea } from "../components/ui";
-import { REGIONS, SettingsPanel, TIME_ZONES, currencyName } from "./Settings";
+import { Facts, Field, Input, Label, LoadingBlock, Notice, SearchBox, Select, Table, TextArea } from "../components/ui";
+import { ChoiceSetting, ContactLine, REGIONS, SettingRow, SettingsPanel, TIME_ZONES, TextSetting, currencyName } from "./Settings";
 import { ResourcesSection, Tile, fmtBytes, pct } from "./Stats";
 
 /** What Cloudflare Access says about who's signed in: their name, and how. */
@@ -41,7 +41,7 @@ export function AccountScreen() {
   const status = t?.account?.status || (t?.signed_in ? "none" : "signed-out");
   useEffect(() => {
     document.body.classList.add("no-account");
-    document.title = `hunt · ${BASE_TITLE}`;
+    document.title = S.META.about?.name || `hunt · ${baseTitle()}`;
   }, []);
   const head = (title: string, lead?: string) => <><h1>{title}</h1>{lead ? <p className="account-lead">{lead}</p> : null}</>;
   const who = t?.email ? <p className="muted small">Signed in as <b translate="no">{t.email}</b>.</p> : null;
@@ -63,7 +63,7 @@ export function AccountScreen() {
   } else if (status === "disabled") {
     body = <>{head("Your account is disabled", "Ask an admin if you think it shouldn't be.")}{who}</>;
   }
-  return <div className="page account-page">{body}</div>;
+  return <div className="page account-page">{body}<ContactLine /></div>;
 }
 
 function BeSomeone({ head }: { head: ReactNode }) {
@@ -113,7 +113,8 @@ function AskForAccount({ head, who }: { head: ReactNode; who: ReactNode }) {
 
 /** The admin centre's tabs: each one's key, name, what's in it, and its icon. */
 const ADMIN_TABS: [string, string, string, string][] = [
-  ["general", "General", "This hunt, new accounts", "sliders"],
+  ["general", "General", "Name, notice, new accounts", "sliders"],
+  ["info", "Info", "Version, sign-in, accounts", "info"],
   ["access", "Access and accounts", "Sign-ups, invites, accounts", "key"],
   ["users", "User stats", "How accounts use hunt", "users"],
   ["system", "System resources", "The machine, by account", "server"],
@@ -207,7 +208,7 @@ export function AdminPage() {
   // Its sections are in the sidebar, in the app's place.
   useEffect(() => {
     sectionNav.set({ label: "Admin sections", base: "admin", tabs: ADMIN_TABS, tab });
-    document.title = `Admin · ${BASE_TITLE}`;
+    document.title = `Admin · ${baseTitle()}`;
     return () => sectionNav.set(null);
   }, [tab]);
   useEffect(() => { if (isAdmin()) get("admin/overview").then(setData).catch((e) => setError(e.message)); }, [version]);
@@ -218,55 +219,72 @@ export function AdminPage() {
       <div className="settings-content" role="region" aria-labelledby={`admin-tab-${tab}`}>
         {error ? <Notice kind="danger">{error}</Notice> : data ? (
           tab === "general" ? <AdminGeneral data={data} />
+            : tab === "info" ? <AdminInfo data={data} />
             : tab === "access" ? <AdminAccess data={data} reload={reload} />
               : tab === "users" ? <AdminUsers />
                 : tab === "system" ? <AdminSystem />
                   : <AdminDebug />
-        ) : null}
+        ) : <LoadingBlock />}
       </div>
     </div>
   );
 }
 
-/** General: this hunt, and what new accounts start with. */
+/** A hunt-wide setting changed: saved, said, with Undo putting back what it was. */
+async function saveAdmin(change: Row, was: Row, then: (saved: Row) => void) {
+  const saved = await attempt(() => patch("admin/settings", change));
+  if (!saved) return false;
+  then(saved);
+  toast("Saved", "info", { label: "Undo", onclick: async () => {
+    const back = await attempt(() => patch("admin/settings", was));
+    if (back) { then(back); toast("Undone"); }
+  } });
+  return true;
+}
+
+/** General: what this hunt says of itself, and what new accounts start with. */
 function AdminGeneral({ data }: { data: Row }) {
-  const d = data.defaults || {};
-  const [vals, setVals] = useState({ language: d.language || "", region: d.region || "", timezone: d.timezone || "", currency: d.currency || "" });
-  const [busy, setBusy] = useState(false);
-  const pick = (id: string, k: keyof typeof vals, options: [string, string][], none: string) => (
-    <Select id={id} value={vals[k]} onChange={(e) => setVals({ ...vals, [k]: e.target.value })}>
-      <option value="">{none}</option>{options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-    </Select>
+  useShared();
+  const [defaults, setDefaults] = useState<Row>(data.defaults || {});
+  const about = S.META.about;
+  const said = (saved: Row) => { S.META.about = saved.site; changed(); };
+  const site = (key: string) => (v: string) => saveAdmin({ site: { [key]: v } }, { site: { [key]: about[key as keyof typeof about] || "" } }, said);
+  const starts = (key: string) => (v: string) => saveAdmin({ defaults: { [key]: v } }, { defaults: { [key]: defaults[key] || "" } }, (saved) => setDefaults(saved.defaults));
+  const pick = (id: string, key: string, options: [string, string][], none: string) => (
+    <ChoiceSetting id={id} value={defaults[key] || ""} options={[["", none], ...options]} save={starts(key)} />
   );
   return <>
-    <SettingsPanel title="This hunt">
-      <Facts rows={[
-        ["Version", `hunt ${S.META.version}`],
-        ["Sign-in", S.META.access ? "Cloudflare Access" : "Who's asking, as the server is told (for trying it out)"],
-        ...(S.META.operator ? [["Run by", <span translate="no">{S.META.operator}</span>] as [string, ReactNode]] : []),
-        ["Accounts", `${nf(data.totals.active)} active, ${nf(data.totals.admins)} of them admins`],
-      ]} />
+    <SettingsPanel title="About this hunt" intro="What everyone who opens this hunt sees of it. Each is saved as it's changed.">
+      <SettingRow id="site-name" label="Name" hint="In the sidebar and the browser's tab, in place of hunt. Leave it empty for hunt's own.">
+        <TextSetting id="site-name" value={about.name || ""} placeholder="hunt" maxLength={40} autoComplete="off" save={site("name")} />
+      </SettingRow>
+      <SettingRow id="site-announcement" label="Notice" hint="Above every page, for everyone, until they close it: for upkeep, or news. Leave it empty for none.">
+        <TextSetting id="site-announcement" value={about.announcement || ""} placeholder="e.g. hunt is down for upkeep on Sunday, 22:00–23:00" maxLength={280} autoComplete="off" save={site("announcement")} />
+      </SettingRow>
+      <SettingRow id="site-contact" label="Address for help" hint="Where people can write to the admins: on the account screen, and in Settings.">
+        <TextSetting id="site-contact" type="email" value={about.contact || ""} placeholder="help@example.com" maxLength={254} autoComplete="off" save={site("contact")} />
+      </SettingRow>
     </SettingsPanel>
     <SettingsPanel title="New accounts start with" intro="Each account can change these in its own Settings. Leave one as it is for hunt's own default.">
-      <form onSubmit={async (e) => {
-        e.preventDefault();
-        if (busy) return;
-        setBusy(true);
-        const done = await attempt(() => patch("admin/settings", { defaults: vals }));
-        setBusy(false);
-        if (done) toast("Saved: new accounts start with these");
-      }}>
-        <div className="fields two">
-          <Field><Label htmlFor="def-language">Language</Label>{pick("def-language", "language", S.META.languages.map((o) => [o.value, o.label]), "English (hunt's default)")}</Field>
-          <Field><Label htmlFor="def-region">Region</Label>{pick("def-region", "region", REGIONS, "The browser's")}</Field>
-          <Field><Label htmlFor="def-timezone">Time zone</Label>{pick("def-timezone", "timezone", TIME_ZONES.map((z) => [z, z.replaceAll("_", " ")]), "The machine's")}</Field>
-          <Field><Label htmlFor="def-currency">Currency</Label>{pick("def-currency", "currency", CURRENCIES.map((c) => [c, currencyName(c)]), "GBP (hunt's default)")}</Field>
-        </div>
-        <div className="actions"><button className="al-button al-button--primary" type="submit" aria-busy={busy ? "true" : undefined}>Save</button></div>
-      </form>
+      <SettingRow id="def-language" label="Language">{pick("def-language", "language", S.META.languages.map((o) => [o.value, o.label]), "English (hunt's default)")}</SettingRow>
+      <SettingRow id="def-region" label="Region">{pick("def-region", "region", REGIONS, "The browser's")}</SettingRow>
+      <SettingRow id="def-timezone" label="Time zone">{pick("def-timezone", "timezone", TIME_ZONES.map((z) => [z, z.replaceAll("_", " ")]), "The machine's")}</SettingRow>
+      <SettingRow id="def-currency" label="Currency">{pick("def-currency", "currency", CURRENCIES.map((c) => [c, currencyName(c)]), "GBP (hunt's default)")}</SettingRow>
     </SettingsPanel>
   </>;
 }
+
+/** Info: what this hunt is: its version, how people sign in, who runs it, and its accounts. */
+const AdminInfo = ({ data }: { data: Row }) => (
+  <SettingsPanel title="This hunt">
+    <Facts rows={[
+      ["Version", `hunt ${S.META.version}`],
+      ["Sign-in", S.META.access ? "Cloudflare Access" : "Who's asking, as the server is told (for trying it out)"],
+      ...(S.META.operator ? [["Run by", <span translate="no">{S.META.operator}</span>] as [string, ReactNode]] : []),
+      ["Accounts", `${nf(data.totals.active)} active, ${nf(data.totals.admins)} of them admins`],
+    ]} />
+  </SettingsPanel>
+);
 
 /** Access and accounts: sign-ups, invites, the early access list, every account. */
 function AdminAccess({ data, reload }: { data: Row; reload: () => void }) {
@@ -405,7 +423,7 @@ function useUsage() {
 /** User stats: how accounts use hunt, by number, never by name. */
 function AdminUsers() {
   const { accounts, chosen, choose, out, pick } = useUsage();
-  if (!accounts) return null;
+  if (!accounts) return <LoadingBlock tall={4} />;
   const one = accounts.find((a) => String(a.id) === String(chosen));
   const sum = (k: string) => accounts.reduce((n, a) => n + (a[k] || 0), 0);
   const recent = accounts.filter((a) => a.last_seen && (daysAgo(a.last_seen) as number) <= 7).length;

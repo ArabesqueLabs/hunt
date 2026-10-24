@@ -81,7 +81,7 @@ public, and what needs signing in".
 ### 3. Choose a version (optional)
 
 `latest` is main's newest build. Each release is also tagged with its
-version (`v0.15.0`), and each build with its commit (`sha-…`): use one of
+version (`v0.16.0`), and each build with its commit (`sha-…`): use one of
 those to choose when you upgrade.
 
 ### 4. Use PostgreSQL or MySQL (optional)
@@ -215,7 +215,7 @@ Give the container the database's address as `HUNT_DB`, from a secret:
 
 ```sh
 kubectl -n hunt rollout restart deployment/hunt     # pulls latest again
-kubectl -n hunt set image deployment/hunt hunt=ghcr.io/arabesquelabs/hunt:v0.15.0   # or a version
+kubectl -n hunt set image deployment/hunt hunt=ghcr.io/arabesquelabs/hunt:v0.16.0   # or a version
 ```
 
 ## The database
@@ -264,7 +264,7 @@ with the [Arabesque Design System](https://design.arabesquelabs.com/).
 
 Each part has a page of its own:
 
-- [The Tracking Board](docs/web-ui/tracking-board.md): the board and the
+- [Applications](docs/web-ui/tracking-board.md): the board and the
   table, filters, hiding and folding.
 - [Swimlanes and sub stages](docs/web-ui/swimlanes-and-sub-stages.md): the
   board's rows, and the parts of a column.
@@ -412,7 +412,11 @@ hunt serve --tenants --admins you@example.com,other-admin@example.com \
   enable, or remove it (with everything of theirs, if chosen); and a
   switch for whether new people may ask for an account at all (closed,
   they're told the list is closed for now; accounts already here carry
-  on). Its Debugging info has links to hand: your Cloudflare Access
+  on). Its General section names this hunt (in the sidebar and the
+  browser's tab), puts a notice above every page (until each person
+  closes it), gives an address people can write to for help, and sets
+  what new accounts start with; Info has its version, how people sign
+  in, who runs it, and how many accounts it has. Its Debugging info has links to hand: your Cloudflare Access
   identity and Log out, the health check, calendar feed, backup and API,
   and the source and image builds.
   It's under Settings in the sidebar. Admins also see System resources

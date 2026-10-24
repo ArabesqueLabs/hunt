@@ -761,13 +761,14 @@ pub static RESOURCES: &[Resource] = &[
             ),
             defaulted(field("started_on", "Started", Date)),
             field("ended_on", "Ended", Date),
-            field(
+            // One of these, or in your own words (earlier ones suggested).
+            suggest(field(
                 "outcome",
                 "How it ended",
                 Enum {
                     options: CYCLE_OUTCOMES,
                 },
-            ),
+            )),
             field("outcome_note", "What happened", Text),
         ],
         label_sql: "t.name",

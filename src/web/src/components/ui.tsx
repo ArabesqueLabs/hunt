@@ -25,9 +25,11 @@ const ICONS: Record<string, string> = {
   archive: "M3 3h18v5H3zM5 8v11a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8M10 12h4",
   trash: "M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v5M14 11v5",
   grip: "M9 5h.01M9 12h.01M9 19h.01M15 5h.01M15 12h.01M15 19h.01",
+  more: "M5 12h1M12 12h1M19 12h1",
   copy: "M9 9h11v11H9zM5 15H4V4h11v1",
   download: "M12 3v12M7 10l5 5 5-5M5 21h14",
   back: "M19 12H5M11 18l-6-6 6-6",
+  forward: "M5 12h14M13 6l6 6-6 6",
   sliders: "M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6",
   key: "M15.5 7.5a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0zM12 11v10M12 15h3M12 18h2",
   users: "M9 4a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM1 21a8 8 0 0 1 16 0M17 4.5a4 4 0 0 1 0 7M19.5 14.5A8 8 0 0 1 23 21",
@@ -39,6 +41,7 @@ const ICONS: Record<string, string> = {
   calc: "M6 2h12a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zM8 6h8M8 11h.01M12 11h.01M16 11h.01M8 15h.01M12 15h.01M16 15h.01M8 19h.01M12 19h.01M16 19h.01",
   tag: "M3 3h8l10 10-8 8L3 11zM7.5 7.5h.01",
   user: "M12 4a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM4 21a8 8 0 0 1 16 0",
+  info: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 16v-5M12 8h.01",
 };
 
 /** A line icon, drawn in the text's colour. */
@@ -96,6 +99,60 @@ export function EmptyState({ title, text, action }: { title: string; text?: stri
       <p className="al-empty__title">{title}</p>
       {text ? <p className="al-empty__text">{text}</p> : null}
       {action}
+    </div>
+  );
+}
+
+// ---- loading ------------------------------------------------------------------------------
+
+/** One of the design system's skeletons, `w` wide (any CSS length) and `h` tall. */
+const Bone = ({ w, h }: { w?: string; h?: string }) => (
+  <span className="al-skeleton" style={{ inlineSize: w, blockSize: h }} />
+);
+
+/**
+ * Where a page will be while it loads: its shape in the system's skeletons,
+ * so it doesn't jump in. Shown only after a moment (in CSS), so a quick
+ * load doesn't flash. `kind`: "board" (columns of cards), "table" (rows),
+ * "detail" (a record: its text, its facts beside), or a plain page.
+ */
+export function LoadingPage({ kind = "page" }: { kind?: "page" | "board" | "table" | "detail" }) {
+  const lines = (n: number) => [...Array(n)].map((_, i) => <Bone key={i} w={`${90 - ((i * 23) % 40)}%`} />);
+  return (
+    <div className={`page loading loading-${kind}`} role="status" aria-busy="true">
+      <span className="al-visually-hidden">Loading…</span>
+      <div className="loading-head"><Bone w="min(22rem, 60%)" h="2.75rem" /><Bone w="min(14rem, 40%)" /></div>
+      {kind === "board" ? (
+        <div className="loading-columns">
+          {[3, 2, 2, 1].map((n, i) => <div key={i} className="loading-column"><Bone w="60%" h="1.5rem" />{[...Array(n)].map((_, j) => <Bone key={j} h="6.5rem" />)}</div>)}
+        </div>
+      ) : kind === "table" ? (
+        <div className="loading-rows">{[...Array(8)].map((_, i) => <Bone key={i} h="2.25rem" />)}</div>
+      ) : kind === "detail" ? (
+        <div className="loading-split"><div className="loading-lines">{lines(7)}</div><div className="loading-lines">{lines(5)}</div></div>
+      ) : (
+        <div className="loading-lines">{lines(6)}</div>
+      )}
+    </div>
+  );
+}
+
+/** A table's body while it loads: `rows` rows of `cols` cells, in skeletons. */
+export function LoadingRows({ cols, rows = 6 }: { cols: number; rows?: number }) {
+  return <>{[...Array(rows)].map((_, i) => (
+    <tr key={i} className="loading" aria-hidden="true">
+      {[...Array(cols)].map((_, j) => <td key={j}><Bone w={j ? "70%" : "85%"} /></td>)}
+    </tr>
+  ))}</>;
+}
+
+/** A region of a page while it loads: `lines` lines in skeletons, `tall` blocks if asked. */
+export function LoadingBlock({ lines = 4, tall = 0 }: { lines?: number; tall?: number }) {
+  return (
+    <div className="loading loading-block" role="status" aria-busy="true">
+      <span className="al-visually-hidden">Loading…</span>
+      {tall ? <div className="loading-tiles">{[...Array(tall)].map((_, i) => <Bone key={i} h="6rem" />)}</div> : null}
+      <div className="loading-lines">{[...Array(lines)].map((_, i) => <Bone key={i} w={`${90 - ((i * 23) % 40)}%`} />)}</div>
     </div>
   );
 }

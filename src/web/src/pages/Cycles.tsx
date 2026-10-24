@@ -1,5 +1,5 @@
 // The Cycles page (/cycles): the running cycles and the past ones, each
-// with its details to edit, and starting and ending them.
+// with its details to edit, and starting, ending and resuming them.
 
 import { useEffect, useRef, useState } from "react";
 import { attempt, patch } from "../lib/api";
@@ -9,9 +9,9 @@ import { fieldOf, optionLabel } from "../lib/meta";
 import { useShared } from "../lib/state";
 import { toast } from "../lib/toast";
 import type { Cycle } from "../lib/types";
-import { endCycle, resumeCycle, startCycle } from "../components/cycleDialogs";
+import { endCycle, ownOutcomes, resumeCycle, startCycle } from "../components/cycleDialogs";
 import { DatePicker } from "../components/DatePicker";
-import { FLAG, Field, Icon, Input, Label, Optional, PathIcon, TextArea } from "../components/ui";
+import { FLAG, Field, Icon, Input, Label, Optional, PathIcon, Select, TextArea } from "../components/ui";
 
 const OUTCOME_BADGE: Record<string, string> = { offer: "al-badge--success" };
 
@@ -27,6 +27,17 @@ export function CyclesPage() {
   const past = endedCycles();
   const stat = (label: string, value: number) => <div className="al-stat"><span className="al-stat__label">{label}</span><span className="al-stat__value">{value}</span></div>;
   const done = async () => { setEditing(null); await loadCycles(); };
+  // Under each cycle: edit it, end or resume it; then links to its board and its stats.
+  const actions = (c: Cycle) => (
+    <div className="cycle-actions">
+      <button className="al-button al-button--sm" type="button" onClick={() => setEditing(c.id)}>Edit details</button>
+      {c.ended_on
+        ? <button className="al-button al-button--sm" type="button" onClick={() => resumeCycle(c)}>Resume cycle</button>
+        : <button className="al-button al-button--danger al-button--sm" type="button" onClick={() => endCycle(c)}><PathIcon d={FLAG} /><span>End cycle</span></button>}
+      <a className="al-link" href={c.ended_on ? `/?cycle=${c.id}` : "/"} onClick={c.ended_on ? undefined : (e) => { e.preventDefault(); pickCycle(c.id); }}>Open its board</a>
+      <a className="al-link" href={`/stats?cycle=${c.id}`}>Stats</a>
+    </div>
+  );
   return (
     <div className="page cycles-page" ref={page}>
       <header className="al-page-head">
@@ -44,17 +55,13 @@ export function CyclesPage() {
               <div className="cycle-head">
                 <h3 translate="no">{c.name}</h3><span className="al-badge al-badge--accent">Active</span>
                 <span className="al-hint">{`Since ${longDate(c.started_on)} · week ${cycleWeek(c)}`}</span>
-                <button className="al-button al-button--quiet al-button--sm cycle-edit-button" type="button" onClick={() => setEditing(c.id)}>Edit details</button>
               </div>
               {c.description ? <p className="cycle-desc" translate="no">{c.description}</p> : null}
               <div className="cycle-stats">
                 {stat("Active", c.counts.active)}{stat("Closed", c.counts.archived)}
                 {stat("Interviewing", c.counts.interviewed)}{stat("Offers", c.counts.offers)}
               </div>
-              <div className="cycle-actions">
-                <button className="al-button" type="button" onClick={() => pickCycle(c.id)}>Open its board</button>
-                <button className="al-button al-button--quiet" type="button" onClick={() => endCycle(c)}><PathIcon d={FLAG} /><span>End this cycle…</span></button>
-              </div>
+              {actions(c)}
             </>}
           </article>
         )) : <p className="muted">No cycle is active. Start one to begin tracking applications.</p>}
@@ -67,7 +74,6 @@ export function CyclesPage() {
               <div className="cycle-head">
                 <h3 translate="no">{c.name}</h3>
                 <span className="al-hint">{`${longDate(c.started_on)} to ${longDate(c.ended_on)} · ${cycleWeeks(c)} weeks`}</span>
-                <button className="al-button al-button--quiet al-button--sm cycle-edit-button" type="button" onClick={() => setEditing(c.id)}>Edit details</button>
               </div>
               {c.description ? <p className="cycle-desc" translate="no">{c.description}</p> : null}
               <div className="cycle-outcome">
@@ -78,11 +84,7 @@ export function CyclesPage() {
                 {([["Applied", c.counts.applied], ["Interviewed", c.counts.interviewed], ["Offers", c.counts.offers], ["On the board at the end", c.counts.active]] as [string, number][])
                   .map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}
               </dl>
-              <div className="cycle-actions">
-                <a className="al-button al-button--sm" href={`/?cycle=${c.id}`}>Look at its board</a>
-                <button className="al-button al-button--quiet al-button--sm" type="button" onClick={() => resumeCycle(c)}>Resume</button>
-                <a className="al-button al-button--quiet al-button--sm" href={`/stats?cycle=${c.id}`}>Its stats</a>
-              </div>
+              {actions(c)}
             </>}
           </article>
         )) : <p className="muted">None yet. When a cycle ends, its board is kept here.</p>}
@@ -92,15 +94,23 @@ export function CyclesPage() {
 }
 
 function CycleEditor({ c, done, cancel }: { c: Cycle; done: () => void; cancel: () => void }) {
-  const [vals, setVals] = useState({ name: c.name, description: c.description || "", started_on: c.started_on as string | null, ended_on: c.ended_on });
+  const [vals, setVals] = useState({ name: c.name, description: c.description || "", started_on: c.started_on as string | null, ended_on: c.ended_on,
+    outcome: c.outcome || "other", outcome_note: c.outcome_note || "" });
+  // How it ended: one of the usual, one of yours from before, or new words.
+  const [own, setOwn] = useState<string[]>([]);
+  useEffect(() => { if (c.ended_on) ownOutcomes().then(setOwn); }, [c.ended_on]);
+  const usual = fieldOf("cycles", "outcome").options as [string, string][];
+  const yours = [...new Set([...own, ...(vals.outcome && !usual.some(([v]) => v === vals.outcome) ? [vals.outcome] : [])])];
+  const [typing, setTyping] = useState(false);
   const bad = !!(c.ended_on && vals.started_on && vals.ended_on && vals.ended_on < vals.started_on);
-  const disabled = !vals.name.trim() || !vals.started_on || (!!c.ended_on && !vals.ended_on) || bad;
+  const disabled = !vals.name.trim() || !vals.started_on || (!!c.ended_on && (!vals.ended_on || (typing && !vals.outcome.trim()))) || bad;
   return (
     <form className="cycle-edit" onSubmit={async (e) => {
       e.preventDefault();
       const fields: Record<string, unknown> = { name: vals.name.trim(), description: vals.description.trim() || null, started_on: vals.started_on };
-      if (c.ended_on) fields.ended_on = vals.ended_on;
-      const before = { name: c.name, description: c.description, started_on: c.started_on, ...(c.ended_on ? { ended_on: c.ended_on } : {}) };
+      if (c.ended_on) Object.assign(fields, { ended_on: vals.ended_on, outcome: vals.outcome.trim(), outcome_note: vals.outcome_note.trim() || null });
+      const before = { name: c.name, description: c.description, started_on: c.started_on,
+        ...(c.ended_on ? { ended_on: c.ended_on, outcome: c.outcome, outcome_note: c.outcome_note } : {}) };
       const saved = await attempt(() => patch(`cycles/${c.id}`, fields));
       if (!saved) return;
       await done();
@@ -115,6 +125,22 @@ function CycleEditor({ c, done, cancel }: { c: Cycle; done: () => void; cancel: 
         {c.ended_on ? <Field><Label htmlFor={`ce-end-${c.id}`}>Ended</Label>
           <DatePicker id={`ce-end-${c.id}`} value={vals.ended_on} onChange={(v) => setVals((x) => ({ ...x, ended_on: v }))} /></Field> : null}
       </div>
+      {c.ended_on ? <div className="cycle-dates">
+        <Field><Label htmlFor={`ce-outcome-${c.id}`}>How it ended</Label>
+          <Select id={`ce-outcome-${c.id}`} value={typing ? "" : vals.outcome} onChange={(e) => {
+            const v = e.target.value;
+            setTyping(!v);
+            setVals({ ...vals, outcome: v });
+          }}>
+            {usual.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            {yours.length ? <optgroup label="Your own">{yours.map((v) => <option key={v} value={v} translate="no">{v}</option>)}</optgroup> : null}
+            <option value="">In your own words…</option>
+          </Select>
+          {typing ? <Input aria-label="How it ended, in your own words" placeholder="e.g. Moved abroad" value={vals.outcome}
+            onChange={(e) => setVals({ ...vals, outcome: e.target.value })} /> : null}</Field>
+        <Field><Label htmlFor={`ce-note-${c.id}`}>What happened <Optional /></Label>
+          <Input id={`ce-note-${c.id}`} value={vals.outcome_note} onChange={(e) => setVals({ ...vals, outcome_note: e.target.value })} /></Field>
+      </div> : null}
       <p className="al-error" id={`cycle-${c.id}-err`} hidden={!bad}>{bad ? "It ends before it starts. Pick a later end date, or an earlier start." : ""}</p>
       <p className="al-hint">{c.ended_on ? "Only the details change. Its board stays exactly as it was." : "Week numbers and stats count from the start date."}</p>
       <div className="cycle-actions">

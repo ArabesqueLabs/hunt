@@ -4,13 +4,13 @@ hunt with its demo data (`make demo`): every company, person and address in
 it is made up. They show light or dark, as your system is set. Made by
 `make screenshots`.
 
-## Tracking board
+## Applications
 
 Applications by stage, with what's next on each; the cycles running side by side.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="screenshots/board-dark.png">
-  <img src="screenshots/board-light.png" alt="Tracking board">
+  <img src="screenshots/board-light.png" alt="Applications">
 </picture>
 
 ## Swimlanes, sub stages and folding
@@ -22,13 +22,13 @@ The board's rows: what's active, the offers, and what's closed, each stage a col
   <img src="screenshots/swimlanes-light.png" alt="Swimlanes, sub stages and folding">
 </picture>
 
-## Tracking board, as a table
+## Applications, as a table
 
 Every application, sortable, with the board's filters.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="screenshots/table-dark.png">
-  <img src="screenshots/table-light.png" alt="Tracking board, as a table">
+  <img src="screenshots/table-light.png" alt="Applications, as a table">
 </picture>
 
 ## Adding an application

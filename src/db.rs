@@ -21,7 +21,7 @@ const SCHEMA_POSTGRES: &str = include_str!("schema_postgres.sql");
 const SCHEMA_MYSQL: &str = include_str!("schema_mysql.sql");
 /// "hunt" in ASCII: marks a database as ours.
 const APP_ID: i64 = 0x6875_6e74;
-pub const SCHEMA_VERSION: i64 = 23;
+pub const SCHEMA_VERSION: i64 = 24;
 /// The version schema*.sql describe: a new database is made at it, then
 /// brought up to [`SCHEMA_VERSION`] by the migrations after it.
 const SCHEMA_BASE: i64 = 14;
@@ -51,6 +51,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("migrate_v21.sql"),
     include_str!("migrate_v22.sql"),
     include_str!("migrate_v23.sql"),
+    include_str!("migrate_v24.sql"),
 ];
 /// Upgrades PostgreSQL and MySQL databases can take: (version reached, its
 /// SQL for PostgreSQL, for MySQL). They start at version 8.
@@ -129,6 +130,11 @@ const SERVER_MIGRATIONS: &[(i64, &str, &str)] = &[
         23,
         include_str!("migrate_v23_postgres.sql"),
         include_str!("migrate_v23_mysql.sql"),
+    ),
+    (
+        24,
+        include_str!("migrate_v24_postgres.sql"),
+        include_str!("migrate_v24_mysql.sql"),
     ),
 ];
 
@@ -655,7 +661,8 @@ impl Db {
             .unwrap_or_else(|| format!("#{id}"))
     }
 
-    /// Earlier values of a free-text field, most used first, for suggestions.
+    /// Earlier values of a free-text field, most used first, for suggestions;
+    /// of a field with options, those in your own words.
     pub fn suggestions(&self, r: &Resource, field: &str, q: &str) -> Result<Vec<String>> {
         let f = r
             .field(field)
@@ -670,6 +677,10 @@ impl Db {
             .query(&sql, args![format!("%{q}%")])?
             .into_iter()
             .filter_map(|r| r["v"].as_str().map(String::from))
+            .filter(|v| match f.kind {
+                FieldKind::Enum { options } => options.iter().all(|(o, _)| o != v),
+                _ => true,
+            })
             .collect())
     }
 
@@ -1024,6 +1035,8 @@ impl Db {
                     .find(|(v, l)| v.eq_ignore_ascii_case(&text) || l.eq_ignore_ascii_case(&text));
                 match found {
                     Some((v, _)) => Value::String(v.to_string()),
+                    // One that suggests takes your own words too.
+                    None if f.suggest => Value::String(text),
                     None => {
                         return Err(invalid(format!(
                             "{}: {text:?} isn't one of {}",
