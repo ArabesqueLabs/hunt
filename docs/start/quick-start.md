@@ -54,6 +54,9 @@ skipped; the rest can be changed later, in Settings.
    (chosen to begin with), or restore a backup from another hunt. A backup
    brings its applications, settings, cycles and files, so it goes straight
    on to authentication, then where to start.
+
+   ![Setting up hunt, Welcome: configure your hunt, or restore from a backup](../screenshots/setup-welcome-light.png#gh-light-mode-only)
+   ![Setting up hunt, Welcome: configure your hunt, or restore from a backup](../screenshots/setup-welcome-dark.png#gh-dark-mode-only)
 2. **Authentication:** your account, as the hunt's owner: an email address
    and a password (8 characters or more). You sign in with them at
    `/login`, and hunt remembers each browser for 30 days. You run the hunt
@@ -64,6 +67,9 @@ skipped; the rest can be changed later, in Settings.
    signing in, so make it straight away. Started with `HUNT_ADMIN_EMAIL`
    and `HUNT_ADMIN_PASSWORD`, hunt makes the owner itself, and the launcher
    says who.
+
+   ![Setting up hunt, Authentication: an email address, and a password twice](../screenshots/setup-account-light.png#gh-light-mode-only)
+   ![Setting up hunt, Authentication: an email address, and a password twice](../screenshots/setup-account-dark.png#gh-dark-mode-only)
 3. **Your settings,** filled in from your browser:
    - **Region and currency:** the region dates and numbers are written
      for, your time zone (interview times are in it), the currency pay is
@@ -72,6 +78,9 @@ skipped; the rest can be changed later, in Settings.
    - **Appearance:** light, dark, or matching your device.
    - **Whether you live in the UK,** for working out take-home pay after
      tax: on when your browser's in the UK, or on UK time.
+
+   ![Setting up hunt, Your settings: region, time zone, currency, the first day of the week, and how it looks](../screenshots/setup-settings-light.png#gh-light-mode-only)
+   ![Setting up hunt, Your settings: region, time zone, currency, the first day of the week, and how it looks](../screenshots/setup-settings-dark.png#gh-dark-mode-only)
 
 The language (English or Arabic) is in Settings → General.
 
@@ -88,6 +97,9 @@ start one: choose **Start a new cycle**, and give it a name ("Autumn
 2026", say, or "Remote, Europe") and when it starts. Used hunt elsewhere?
 **Restore from a backup**, beside it, carries on from that hunt instead.
 
+![The board of a new hunt: Start a new cycle, or Restore from a backup](../screenshots/first-cycle-light.png#gh-light-mode-only)
+![The board of a new hunt: Start a new cycle, or Restore from a backup](../screenshots/first-cycle-dark.png#gh-dark-mode-only)
+
 ## 4. Add your first application
 
 1. On the board, choose **Add application** (or press N).
@@ -96,6 +108,9 @@ start one: choose **Start a new cycle**, and give it a name ("Autumn
    posting**. hunt fills in the role, the company, the pay and the
    description. No link? Type the company and the role instead.
 3. Choose the stage it's at (Applied, say), and add it.
+
+![Adding an application, from the link to a job posting](../screenshots/new-application-light.png#gh-light-mode-only)
+![Adding an application, from the link to a job posting](../screenshots/new-application-dark.png#gh-dark-mode-only)
 
 It's a card on the board now, in your job search.
 

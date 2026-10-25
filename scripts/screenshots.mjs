@@ -5,6 +5,9 @@
 //
 //   node scripts/screenshots.mjs        (or `make screenshots`, which builds first)
 //
+// The launcher (the setup wizard) is photographed too, on a new hunt of its
+// own (an empty database), and the board it leads to, with no cycle yet.
+//
 // Writes docs/screenshots/*.png, docs/screenshots.md, and
 // docs/screenshots.json (each shot's name, title, what it shows, and whether
 // it's a phone's, for the website), replacing them.
@@ -17,6 +20,10 @@ import { join } from "node:path";
 
 const ADDR = process.env.SHOTS_ADDR || "127.0.0.1:4847";
 const BASE = `http://${ADDR}`;
+// The new hunt, for the launcher: at localhost, not 127.0.0.1, so its
+// sign-in's cookie isn't the demo's.
+const SETUP_ADDR = process.env.SETUP_ADDR || "localhost:4851";
+const SETUP_BASE = `http://${SETUP_ADDR}`;
 const HUNT = process.env.HUNT || "target/debug/hunt";
 const OUT = "docs/screenshots";
 const PORT = 9347;
@@ -34,9 +41,20 @@ function chrome() {
 
 // ---- the pages -------------------------------------------------------------------------
 
+/** A page's button, by its words, pressed (as an `act`). */
+const press = (words) => `[...document.querySelectorAll("button")].find((b) => b.textContent.trim() === ${JSON.stringify(words)}).click()`;
+
+/** A form's field, typed in (as an `act`): as React hears it, an input event. */
+const type = (selector, value) => `{ const f = document.querySelector(${JSON.stringify(selector)});
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(f, ${JSON.stringify(value)});
+  f.dispatchEvent(new Event("input", { bubbles: true })); }`;
+
 /**
  * Each shot: a file name, a caption, the page, and what to do there first.
  * `full` takes the whole page, not just the window; `phone` is 390 wide.
+ * `setup` shots are the new hunt's, one after another, from its launcher's
+ * first step: each one's `act` takes it on from the last (`wait`, for
+ * what follows to settle, such as a toast to go).
  */
 const SHOTS = [
   { name: "board", title: "Applications", about: "Applications by stage, with what's next on each; the cycles running side by side.", path: "/", detailed: true },
@@ -75,6 +93,17 @@ const SHOTS = [
   { name: "settings", title: "Settings", path: "/settings", full: true },
   { name: "settings-board", title: "Settings: the board", about: "Swimlanes, their stages and the stages' sub stages: which stages close a process, which start folded, and where a card goes by default.",
     path: "/settings?tab=board", full: true },
+  // A new hunt: its launcher, step by step, and the board it leads to.
+  { name: "setup-welcome", title: "Setting up: welcome", about: "A new hunt opens on its launcher: set it up afresh, or restore a backup from another hunt.",
+    setup: true },
+  { name: "setup-account", title: "Setting up: authentication", about: "Your account, as the hunt's owner and admin: an email address and a password.",
+    setup: true, act: `${press("Continue")}; await new Promise((r) => setTimeout(r, 500));
+      ${type("#launch-email", "you@example.com")}; ${type("#launch-password", "a few good words")}; ${type("#launch-again", "a few good words")}` },
+  // Its toast ("Account made") gone first.
+  { name: "setup-settings", title: "Setting up: your settings", about: "Region, time zone, currency and the first day of the week, filled in from the browser; and how it looks.",
+    setup: true, full: true, act: press("Continue"), wait: 3500 },
+  { name: "first-cycle", title: "A new hunt's board", about: "No job search yet: start a cycle, or carry on from another hunt's backup.",
+    setup: true, act: press("Finish setup") },
   // In Arabic, right to left.
   { name: "board-ar", title: "In Arabic: the board", about: "Right to left, with Arabic-Indic digits; what people wrote stays as written.", path: "/", detailed: true, language: "ar" },
   { name: "application-ar", title: "In Arabic: an application", path: (ids) => `/applications/${ids.app}`, language: "ar" },
@@ -141,6 +170,12 @@ async function browser() {
     errors,
     // Phones at 2x, as they are; the desktop at 1x, to keep the files small.
     size: (width, height, mobile = false) => send("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: mobile ? 2 : 1, mobile }),
+    // As if in the UK, for the launcher's guesses (its region, time zone and currency); undefined, as before.
+    locale: async (locale, zone) => {
+      await send("Emulation.setLocaleOverride", locale ? { locale } : {});
+      await send("Emulation.setTimezoneOverride", { timezoneId: zone || "" });
+    },
+    clearCookies: () => send("Network.clearBrowserCookies"),
     scheme: (value) => send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-color-scheme", value }] }),
     go: async (url) => { await send("Page.navigate", { url }); await sleep(1500); },
     eval: evaluate,
@@ -188,7 +223,7 @@ try {
   for (const f of readdirSync(OUT)) if (f.endsWith(".png")) rmSync(join(OUT, f));
   for (const theme of ["light", "dark"]) {
     await b.scheme(theme);
-    for (const s of SHOTS) {
+    for (const s of SHOTS.filter((s) => !s.setup)) {
       const [width, height] = s.phone ? [390, 844] : [1440, 900];
       await b.size(width, height, !!s.phone);
       // The language is the service's setting: set for the shot, then back.
@@ -211,6 +246,14 @@ try {
       process.stdout.write(`  ${s.name}-${theme}.png\n`);
     }
   }
+  // The launcher's, on a new hunt for each theme: signed in as nobody.
+  await b.clearCookies();
+  await b.locale("en-GB", "Europe/London");
+  for (const theme of ["light", "dark"]) {
+    await b.scheme(theme);
+    await setup(b, theme);
+  }
+  await b.locale();
   if (b.errors.length) throw new Error(`the pages had errors:\n${b.errors.join("\n")}`);
 
   // The page that shows them: light or dark, as the reader's system is.
@@ -241,4 +284,46 @@ try {
   b.close();
   server.kill();
   rmSync(work, { recursive: true, force: true });
+}
+
+/**
+ * The `setup` shots, in one theme: a hunt of its own on an empty database
+ * (a new hunt, with no owner: HUNT_ADMIN_EMAIL and HUNT_ADMIN_PASSWORD
+ * unset), from its launcher's first step to its board.
+ */
+async function setup(b, theme) {
+  const dir = mkdtempSync(join(tmpdir(), "hunt-shots-new-"));
+  const env = { ...process.env };
+  delete env.HUNT_ADMIN_EMAIL;
+  delete env.HUNT_ADMIN_PASSWORD;
+  const fresh = spawn(HUNT, ["serve", "--addr", SETUP_ADDR, "--db", join(dir, "new.db")], { stdio: "ignore", env });
+  try {
+    for (let i = 0; ; i++) {
+      try { if ((await fetch(`${SETUP_BASE}/api/meta`)).ok) break; } catch { /* starting */ }
+      if (i > 50) throw new Error(`the new hunt didn't start on ${SETUP_ADDR}`);
+      await sleep(200);
+    }
+    const [width, height] = [1440, 900];
+    await b.size(width, height);
+    // Nothing kept from the last theme's run (the launcher's own keys).
+    await b.go(SETUP_BASE);
+    await b.eval("localStorage.clear(); sessionStorage.clear(); return 1");
+    await b.go(SETUP_BASE);
+    for (const s of SHOTS.filter((s) => s.setup)) {
+      await b.size(width, height);
+      if (s.act) { await b.eval(`${s.act}; return 1`); await sleep(s.wait || 1500); }
+      if (s.full) {
+        const tall = await b.eval("return Math.ceil(document.documentElement.scrollHeight)");
+        await b.size(width, Math.min(Math.max(tall, height), 4000));
+        await sleep(400);
+      }
+      await b.eval("window.scrollTo(0, 0); document.activeElement?.blur(); return 1");
+      await sleep(200);
+      await b.shot(join(OUT, `${s.name}-${theme}.png`));
+      process.stdout.write(`  ${s.name}-${theme}.png\n`);
+    }
+  } finally {
+    fresh.kill();
+    rmSync(dir, { recursive: true, force: true });
+  }
 }
