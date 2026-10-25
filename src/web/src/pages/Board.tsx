@@ -20,11 +20,13 @@ import { toast } from "../lib/toast";
 import type { Board, Card, Stage } from "../lib/types";
 import { BulkBar, ProcessActions, bulkProcesses } from "../components/bulk";
 import { endCycle, resumeCycle, startCycle } from "../components/cycleDialogs";
+import { useFilePicker } from "../components/files";
 import { FilterBar } from "../components/FilterBar";
 import { newApplication } from "../components/NewApplication";
 import { TagChip } from "../components/tags";
 import { Icon, Input, LoadingPage, Logo, Notice, Table, dotted } from "../components/ui";
 import { celebrating, Celebration } from "./Celebrate";
+import { importBackup } from "./Settings";
 
 /** What's next, to show: its title as written, then when, in the page's language. */
 export const NextLabel = ({ n }: { n: Next }) => <><span translate="no">{n.title}</span>{n.when ? <>{", "}<span>{n.when}</span></> : null}</>;
@@ -130,13 +132,20 @@ export function NoCycle() {
   const past = endedCycles();
   const outcomes = fieldOf("cycles", "outcome").options;
   const n = past.length;
+  // A fresh start, with nothing yet: or start from another hunt's backup
+  // (the page drawn again in its settings, its language even).
+  const picker = useFilePicker("application/json,.json", async (f) => { if (await importBackup(f)) location.reload(); });
   return (
     <div className="board-welcome">
       <div className="al-empty board-empty">
         <h1 className="al-empty__title">Welcome!</h1>
         <p className="al-empty__text">Let's explore greener pastures, and start a new cycle!</p>
-        <button className="al-button al-button--primary" type="button" onClick={() => startCycle()}><Icon name="plus" /><span>Start a new cycle</span></button>
-        <p className="muted small">{n === 0 ? "You've had no cycles before." : n === 1 ? "You've had 1 cycle before." : `You've had ${n} cycles before.`}</p>
+        <div className="actions">
+          <button className="al-button al-button--primary" type="button" onClick={() => startCycle()}><Icon name="plus" /><span>Start a new cycle</span></button>
+          {n === 0 ? <button className="al-button" type="button" onClick={picker.open}><Icon name="download" /><span>Restore from a backup</span></button> : null}
+        </div>
+        {picker.input}
+        <p className="muted small">{n === 0 ? "You've had no cycles before. Used hunt elsewhere? Restore its backup to carry on from it." : n === 1 ? "You've had 1 cycle before." : `You've had ${n} cycles before.`}</p>
       </div>
       {n ? (
         <details className="al-disclosure past-cycles">

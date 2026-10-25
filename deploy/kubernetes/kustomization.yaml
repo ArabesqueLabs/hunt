@@ -1,0 +1,27 @@
+# hunt on Kubernetes, with Kustomize: one pod and one volume.
+#
+#   cp .env.example .env && cp .secrets.example .secrets   # then fill them in
+#   kubectl apply -k .                                     # or, in a clone: make k8s-up
+#
+# Which hunt: newTag below (`release`, a version to stay on such as
+# v0.17.0, or `latest`, main's newest build). To reach it from elsewhere,
+# see ingress.example.yaml.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: hunt
+resources:
+  - namespace.yaml
+  - pvc.yaml
+  - deployment.yaml
+  - service.yaml
+images:
+  - name: ghcr.io/arabesquelabs/hunt
+    newTag: release
+# Settings (.env) and secrets (.secrets): KEY=value lines, as their
+# examples say. A change rolls the pod, as its name changes with it.
+configMapGenerator:
+  - name: hunt-config
+    envs: [.env]
+secretGenerator:
+  - name: hunt-secrets
+    envs: [.secrets]

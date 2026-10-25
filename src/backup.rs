@@ -139,11 +139,14 @@ fn table_of(entity: &str) -> Option<&'static str> {
 }
 
 /// Settings that belong to this machine (its Gmail connection, its
-/// uptime): not backed up, and kept as they are when a backup is imported.
+/// uptime, its password, whether it's been set up): not backed up, and kept
+/// as they are when a backup is imported.
 fn is_private_setting(name: &str) -> bool {
     // And the calendar's private link: a copy of hunt elsewhere shouldn't share it.
     name.starts_with("mail.")
         || name.starts_with("system.")
+        || name.starts_with("auth.")
+        || name.starts_with("setup.")
         || name == crate::service::CALENDAR_TOKEN
 }
 

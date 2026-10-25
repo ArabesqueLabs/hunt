@@ -1,11 +1,16 @@
-//! Signing in without Cloudflare: a password for one person's hunt, and the
+//! Signing in without Cloudflare: one person's hunt's owner, and the
 //! addresses a sign-in proxy's header is taken from, for several people's.
 //!
-//! **A password** (`HUNT_PASSWORD`): the app and its API need signing in,
-//! at /login. Signing in sets a cookie, good for 30 days: its expiry, signed
-//! with a key made from the password, so changing the password signs
-//! everyone out. The CLI sends the password itself (`Authorization: Bearer`,
-//! from its own `HUNT_PASSWORD`). A wrong one costs a second.
+//! **hunt's own sign-in**: each account's email address and password (an
+//! Argon2 hash, with the account: see [`crate::tenants`]), at /login. The
+//! first is the owner's, made in a new hunt's launcher (or from
+//! `HUNT_ADMIN_EMAIL` and `HUNT_ADMIN_PASSWORD` when hunt starts); others
+//! sign up at /signup, while sign-ups are open or invited. Until there's an
+//! owner, nothing needs signing in. Signing in sets a cookie, good for 30
+//! days: the account, its expiry, signed with a key made from its
+//! password's hash, so a new password ends its sessions. The CLI sends the
+//! address and password itself (`Authorization: Basic`, from `HUNT_EMAIL`
+//! and `HUNT_PASSWORD`). A wrong one costs a second.
 //!
 //! **A sign-in proxy** (`HUNT_AUTH_HEADER`): Authelia, Authentik,
 //! oauth2-proxy or Tailscale signs people in, and names them in a header
@@ -14,7 +19,13 @@
 //! hunt another way can claim to be anyone. See [`crate::tenants`].
 
 use std::net::IpAddr;
+use std::sync::Mutex;
 
+use argon2::Argon2;
+use argon2::password_hash::{
+    PasswordHash, PasswordHasher, PasswordVerifier, SaltString, rand_core::OsRng,
+};
+use base64::Engine;
 use sha2::{Digest, Sha256};
 
 use crate::error::{Error, Result};
@@ -23,32 +34,60 @@ use crate::error::{Error, Result};
 pub const COOKIE: &str = "hunt_session";
 /// How long signing in lasts.
 pub const SESSION_DAYS: i64 = 30;
+/// The shortest password.
+pub const MIN_LENGTH: usize = 8;
 
-/// One person's hunt's password, and the key its sessions are signed with.
+/// A password, kept as its Argon2 hash, and the key its sessions are
+/// signed with.
 pub struct Password {
-    password: String,
+    hash: String,
     key: [u8; 32],
+    /// The last password that matched (its SHA-256), so the CLI's requests,
+    /// each sending it, aren't each an Argon2 check.
+    matched: Mutex<Option<[u8; 32]>>,
 }
 
 impl Password {
-    pub fn new(password: &str) -> Result<Password> {
-        if password.chars().count() < 8 {
-            return Err(Error::Invalid(
-                "HUNT_PASSWORD is too short: give it 8 characters or more".into(),
-            ));
+    /// A new password: its hash, to keep.
+    pub fn hash(password: &str) -> Result<String> {
+        if password.chars().count() < MIN_LENGTH {
+            return Err(Error::Invalid(format!(
+                "The password is too short: give it {MIN_LENGTH} characters or more"
+            )));
         }
+        let salt = SaltString::generate(&mut OsRng);
+        Argon2::default()
+            .hash_password(password.as_bytes(), &salt)
+            .map(|h| h.to_string())
+            .map_err(|e| Error::Invalid(format!("can't keep that password: {e}")))
+    }
+
+    /// One that was kept, from its hash.
+    pub fn stored(hash: &str) -> Result<Password> {
+        PasswordHash::new(hash).map_err(|e| Error::Db(format!("the stored password: {e}")))?;
         Ok(Password {
-            password: password.to_string(),
-            key: Sha256::digest(format!("hunt session key\n{password}")).into(),
+            hash: hash.to_string(),
+            key: Sha256::digest(format!("hunt session key\n{hash}")).into(),
+            matched: Mutex::new(None),
         })
     }
 
-    /// Whether `given` is the password (in constant time).
+    /// Whether `given` is the password.
     pub fn matches(&self, given: &str) -> bool {
-        same(
-            &Sha256::digest(given.as_bytes()),
-            &Sha256::digest(self.password.as_bytes()),
-        )
+        let given_sum: [u8; 32] = Sha256::digest(given.as_bytes()).into();
+        let mut last = self.matched.lock().unwrap_or_else(|e| e.into_inner());
+        if last.is_some_and(|sum| same(&sum, &given_sum)) {
+            return true;
+        }
+        let ok = PasswordHash::new(&self.hash).is_ok_and(|h| {
+            Argon2::default()
+                .verify_password(given.as_bytes(), &h)
+                .is_ok()
+        });
+        if ok {
+            *last = Some(given_sum);
+        }
+        ok
     }
 
     /// A session, for the cookie: good until `until` (seconds since 1970).
@@ -73,6 +112,25 @@ impl Password {
                 hex(&hmac(&self.key, until.to_string().as_bytes())).as_bytes(),
             )
     }
+}
+
+/// An `Authorization: Basic` header's address and password (the CLI's).
+pub fn basic(header: &str) -> Option<(String, String)> {
+    let encoded = header.strip_prefix("Basic ")?;
+    let decoded = base64::engine::general_purpose::STANDARD
+        .decode(encoded.trim())
+        .ok()?;
+    let text = String::from_utf8(decoded).ok()?;
+    let (email, password) = text.split_once(':')?;
+    Some((email.to_string(), password.to_string()))
+}
+
+/// An `Authorization: Basic` header for an address and password.
+pub fn basic_header(email: &str, password: &str) -> String {
+    format!(
+        "Basic {}",
+        base64::engine::general_purpose::STANDARD.encode(format!("{email}:{password}"))
+    )
 }
 
 /// HMAC-SHA256 (RFC 2104).
@@ -151,23 +209,54 @@ impl Cidr {
     }
 }
 
-/// The sign-in page: the password, and where to go after.
-pub fn login_page(next: &str, wrong: bool) -> String {
+/// Text made safe to put in a page.
+fn html(text: &str) -> String {
+    text.replace('&', "&amp;")
+        .replace('"', "&quot;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+}
+
+/// The sign-in page: an email address and password, where to go after, and
+/// (while sign-ups are open) the way to sign up.
+pub fn login_page(next: &str, wrong: bool, signups_open: bool) -> String {
     include_str!("web/login.html")
-        .replace(
-            "{{next}}",
-            &next
-                .replace('&', "&amp;")
-                .replace('"', "&quot;")
-                .replace('<', "&lt;"),
-        )
+        .replace("{{next}}", &html(next))
         .replace(
             "{{error}}",
             if wrong {
-                r#"<p class="al-error" id="login-error" role="alert">That isn't the password.</p>"#
+                r#"<p class="al-error" id="login-error" role="alert">That email address and password don't match.</p>"#
             } else {
                 ""
             },
+        )
+        .replace(
+            "{{signup}}",
+            if signups_open {
+                r#"<p class="login-other">New here? <a href="/signup">Sign up</a>.</p>"#
+            } else {
+                ""
+            },
+        )
+}
+
+/// The sign-up page: an email address and password, a name and why, the
+/// terms of use to agree to (where this hunt has some: `site`, its
+/// website), and what was wrong with the last try.
+pub fn signup_page(site: Option<&str>, wrong: Option<&str>) -> String {
+    let terms = site.map(|site| {
+        let site = html(site.trim_end_matches('/'));
+        format!(
+            r#"<label class="al-label al-choice agree"><input type="checkbox" name="agrees" required> I agree to the <a href="{site}/terms/" target="_blank">terms of use</a>, and have read the <a href="{site}/privacy/" target="_blank">privacy notice</a>.</label>"#
+        )
+    });
+    include_str!("web/signup.html")
+        .replace("{{terms}}", &terms.unwrap_or_default())
+        .replace(
+            "{{error}}",
+            &wrong
+                .map(|w| format!(r#"<p class="al-error" role="alert">{}</p>"#, html(w)))
+                .unwrap_or_default(),
         )
 }
 
@@ -183,9 +272,13 @@ pub fn safe_next(next: Option<&str>) -> String {
 mod tests {
     use super::*;
 
+    fn password(p: &str) -> Password {
+        Password::stored(&Password::hash(p).unwrap()).unwrap()
+    }
+
     #[test]
     fn a_session_is_good_till_it_ends_and_only_with_its_password() {
-        let p = Password::new("correct horse").unwrap();
+        let p = password("correct horse");
         let s = p.session(1_000);
         assert!(p.valid(&s, 999));
         assert!(!p.valid(&s, 1_000), "ended");
@@ -193,14 +286,21 @@ mod tests {
             !p.valid(&s.replace("1000.", "9999."), 999),
             "a later end, unsigned"
         );
-        assert!(
-            !Password::new("another one").unwrap().valid(&s, 999),
-            "another password"
-        );
+        assert!(!password("another one").valid(&s, 999), "another password");
         assert!(!p.valid("nonsense", 0));
         assert!(p.matches("correct horse"));
         assert!(!p.matches("correct horsE"));
-        assert!(Password::new("short").is_err());
+        assert!(Password::hash("short").is_err());
+    }
+
+    #[test]
+    fn the_cli_sends_an_address_and_password() {
+        let (email, pass) = basic(&basic_header("me@example.com", "a:colon")).unwrap();
+        assert_eq!(
+            (email.as_str(), pass.as_str()),
+            ("me@example.com", "a:colon")
+        );
+        assert!(basic("Bearer x").is_none());
     }
 
     #[test]

@@ -38,34 +38,39 @@ enum Command {
         /// out: {"password": "...", "messages": [...], "labels": [...]}
         #[arg(long, hide = true)]
         fake_mail: Option<PathBuf>,
-        /// Several people, each with their own applications in the one
-        /// database, signing in through Cloudflare Access. New people ask
-        /// for an account; admins approve them
+        /// Once how several people shared one hunt: every hunt has accounts
+        /// now, so it's taken, and changes nothing
         #[arg(long, env = "HUNT_TENANTS", value_parser = clap::builder::BoolishValueParser::new(),
-              action = clap::ArgAction::SetTrue)]
+              action = clap::ArgAction::SetTrue, hide = true)]
         tenants: bool,
-        /// With --tenants: the admins, by email, comma-separated. The first
-        /// keeps what the database held before
+        /// Admins, by email, comma-separated, made when hunt starts (the first
+        /// is account 1, if there's none). Others are made admins in Admin
         #[arg(long, env = "HUNT_ADMINS", value_delimiter = ',')]
         admins: Vec<String>,
-        /// With --tenants: your Cloudflare Zero Trust team (its name, or
-        /// name.cloudflareaccess.com)
+        /// People sign in through Cloudflare Access, as well as hunt's own
+        /// sign-in: your Zero Trust team (its name, or name.cloudflareaccess.com)
         #[arg(long, env = "HUNT_ACCESS_TEAM")]
         access_team: Option<String>,
-        /// With --tenants: the Access application's audience (AUD) tag
+        /// With --access-team: the Access application's audience (AUD) tag
         #[arg(long, env = "HUNT_ACCESS_AUD")]
         access_aud: Option<String>,
-        /// With --tenants, instead of Access: trust this header to name who's
-        /// asking. Only for trying hunt out, never where others can reach it
+        /// Instead of Access: trust this header to name who's asking. Only
+        /// for trying hunt out, never where others can reach it
         #[arg(long, env = "HUNT_IDENTITY_HEADER", hide = true)]
         identity_header: Option<String>,
-        /// One person's hunt, with a sign-in: this password, at /login (the
-        /// CLI sends its own HUNT_PASSWORD). 8 characters or more
-        #[arg(long, env = "HUNT_PASSWORD", hide_env_values = true)]
-        password: Option<String>,
-        /// With --tenants, instead of Access: a sign-in proxy (Authelia,
-        /// Authentik, oauth2-proxy, Tailscale) names who's asking in this
-        /// header (e.g. Remote-Email), taken only from --trusted-proxies
+        /// The hunt's owner, made when hunt starts (instead of in its
+        /// launcher): their email address, with --admin-password. They sign
+        /// in at /login, and run the hunt (an admin)
+        #[arg(long, env = "HUNT_ADMIN_EMAIL")]
+        admin_email: Option<String>,
+        /// With --admin-email: the owner's password, 8 characters or more.
+        /// Given again, it replaces theirs: the way back in when it's
+        /// forgotten
+        #[arg(long, env = "HUNT_ADMIN_PASSWORD", hide_env_values = true)]
+        admin_password: Option<String>,
+        /// Instead of Access: a sign-in proxy (Authelia, Authentik,
+        /// oauth2-proxy, Tailscale) names who's asking in this header (e.g.
+        /// Remote-Email), taken only from --trusted-proxies
         #[arg(long, env = "HUNT_AUTH_HEADER")]
         auth_header: Option<String>,
         /// With --auth-header: the addresses the sign-in proxy's requests come
@@ -381,58 +386,58 @@ pub fn run() -> Result<()> {
             access_team,
             access_aud,
             identity_header,
-            password,
+            admin_email,
+            admin_password,
             auth_header,
             trusted_proxies,
             experiments,
         } => {
-            // Several people: who the admins are, and how to tell who's asking.
-            let tenancy = if tenants {
-                let admins: Vec<String> = admins
-                    .iter()
-                    .map(|a| a.trim().to_string())
-                    .filter(|a| !a.is_empty())
-                    .collect();
-                if admins.is_empty() {
-                    bail!("--tenants needs an admin: --admins you@example.com (or HUNT_ADMINS)");
+            // Its accounts: the admins named, where who's asking comes from
+            // beside hunt's own sign-in, and its owner from the environment.
+            let _ = tenants;
+            let admins: Vec<String> = admins
+                .iter()
+                .map(|a| a.trim().to_string())
+                .filter(|a| !a.is_empty())
+                .collect();
+            let identity = match (identity_header, access_team, access_aud) {
+                _ if auth_header.is_some() => {
+                    let trusted = if trusted_proxies.is_empty() {
+                        hunt::auth::Cidr::local()
+                    } else {
+                        trusted_proxies
+                            .iter()
+                            .filter(|t| !t.trim().is_empty())
+                            .map(|t| hunt::auth::Cidr::parse(t))
+                            .collect::<hunt::Result<Vec<_>>>()?
+                    };
+                    hunt::tenants::IdentitySource::Proxy {
+                        header: auth_header.clone().unwrap_or_default(),
+                        trusted,
+                    }
                 }
-                let identity = match (identity_header, access_team, access_aud) {
-                    _ if auth_header.is_some() => {
-                        let trusted = if trusted_proxies.is_empty() {
-                            hunt::auth::Cidr::local()
-                        } else {
-                            trusted_proxies
-                                .iter()
-                                .filter(|t| !t.trim().is_empty())
-                                .map(|t| hunt::auth::Cidr::parse(t))
-                                .collect::<hunt::Result<Vec<_>>>()?
-                        };
-                        hunt::tenants::IdentitySource::Proxy {
-                            header: auth_header.clone().unwrap_or_default(),
-                            trusted,
-                        }
-                    }
-                    (Some(h), _, _) => {
-                        eprintln!(
-                            "hunt: trusting the {h} header to say who's asking: only for trying hunt out"
-                        );
-                        hunt::tenants::IdentitySource::Header(h)
-                    }
-                    (None, Some(team), Some(aud)) => {
-                        hunt::tenants::IdentitySource::access(&team, &aud)
-                    }
-                    _ => bail!(
-                        "--tenants needs to know who's asking: Cloudflare Access (--access-team \
-                         and --access-aud, or HUNT_ACCESS_TEAM and HUNT_ACCESS_AUD), or a sign-in \
-                         proxy's header (--auth-header, or HUNT_AUTH_HEADER)"
-                    ),
-                };
-                Some(hunt::api::TenancyConfig { admins, identity })
-            } else {
-                None
+                (Some(h), _, _) => {
+                    eprintln!(
+                        "hunt: trusting the {h} header to say who's asking: only for trying hunt out"
+                    );
+                    hunt::tenants::IdentitySource::Header(h)
+                }
+                (None, Some(team), Some(aud)) => hunt::tenants::IdentitySource::access(&team, &aud),
+                (None, Some(_), None) | (None, None, Some(_)) => bail!(
+                    "Cloudflare Access needs both --access-team and --access-aud (HUNT_ACCESS_TEAM \
+                     and HUNT_ACCESS_AUD)"
+                ),
+                (None, None, None) => hunt::tenants::IdentitySource::BuiltIn,
+            };
+            let tenancy = hunt::api::TenancyConfig {
+                admins,
+                identity,
+                owner_email: admin_email.filter(|e| !e.trim().is_empty()),
+                owner_password: admin_password.filter(|p| !p.is_empty()),
             };
             let experiments = hunt::experiments::Experiments::parse(&experiments)?;
-            let target = match db {
+            // An empty HUNT_DB (a blank line in .env) is none: the default.
+            let target = match db.filter(|d| !d.trim().is_empty()) {
                 Some(t) => t,
                 None => std::env::home_dir()
                     .context("no home directory; pass --db")?
@@ -447,29 +452,8 @@ pub fn run() -> Result<()> {
                     .with_context(|| format!("reading {}", file.display()))?;
                 db.mailbox = hunt::mail::Fake::from_json(&text)?.connector();
             }
-            println!(
-                "hunt on http://{addr}  (database {shown}{}, ctrl-c to stop)",
-                if tenancy.is_some() {
-                    ", several people"
-                } else {
-                    ""
-                }
-            );
-            let password = match password.filter(|p| !p.is_empty()) {
-                Some(_) if tenancy.is_some() => bail!(
-                    "HUNT_PASSWORD is for one person's hunt: with --tenants, people sign in \
-                     through Cloudflare Access or a sign-in proxy (HUNT_AUTH_HEADER)"
-                ),
-                Some(p) => Some(hunt::auth::Password::new(&p)?),
-                None => None,
-            };
-            if auth_header.is_some() && tenancy.is_none() {
-                bail!(
-                    "HUNT_AUTH_HEADER is for several people (--tenants): for one person's hunt \
-                     behind a sign-in proxy, hunt needs nothing"
-                );
-            }
-            hunt::api::serve(db, &addr, tenancy, experiments, password)?;
+            println!("hunt on http://{addr}  (database {shown}, ctrl-c to stop)");
+            hunt::api::serve(db, &addr, tenancy, experiments)?;
         }
         Command::Board { all } => {
             let since = time::date(

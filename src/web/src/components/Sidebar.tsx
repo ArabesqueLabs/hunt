@@ -121,14 +121,15 @@ export function Sidebar({ page, section, account }: { page: string; section: str
           <nav className="al-sidebar__nav" aria-label="Settings">
             <NavLink href="/settings" nav="settings" d={SLIDERS} label="Settings" current={section === "settings"} mini={mini} />
             <NavLink href="/admin" nav="admin" d={SHIELD} label="Admin" current={section === "admin"} hidden={!(M && isAdmin())} mini={mini} />
-            {/* Behind Cloudflare Access, its log out; with a password, hunt's own. */}
-            <a className="al-sidebar__link" href={M?.password && !M?.access ? "/logout" : "/cdn-cgi/access/logout"} id="logout" hidden={!M || (!M.access && !M.password)}
+            {/* Behind Cloudflare Access, its log out; signed in with hunt's own sign-in, hunt's. */}
+            <a className="al-sidebar__link" href={M?.tenancy?.account?.has_password ? "/logout" : "/cdn-cgi/access/logout"} id="logout"
+              hidden={!M || (!M.access && !M.tenancy?.account?.has_password)}
               title={M?.access?.email ? `Signed in as ${M.access.email}` : mini ? t("Log out") : undefined}>
               <svg className="al-icon" viewBox="0 0 24 24" aria-hidden="true"><path d={LOGOUT} /></svg><span className="al-sidebar__label">Log out</span>
             </a>
           </nav>
           <button type="button" className="al-sidebar__link al-sidebar__collapse" id="sidebar-toggle" aria-expanded={String(!mini) as "true" | "false"} title={mini ? t("Expand sidebar") : ""} onClick={toggle}>
-            <SysIcon name="sidebar" className="al-icon al-mirror" /><span className="al-sidebar__label">{mini ? "Expand sidebar" : "Collapse sidebar"}</span>
+            <SysIcon name="sidebar" className="al-icon al-mirror" /><span className="al-sidebar__label">{mini ? "Expand sidebar" : "Hide sidebar"}</span>
           </button>
           {/* The version, linked to its release on GitHub (tagged v0.2.0 …). */}
           <p className="app-version" id="version">

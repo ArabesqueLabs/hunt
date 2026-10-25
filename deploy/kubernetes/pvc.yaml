@@ -1,0 +1,7 @@
+# The SQLite database, and nothing else: `make k8s-down` leaves it be.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: { name: hunt-data }
+spec:
+  accessModes: [ReadWriteOnce]
+  resources: { requests: { storage: 1Gi } }

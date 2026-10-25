@@ -8,3 +8,9 @@ research.md
 # The web UI's packages, and what it's built into (npm run build, in src/web)
 /src/web/node_modules/
 /src/web/dist/
+
+# A self-hoster's: deploy/'s settings and secrets, and `make backup`'s backups
+/deploy/docker/.env
+/deploy/kubernetes/.env
+/deploy/kubernetes/.secrets
+/backups/

@@ -1,0 +1,22 @@
+# Reaching hunt from elsewhere: set your host, then
+# `kubectl -n hunt apply -f ingress.example.yaml`. Make hunt's owner first
+# (in its launcher, or HUNT_ADMIN_EMAIL and HUNT_ADMIN_PASSWORD in
+# .secrets), or put a sign-in in front of it.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: hunt
+  namespace: hunt
+spec:
+  # ingressClassName: nginx
+  rules:
+    - host: hunt.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend: { service: { name: hunt, port: { number: 4848 } } }
+  # HTTPS: kubectl -n hunt create secret tls hunt-tls --cert=… --key=…
+  # tls:
+  #   - hosts: [hunt.example.com]
+  #     secretName: hunt-tls

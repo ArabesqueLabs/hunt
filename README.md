@@ -10,106 +10,140 @@ has these docs, screenshots (also in [`docs/screenshots.md`](docs/screenshots.md
 and the hosted hunt's legal pages; it's a repository of its own,
 [ArabesqueLabs/careerhunt.app](https://github.com/ArabesqueLabs/careerhunt.app).
 
-To try it on your own machine, with Docker, or with Rust and Node (its web
-UI is built with Node first), then open http://localhost:4848:
+To look around first, with made-up data on every page (nothing is kept
+once you stop it):
 
 ```sh
-docker run -p 4848:4848 -v hunt-data:/data ghcr.io/arabesquelabs/hunt
-git clone https://github.com/ArabesqueLabs/hunt && cd hunt && make install && hunt serve
+docker run --rm -p 127.0.0.1:4848:4848 ghcr.io/arabesquelabs/hunt:demo
 ```
 
-One person's hunt needs no sign-in on your own machine. To reach it from
-elsewhere, give it a password (`HUNT_PASSWORD`), or put a sign-in in front
-of it: see "What's public, and what needs signing in", below. To work on
-hunt itself:
+To run your own, with Docker (see "Docker", below), Kubernetes
+("Kubernetes") or built from source with Rust and Node, then open
+http://localhost:4848. In a clone of hunt, `make help` lists a target for each:
+
+```sh
+git clone https://github.com/ArabesqueLabs/hunt && cd hunt
+make doctor                     # what you have, and which way it can run
+make docker-up                  # with Docker (deploy/docker): or…
+make k8s-up                     # …on Kubernetes (deploy/kubernetes): or…
+make install && make serve      # …built from source, database ~/.hunt/hunt.db
+make backup                     # save everything in the running hunt to backups/
+```
+
+A new hunt opens on its launcher: a few steps to make its owner's account
+(an email address and a password) and set it up (its region, currency
+and theme), or to restore a backup, then the board. New
+to it? Start with the [Introduction](docs/start/introduction.md) and the
+[Quick start](docs/start/quick-start.md), then the
+[Core concepts](docs/concepts/cycles.md).
+
+Every hunt has an owner, who signs in and runs it: made in the launcher,
+or from `HUNT_ADMIN_EMAIL` and `HUNT_ADMIN_PASSWORD`. Others join only as
+the owner says (sign-ups are closed on a new hunt): see "What's public,
+and what needs signing in" and "Several people", below. To work on hunt
+itself:
 
 `hunt serve` runs one service. It owns the database (SQLite, PostgreSQL or
 MySQL) and serves a JSON API, plus a web UI that uses that API. The rest of the `hunt` commands use
 the same API, so the CLI and the browser always agree.
 
 ```sh
-make serve                      # http://127.0.0.1:4848, database ~/.hunt/hunt.db, for several people (as dev-tenants)
-make dev                        # the same, with a throwaway database in target/
-make demo                       # fill that throwaway database with demo data (replacing it)
+make                            # make dev: http://127.0.0.1:4848, on an empty database each start (the launcher)
+make dev-demo                   # the same, with made-up data in it
+make help                       # every target, by who it's for
 make watch                      # serve it for several people, rebuilding and restarting on every change
-make                            # every target: build, release, test, lint, fmt, ci, install…
+make image && make image-try    # the container image, built and run here, keeping nothing
+make ci                         # what CI runs: format check, lint, every test
 ```
+
+[CONTRIBUTING.md](CONTRIBUTING.md) has more, and
+[docs/maintaining.md](docs/maintaining.md) how hunt is released.
 
 ## Docker
 
 hunt's image, [`ghcr.io/arabesquelabs/hunt`](https://github.com/ArabesqueLabs/hunt/pkgs/container/hunt), is small: no shell, and it runs
-as a non-root user. It listens on :4848, keeps its SQLite database in
-`/data` (a volume), and answers `/healthz` once its database does.
+as a non-root user, on Intel and AMD (`linux/amd64`) and ARM (`linux/arm64`:
+a Raspberry Pi, a Mac with Apple silicon). It listens on :4848, keeps its
+SQLite database in `/data` (a volume), and answers `/healthz` once its
+database does.
 
 ### Requirements
 
-- Docker
-- Docker Compose, to run it from a compose file (optional)
+- Docker, with Docker Compose
 
-### 1. Run it
+### 1. Get the compose file and its settings
+
+In a folder of its own (`mkdir hunt && cd hunt`):
+
+```sh
+curl -fsSLO https://raw.githubusercontent.com/ArabesqueLabs/hunt/main/deploy/docker/compose.yaml
+curl -fsSL https://raw.githubusercontent.com/ArabesqueLabs/hunt/main/deploy/docker/.env.example -o .env
+```
+
+`.env` is its settings, each explained there: which hunt (`HUNT_VERSION`),
+its owner (`HUNT_ADMIN_EMAIL` and `HUNT_ADMIN_PASSWORD`, or make them in
+the launcher), where it listens (`HUNT_BIND`, `HUNT_PORT`), and a
+PostgreSQL or MySQL database instead of SQLite (`HUNT_DB`).
+
+### 2. Run it
+
+```sh
+docker compose up -d
+```
+
+In a clone of hunt, `make docker-up` does both steps, with the files in
+[`deploy/docker`](deploy/docker). Your data is in the `hunt-data` volume,
+and stays when the container is replaced. Without Compose, the same is:
 
 ```sh
 docker run -d --name hunt --restart unless-stopped \
   -p 127.0.0.1:4848:4848 -v hunt-data:/data \
-  ghcr.io/arabesquelabs/hunt:latest
+  ghcr.io/arabesquelabs/hunt:release
 ```
 
-Or with Docker Compose: save this as `compose.yaml`, and run
-`docker compose up -d` beside it.
+### 3. Open it
 
-```yaml
-services:
-  hunt:
-    image: ghcr.io/arabesquelabs/hunt:latest
-    ports: ["127.0.0.1:4848:4848"]
-    volumes: ["hunt-data:/data"]
-    restart: unless-stopped
-volumes:
-  hunt-data:
-```
+Visit http://localhost:4848: a new hunt opens on its launcher, to make its
+owner's account and set it up. Until there's an owner, nothing needs
+signing in, and `127.0.0.1` keeps hunt to this computer: make them before
+opening it to a network (`HUNT_BIND=0.0.0.0`). See "What's public, and
+what needs signing in".
 
-Your data is in the `hunt-data` volume, and stays when the container is
-replaced.
+### Versions
 
-### 2. Open it
+| Tag | What it is |
+|---|---|
+| `release` | the newest release: the default |
+| `v0.17.0`, `v0.17` | a release, to stay on until you choose to move |
+| `latest`, `sha-…` | main's newest build, ahead of any release |
+| `demo` | main's, with made-up data, for looking around |
 
-Visit http://localhost:4848. `127.0.0.1:4848` keeps hunt to this computer.
-Before opening it to a network (`-p 4848:4848`), give it a password
-(`-e HUNT_PASSWORD=…`), or put a sign-in in front of it: see "What's
-public, and what needs signing in".
-
-### 3. Choose a version (optional)
-
-`latest` is main's newest build. Each release is also tagged with its
-version (`v0.16.0`), and each build with its commit (`sha-…`): use one of
-those to choose when you upgrade.
-
-### 4. Use PostgreSQL or MySQL (optional)
-
-Give the container the database's address as `HUNT_DB`
-(`-e HUNT_DB=postgres://hunt:secret@db/hunt`): see "The database".
+Choose one with `HUNT_VERSION` in `.env`. Each release's notes are on
+[GitHub](https://github.com/ArabesqueLabs/hunt/releases).
 
 ### Updating
 
+Back up first (`make backup`, or Settings → Backup and import): a backup
+imports only into the hunt that made it, or a newer one, so it's the way
+back. Then:
+
 ```sh
-docker pull ghcr.io/arabesquelabs/hunt:latest
-docker rm -f hunt        # the data stays, in its volume
+docker compose pull && docker compose up -d
 ```
 
-Then run it again, as in step 1. With Compose:
-`docker compose pull && docker compose up -d`. A newer hunt upgrades a
-SQLite database in place.
+`make docker-update` does all three. A newer hunt upgrades a SQLite
+database in place.
 
 ### Building the image yourself
 
 ```sh
-docker build --platform linux/amd64 -t hunt .
-docker run -p 127.0.0.1:4848:4848 -v hunt-data:/data hunt
+make image                      # hunt:dev, for this machine (TARGET=demo: the demo's)
+make image-try                  # run it, keeping nothing
 ```
 
 The `image` workflow (`.github/workflows/image.yml`) runs `make ci`, then
-publishes `ghcr.io/arabesquelabs/hunt` (`latest` from main, `v<version>`,
-and each commit's sha), so you needn't build it yourself.
+builds each platform on a runner of its own and publishes the tags above,
+so you needn't build it yourself.
 
 Builds reuse what they can. The Dockerfile builds hunt's dependencies in a
 layer of their own, from [cargo-chef](https://github.com/LukeMathWalker/cargo-chef)'s
@@ -123,68 +157,41 @@ build after old entries are evicted is expected.
 
 hunt is one pod with one volume. Only one copy can run at a time, since
 SQLite is a file on that volume, so updates replace the pod rather than
-rolling.
+rolling. [`deploy/kubernetes`](deploy/kubernetes) has it, for Kustomize
+(built into kubectl).
 
 ### Requirements
 
 - A Kubernetes cluster, with a storage class for the volume
 - kubectl
 
-### 1. Write the manifests
+### 1. Get the manifests, and fill in their settings
 
-Save this as `hunt.yaml`: the volume, the deployment and its service.
+From a clone of hunt, or a copy of its `deploy/kubernetes` folder:
 
-```yaml
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata: { name: hunt-data }
-spec:
-  accessModes: [ReadWriteOnce]
-  resources: { requests: { storage: 1Gi } }
----
-apiVersion: apps/v1
-kind: Deployment
-metadata: { name: hunt }
-spec:
-  replicas: 1
-  strategy: { type: Recreate }
-  selector: { matchLabels: { app: hunt } }
-  template:
-    metadata: { labels: { app: hunt } }
-    spec:
-      securityContext: { fsGroup: 65532 }
-      containers:
-        - name: hunt
-          image: ghcr.io/arabesquelabs/hunt:latest
-          ports: [{ containerPort: 4848 }]
-          volumeMounts: [{ name: data, mountPath: /data }]
-          readinessProbe: { httpGet: { path: /healthz, port: 4848 } }
-          livenessProbe: { httpGet: { path: /healthz, port: 4848 } }
-      volumes:
-        - name: data
-          persistentVolumeClaim: { claimName: hunt-data }
----
-apiVersion: v1
-kind: Service
-metadata: { name: hunt }
-spec:
-  selector: { app: hunt }
-  ports: [{ port: 4848, targetPort: 4848 }]
+```sh
+cd deploy/kubernetes
+cp .env.example .env            # settings (none needed for one person on SQLite)
+cp .secrets.example .secrets    # HUNT_ADMIN_EMAIL and _PASSWORD, HUNT_DB: each optional
 ```
+
+Which hunt runs is `newTag` in `kustomization.yaml` (`release`, a version
+to stay on, or `latest`).
+
+### 2. Deploy it
+
+```sh
+kubectl apply -k .
+kubectl -n hunt rollout status deployment/hunt
+```
+
+Or `make k8s-up`, from the clone, which copies the examples if needed.
 
 - **One replica, recreated:** never two pods on one SQLite file.
 - **`fsGroup: 65532`:** the image runs as that user, so this gives it the
   volume.
 - **The probes:** `/healthz` answers "ok" once hunt and its database do,
   and needs no sign-in.
-
-### 2. Deploy it
-
-```sh
-kubectl create namespace hunt
-kubectl -n hunt apply -f hunt.yaml
-kubectl -n hunt rollout status deployment/hunt
-```
 
 ### 3. Open it
 
@@ -194,29 +201,26 @@ Through a port-forward, from your own computer:
 kubectl -n hunt port-forward svc/hunt 4848
 ```
 
-Then visit http://localhost:4848. The CLI works through it too
-(`HUNT_URL=http://127.0.0.1:4848`).
+Then visit http://localhost:4848. The CLI and `make backup` work through
+it too (`HUNT_URL=http://127.0.0.1:4848`).
 
-To reach it from elsewhere, point an Ingress, a load balancer or a
-Cloudflare Tunnel at the `hunt` service's port 4848, with a sign-in in
-front of it: see "What's public, and what needs signing in".
-
-### 4. Use PostgreSQL or MySQL (optional)
-
-Give the container the database's address as `HUNT_DB`, from a secret:
-
-```yaml
-          env:
-            - name: HUNT_DB
-              valueFrom: { secretKeyRef: { name: hunt-db, key: url } }
-```
+To reach it from elsewhere, fill in
+[`ingress.example.yaml`](deploy/kubernetes/ingress.example.yaml) and apply
+it, or point a load balancer or a Cloudflare Tunnel at the `hunt`
+service's port 4848, with a sign-in in front of it: see "What's public,
+and what needs signing in".
 
 ### Updating
 
+Back up first (`make backup`, through the port-forward). Then, on a moving
+tag (`release`, `latest`), restart it to pull the newest:
+
 ```sh
-kubectl -n hunt rollout restart deployment/hunt     # pulls latest again
-kubectl -n hunt set image deployment/hunt hunt=ghcr.io/arabesquelabs/hunt:v0.16.0   # or a version
+kubectl -n hunt rollout restart deployment/hunt     # or make k8s-update
 ```
+
+On a version, change `newTag` and `kubectl apply -k .` again.
+`make k8s-down` takes hunt down and keeps its volume.
 
 ## The database
 
@@ -242,7 +246,10 @@ hunt serve --db mysql://hunt:secret@localhost:3306/hunt      # MySQL (8.0.16 or 
 
 ## Backups
 
-Settings → **Backup and import**, or `hunt backup` and `hunt restore`.
+Settings → **Backup and import**, or `hunt backup` and `hunt restore`. In a
+clone of hunt, `make backup` saves one from the running hunt (Docker's
+too) into `backups/`, signed in as the owner with `HUNT_EMAIL` and
+`HUNT_PASSWORD`.
 
 - **What's in one:** a single JSON file with everything (processes,
   applications, companies, people, files, tags, settings and the change
@@ -291,40 +298,58 @@ Each part has a page of its own:
 
 The app is at `/`, each of its pages at its own address (`/stats`,
 `/applications/2`), and its data under `/api`: those need signing in. The
-rest needs nobody: signing in (`/login`), the health check (`/healthz`),
-the scripts, styles, fonts and logo, and a shared calendar's link. Addresses
-from when the app lived under `/app` (`/app/companies/3`) lead to the same
-page without it, and the website's pages hunt once served (`/docs`,
-`/privacy`, `/terms`, `/data-deletion`, `/screenshots`, and `/ar/…`) lead
-to them on the website (`HUNT_SITE_URL`, below).
+rest needs nobody: signing in and up (`/login`, `/signup`), the health
+check (`/healthz`), the scripts, styles, fonts and logo, and a shared
+calendar's link. Addresses from when the app lived under `/app`
+(`/app/companies/3`) lead to the same page without it, and the website's
+pages hunt once served (`/docs`, `/privacy`, `/terms`, `/data-deletion`,
+`/screenshots`, and `/ar/…`) lead to them on the website (`HUNT_SITE_URL`,
+below).
 
-There are three ways to sign in.
+Every hunt has accounts, and signs them in itself: an email address and a
+password. In front of it, a sign-in proxy or Cloudflare Access can sign
+people in instead.
 
-### A password, for one person
+### hunt's own: an email address and a password
+
+A hunt's first account is its owner's: made in a new hunt's launcher (it
+can't be skipped), or when hunt starts. The owner is account 1, an admin:
+they run the hunt (Admin, in the sidebar). Anyone else joins only as an
+admin says: see "Several people", below.
 
 ```sh
-HUNT_PASSWORD='a long passphrase' hunt serve
-docker run -e HUNT_PASSWORD='a long passphrase' -p 4848:4848 -v hunt-data:/data ghcr.io/arabesquelabs/hunt
+HUNT_ADMIN_EMAIL=you@example.com HUNT_ADMIN_PASSWORD='a long passphrase' hunt serve
+docker run -e HUNT_ADMIN_EMAIL=you@example.com -e HUNT_ADMIN_PASSWORD='a long passphrase' \
+  -p 4848:4848 -v hunt-data:/data ghcr.io/arabesquelabs/hunt:release
 ```
 
-- **The app and its data** ask for it, at `/login`, and remember you for 30
-  days. The sidebar has **Log out**.
-- **The CLI** sends its own `HUNT_PASSWORD`: set it where you run `hunt`.
-- **Changing it** signs everyone out. It needs 8 characters or more; a
-  wrong one costs a second.
+- **The app and its data** ask for them, at `/login`, and remember you for
+  30 days. The sidebar has **Log out**; Settings → Account changes your
+  email address and password. Until there's an owner, nothing needs
+  signing in: make them before hunt can be reached from elsewhere.
+- **Passwords** are kept as Argon2 hashes, with the accounts: never in a
+  backup. A new one ends that account's other sessions. They need 8
+  characters or more; a wrong one costs a second.
+- **The CLI** signs in as an account: set `HUNT_EMAIL` and `HUNT_PASSWORD`
+  where you run `hunt`.
+- **Forgotten it?** Start hunt with `HUNT_ADMIN_EMAIL` and
+  `HUNT_ADMIN_PASSWORD` again: the password replaces that admin's.
+- **`HUNT_PASSWORD`**, which once kept a hunt to whoever knew it, is now
+  the CLI's alone: `hunt serve` won't start with it and no owner, rather
+  than start open.
 - **Over the internet**, put hunt behind HTTPS (a reverse proxy such as
   Caddy, which does it on its own): the cookie is marked secure when the
   proxy says the visit was over HTTPS (`X-Forwarded-Proto`).
 
-### A sign-in proxy, for several people
+### A sign-in proxy
 
 If you already sign people in at a proxy (Authelia, Authentik,
 oauth2-proxy, Tailscale), it can tell hunt who's asking, in a header:
 
 ```sh
-hunt serve --tenants --admins you@example.com \
+hunt serve --admins you@example.com \
   --auth-header Remote-Email --trusted-proxies 172.18.0.0/16
-# or HUNT_TENANTS=1 HUNT_ADMINS=… HUNT_AUTH_HEADER=… HUNT_TRUSTED_PROXIES=…
+# or HUNT_ADMINS=… HUNT_AUTH_HEADER=… HUNT_TRUSTED_PROXIES=…
 ```
 
 | Proxy | Its header |
@@ -342,8 +367,9 @@ hunt serve --tenants --admins you@example.com \
   same.
 - **The proxy** has to set the header itself, replacing any a visitor sent:
   Authelia's and oauth2-proxy's usual setups do.
-- People then join and are let in as with Cloudflare Access: see "Several
-  people", below.
+- **The admins** are named with `HUNT_ADMINS` (the first is account 1, if
+  there's none yet); others join and are let in as with Cloudflare Access:
+  see "Several people", below.
 - **The CLI**, from a trusted address (on hunt's own machine, say), says
   who's asking itself: set `HUNT_AUTH_HEADER` (the same header) and
   `HUNT_USER` (your email) where you run it.
@@ -360,83 +386,83 @@ hunt.example.com {
 }
 ```
 
-One person's hunt behind a sign-in proxy needs nothing from hunt: the
-proxy keeps everyone else out.
-
 ### Cloudflare Access
 
-Protect the whole hostname (`hunt.example.com`). Kubernetes' probes reach
-`/healthz` inside the cluster, not through Access; a calendar app
-subscribing to a shared calendar's link needs a bypass for `/api/calendar/`.
-In a shared hunt, hunt also checks Access's signed token on every request
-for data, so a mistake in Access's setup doesn't open anyone's data.
+```sh
+hunt serve --admins you@example.com,other-admin@example.com \
+  --access-team yourteam --access-aud <the Access application's AUD tag>
+# or HUNT_ADMINS=… HUNT_ACCESS_TEAM=… HUNT_ACCESS_AUD=…
+```
+
+Protect the whole hostname (`hunt.example.com`). Access signs people in
+with GitHub, LinkedIn (or any login method set up there) and hands hunt a
+signed token, which hunt checks against the team's keys and the
+application's audience tag on every request for data, so a request that
+didn't come through Access can't pass for anyone, and a mistake in
+Access's setup doesn't open anyone's data. For others to ask for an
+account, the Access application's policy has to let them in: Include →
+Login Methods → GitHub and LinkedIn (anyone signed in with one), rather
+than your email. Kubernetes' probes reach `/healthz` inside the cluster,
+not through Access; a calendar app subscribing to a shared calendar's link
+needs a bypass for `/api/calendar/`.
 
 Behind Cloudflare Access, the sidebar has **Log out** (ending the Access
 session), and the admin centre's Debugging info has the identity Access
 holds for you and the Zero Trust dashboard, with hunt's own health check,
 calendar feed, backup, source and image builds. The CLI uses a service
 token: set `HUNT_ACCESS_CLIENT_ID` and `HUNT_ACCESS_CLIENT_SECRET` to its
-id and secret, and `HUNT_URL` to the public address. The "Send to hunt"
+id and secret, and `HUNT_URL` to the public address, and set its Client ID
+as the account's CLI token in the admin centre. The "Send to hunt"
 bookmarklet opens hunt in a tab, so it signs in like any other visit.
 
 ## Several people (multi-user)
 
-One hunt can serve several people, each seeing and changing only their own
-applications, companies, people, files, notes, tags and settings. They
+Every hunt can serve several people, each seeing and changing only their
+own applications, companies, people, files, notes, tags and settings. They
 share one database: every row carries its owner, and every request runs as
 the account it comes from (`src/scope.rs` scopes each statement to the
-account's rows, so nothing has to remember to). Turning it on keeps what's
-there: it becomes the first admin's.
+account's rows, so nothing has to remember to). A hunt from before it had
+accounts keeps what's there: it's the owner's, account 1.
 
-```sh
-hunt serve --tenants --admins you@example.com,other-admin@example.com \
-  --access-team yourteam --access-aud <the Access application's AUD tag>
-# or HUNT_TENANTS=1 HUNT_ADMINS=… HUNT_ACCESS_TEAM=… HUNT_ACCESS_AUD=…
-```
+A new hunt is its owner's alone: **sign-ups are closed** until an admin
+opens them (Admin → Access and accounts), or invites someone.
 
-- **Signing in** is Cloudflare Access's job: it signs people in with
-  GitHub, LinkedIn (or any login method set up there) and hands hunt a
-  signed token, which hunt checks against the team's keys and the
-  application's audience tag. A request that didn't come through Access
-  can't pass for anyone. For others to ask for an account, the Access
-  application's policy has to let them in: Include → Login Methods →
-  GitHub and LinkedIn (anyone signed in with one), rather than your email.
-- **The early access list**: asking for an account is framed as joining
-  an early access list, with no dates or promises. Someone new, signed
-  in, sees only "Join the early access list": their name and, optionally,
-  what brings them to hunt. Until an admin lets them in, they see that
-  they're on the list; if they're turned down, they can join again.
-- **The admin centre** (/admin, for admins): the early access list, to let
-  people in or turn them down (with a note), and every account: its status, role (make
-  another admin), applications, when last seen, and its CLI token; disable,
-  enable, or remove it (with everything of theirs, if chosen); and a
-  switch for whether new people may ask for an account at all (closed,
-  they're told the list is closed for now; accounts already here carry
-  on). Its General section names this hunt (in the sidebar and the
-  browser's tab), puts a notice above every page (until each person
-  closes it), gives an address people can write to for help, and sets
-  what new accounts start with; Info has its version, how people sign
-  in, who runs it, and how many accounts it has. Its Debugging info has links to hand: your Cloudflare Access
-  identity and Log out, the health check, calendar feed, backup and API,
-  and the source and image builds.
-  It's under Settings in the sidebar. Admins also see System resources
-  on Stats; others don't. The admins named in
-  `HUNT_ADMINS` are admins whenever hunt starts; the first is account 1.
-- **The CLI** signs in with an Access service token, which has no email:
-  set its Client ID as the account's CLI token in the admin centre, and the
-  CLI acts as that account.
-- **Backups** from older versions of hunt (schema 8 on) import too, in
-  either mode. **Backups** are each account's own: a backup holds its rows (and only the
-  files they use), and importing one replaces only that account's, with
-  new ids so they can't collide with anyone else's.
-- Gmail sync is for one person's hunt only, for now.
-- **Trying it out locally**: `make dev-tenants` (or `make watch`)
-  serves `target/dev.db` for several people, with `ADMINS` (by default
-  admin@example.test) as admins. There's no Cloudflare Access, so who's
-  asking is taken on trust (`--identity-header X-Hunt-User`): in a browser,
-  open `/dev/as?email=admin@example.test` to be the admin, or any other
-  email to be someone new asking for an account; `/dev/as` alone signs
-  out. Never run it like this where others can reach hunt.
+- **Joining**, with hunt's own sign-in: at `/signup`, an email address, a
+  name, a password and, optionally, what brings them to hunt (and the terms
+  of use, where the hunt has some: `HUNT_SITE_URL`). Someone invited signs
+  up with the address the invite went to, and is in at once, sign-ups open
+  or not; anyone else waits for an admin's say, signed in, seeing where
+  they stand. Behind Access or a proxy, they sign in there, then join "the
+  early access list": their name and what brings them.
+- **The admin centre** (/admin, for admins; under Settings in the sidebar):
+  - Access and accounts: whether new people may sign up at all, inviting
+    someone, those waiting (let them in or turn them down, with a note),
+    and every account: its status, role (make another admin),
+    applications, when last seen, and its CLI token; disable, enable, or
+    remove it (with everything of theirs, if chosen).
+  - General: this hunt's name (in the sidebar and the browser's tab), a
+    notice above every page (until each person closes it), an address
+    people can write to for help, and what new accounts start with.
+  - Info: its version, how people sign in, who runs it, and how many
+    accounts it has. User stats and System resources: how each account
+    uses hunt (by number, not name), and the machine. Debugging info:
+    links to hand (the health check, calendar feed, backup and API, the
+    source and image builds, and behind Access, your identity there).
+- **Admins** named in `HUNT_ADMINS` are admins whenever hunt starts; the
+  first is account 1, when there's none yet.
+- **Backups** are each account's own: a backup holds its rows (and only
+  the files they use), and importing one replaces only that account's,
+  with new ids so they can't collide with anyone else's. Backups from older
+  versions of hunt (schema 8 on) import too.
+- **Gmail sync** is the owner's (account 1) only, for now.
+- **`--tenants`** (`HUNT_TENANTS`), which once turned several people on, is
+  no longer needed: it's still taken, and changes nothing.
+- **Trying it out locally**: `make dev-tenants` (or `make watch`) serves
+  `target/dev.db` with `ADMINS` (by default admin@example.test) as admins,
+  and who's asking taken on trust (`--identity-header X-Hunt-User`): in a
+  browser, open `/dev/as?email=admin@example.test` to be the admin, or any
+  other email to be someone new asking for an account; `/dev/as` alone
+  signs out. Never run it like this where others can reach hunt.
 
 ## Take-home pay (UK)
 

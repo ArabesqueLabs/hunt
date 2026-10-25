@@ -1,17 +1,20 @@
-//! Many people, one hunt: accounts, and who's asking.
+//! Accounts, and who's asking.
 //!
-//! With `hunt serve --tenants`, several people use one hunt, each seeing
-//! only their own applications. Everyone shares one database; every row
-//! someone keeps carries its owner (see [`crate::scope`]), and each request
-//! runs as the account it comes from.
+//! Every hunt has accounts: one person's has its owner alone (account 1, an
+//! admin, made in the launcher), and more join only as its admins say
+//! (sign-ups, closed on a new hunt, or an invite). Everyone shares one
+//! database; every row someone keeps carries its owner (see
+//! [`crate::scope`]), and each request runs as the account it comes from.
+//! What a hunt held before it had accounts is account 1's.
 //!
-//! Who's asking comes from Cloudflare Access, in front of hunt: it signs
-//! people in (with GitHub, LinkedIn, …) and hands hunt a signed token,
-//! checked here against the team's keys, so a request that didn't come
-//! through Access can't pass for anyone. Someone new asks for an account;
-//! an admin approves (or rejects) it. Admins are named when hunt starts
-//! (`HUNT_ADMINS`); the first of them is account 1, whose is everything the
-//! database held before, so turning tenancy on keeps what's there.
+//! Who's asking: hunt's own sign-in, always (an email address and a
+//! password, at /login: a session cookie, or the CLI's `Authorization:
+//! Basic`); and, where it's set up, Cloudflare Access in front of hunt (its
+//! signed token, checked against the team's keys, so a request that didn't
+//! come through Access can't pass for anyone) or a sign-in proxy's header.
+//! Someone new signs up (or asks, through Access); an admin approves (or
+//! rejects) them. Admins can also be named when hunt starts
+//! (`HUNT_ADMINS`); the first of them is account 1.
 //!
 //! Accounts are kept in the `account` table: who, their status (pending,
 //! active, rejected, disabled), their role (user, admin), and the Access
@@ -25,11 +28,14 @@ use serde::Serialize;
 use serde_json::{Map, Value, json};
 
 use crate::args;
+use crate::auth::Password;
 use crate::db::{Db, Sql};
 use crate::error::{Error, Result, invalid};
 
-/// Where who's asking comes from.
+/// Where who's asking comes from, beside hunt's own sign-in.
 pub enum IdentitySource {
+    /// Nowhere else: hunt's own sign-in alone.
+    BuiltIn,
     /// Cloudflare Access: its signed token, checked against the team's keys
     /// for this application (its audience tag).
     Access {
@@ -92,6 +98,12 @@ pub struct Account {
     /// user or admin.
     pub role: String,
     pub service_token: Option<String>,
+    /// Their password's hash, to sign in with: never sent anywhere.
+    #[serde(skip)]
+    pub password_hash: Option<String>,
+    /// Whether they sign in with a password of their own (or elsewhere, or
+    /// not yet: invited).
+    pub has_password: bool,
     pub requested_at: String,
     pub decided_at: Option<String>,
     pub decided_by: Option<String>,
@@ -118,6 +130,9 @@ pub struct Tenants {
     identity: IdentitySource,
     /// When each account was last noted as seen, to note it now and then.
     seen: Mutex<HashMap<i64, Instant>>,
+    /// Each account's password, ready to check (by its hash, so a new one's
+    /// read afresh).
+    passwords: Mutex<HashMap<i64, (String, Arc<Password>)>>,
 }
 
 /// An account's rows, children first: what goes when it's removed with its data.
@@ -163,8 +178,32 @@ const DEFAULTS: &[&str] = &[
 /// the most characters it may have.
 const SITE: &[(&str, usize)] = &[("name", 40), ("announcement", 280), ("contact", 254)];
 
-/// An email address, near enough: someone, an @, and somewhere with a dot.
-fn looks_like_email(s: &str) -> bool {
+/// What's asked of `v`'s fields among `keys` (those it has): each one's
+/// value, checked, or none (empty) to go back to none.
+fn site_changes(v: &Value, keys: &[&str]) -> Result<Vec<(String, Option<String>)>> {
+    let mut out = Vec::new();
+    for (k, most) in SITE.iter().filter(|(k, _)| keys.contains(k)) {
+        let Some(x) = v.get(k) else {
+            continue;
+        };
+        let value = x.as_str().map(str::trim).unwrap_or("");
+        if value.chars().count() > *most {
+            return Err(invalid(format!("{k}: at most {most} characters")));
+        }
+        if *k == "contact" && !value.is_empty() && !looks_like_email(value) {
+            return Err(invalid(format!(
+                "contact: an email address, like help@example.com, not {value:?}"
+            )));
+        }
+        out.push((
+            format!("site.{k}"),
+            Some(value.to_string()).filter(|v| !v.is_empty()),
+        ));
+    }
+    Ok(out)
+}
+
+pub(crate) fn looks_like_email(s: &str) -> bool {
     s.split_once('@').is_some_and(|(who, at)| {
         !who.is_empty() && at.contains('.') && !s.contains(char::is_whitespace)
     })
@@ -188,6 +227,8 @@ fn account(r: &Map<String, Value>) -> Account {
         status: text(&r["status"]).unwrap_or_default(),
         role: text(&r["role"]).unwrap_or_default(),
         service_token: text(&r["service_token"]),
+        password_hash: text(&r["password_hash"]),
+        has_password: r.get("password_hash").is_some_and(|v| !v.is_null()),
         requested_at: text(&r["requested_at"]).unwrap_or_default(),
         decided_at: text(&r["decided_at"]),
         decided_by: text(&r["decided_by"]),
@@ -208,7 +249,9 @@ impl Tenants {
             db,
             identity,
             seen: Mutex::new(HashMap::new()),
+            passwords: Mutex::new(HashMap::new()),
         };
+        t.adopt_kept_owner()?;
         for (i, email) in admins.iter().filter_map(|e| clean(Some(e))).enumerate() {
             t.bootstrap_admin(&email.to_lowercase(), i == 0)?;
         }
@@ -310,7 +353,17 @@ impl Tenants {
         headers: &axum::http::HeaderMap,
         peer: Option<std::net::IpAddr>,
     ) -> std::result::Result<Identity, Denied> {
+        // hunt's own sign-in first: its cookie, or the CLI's address and password.
+        if let Some(a) = self.signed_in(headers) {
+            return Ok(Identity {
+                email: Some(a.email.to_lowercase()),
+                token: None,
+            });
+        }
         match &self.identity {
+            IdentitySource::BuiltIn => Err(Denied::NotSignedIn(
+                "sign in first, at /login (the CLI sends HUNT_EMAIL and HUNT_PASSWORD)".into(),
+            )),
             IdentitySource::Proxy { header, trusted } => {
                 // From anywhere else, the header could say anyone.
                 if !peer.is_some_and(|ip| trusted.iter().any(|c| c.contains(ip))) {
@@ -435,6 +488,216 @@ impl Tenants {
         }
     }
 
+    // ---- hunt's own sign-in ----------------------------------------------------------------
+
+    /// Whether there's nobody yet: a new hunt, before its launcher's made
+    /// its owner. Until then, nothing needs signing in.
+    pub fn no_accounts(&self) -> Result<bool> {
+        self.with(|db| Ok(db.int("SELECT count(*) FROM account", &[])? == 0))
+    }
+
+    /// Whether who's asking is told by hunt's own sign-in alone (not
+    /// Cloudflare Access, a sign-in proxy, or a trusted header).
+    pub fn built_in(&self) -> bool {
+        matches!(self.identity, IdentitySource::BuiltIn)
+    }
+
+    /// An account's password, ready to check, if it has one.
+    fn password_of(&self, a: &Account) -> Option<Arc<Password>> {
+        let hash = a.password_hash.as_ref()?;
+        let mut kept = self.passwords.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some((h, p)) = kept.get(&a.id)
+            && h == hash
+        {
+            return Some(p.clone());
+        }
+        let p = Arc::new(Password::stored(hash).ok()?);
+        kept.insert(a.id, (hash.clone(), p.clone()));
+        Some(p)
+    }
+
+    /// The account an email address and password are, if they are one
+    /// (whatever its status: a pending one learns where it stands).
+    pub fn sign_in(&self, email: &str, password: &str) -> Option<Account> {
+        let a = self.find_email(email.trim()).ok()??;
+        self.password_of(&a)?.matches(password).then_some(a)
+    }
+
+    /// A session for an account, for the cookie: good until `until`. Signed
+    /// with a key from its password, so a new password ends it.
+    pub fn session(&self, a: &Account, until: i64) -> Option<String> {
+        Some(format!("{}.{}", a.id, self.password_of(a)?.session(until)))
+    }
+
+    /// Who's signed in with hunt's own sign-in: a session cookie still good,
+    /// or (the CLI) an email address and password.
+    fn signed_in(&self, headers: &axum::http::HeaderMap) -> Option<Account> {
+        if let Some((email, password)) = headers
+            .get(axum::http::header::AUTHORIZATION)
+            .and_then(|v| v.to_str().ok())
+            .and_then(crate::auth::basic)
+        {
+            return self.sign_in(&email, &password);
+        }
+        let session = cookie(headers, crate::auth::COOKIE)?;
+        let (id, rest) = session.split_once('.')?;
+        let a = self.get(id.parse().ok()?).ok()?;
+        self.password_of(&a)?
+            .valid(rest, jiff::Timestamp::now().as_second())
+            .then_some(a)
+    }
+
+    /// Change an account's email address or password (each kept when not
+    /// given). Its sessions end with a new password.
+    pub fn set_credentials(
+        &self,
+        id: i64,
+        email: Option<&str>,
+        password: Option<&str>,
+    ) -> Result<Account> {
+        if let Some(email) = email {
+            let email = email.trim().to_lowercase();
+            if !looks_like_email(&email) || email.chars().count() > 254 {
+                return Err(invalid(format!(
+                    "an email address, like you@example.com, not {email:?}"
+                )));
+            }
+            if self.find_email(&email)?.is_some_and(|a| a.id != id) {
+                return Err(Error::Conflict(format!("{email} is another account's")));
+            }
+            self.with(|db| {
+                db.exec(
+                    "UPDATE account SET email = ?1 WHERE id = ?2",
+                    args![email, id],
+                )
+                .map(drop)
+            })?;
+        }
+        if let Some(password) = password {
+            let hash = Password::hash(password)?;
+            self.with(|db| {
+                db.exec(
+                    "UPDATE account SET password_hash = ?1 WHERE id = ?2",
+                    args![hash, id],
+                )
+                .map(drop)
+            })?;
+        }
+        self.get(id)
+    }
+
+    /// The owner: a new hunt's first account (account 1, an admin), made by
+    /// its launcher or from HUNT_ADMIN_EMAIL and HUNT_ADMIN_PASSWORD; or,
+    /// when they're there, an admin with that address, given that password
+    /// (the way back in when it's forgotten).
+    pub fn make_owner(&self, email: &str, password: &str) -> Result<Account> {
+        let email = email.trim().to_lowercase();
+        if !looks_like_email(&email) || email.chars().count() > 254 {
+            return Err(invalid(format!(
+                "an email address, like you@example.com, not {email:?}"
+            )));
+        }
+        let hash = Password::hash(password)?;
+        let first = self.no_accounts()?;
+        self.bootstrap_admin(&email, first)?;
+        let a = self
+            .find_email(&email)?
+            .ok_or_else(|| Error::NotFound(email.clone()))?;
+        self.with(|db| {
+            db.exec(
+                "UPDATE account SET password_hash = ?1, decided_by = coalesce(decided_by, 'setup') WHERE id = ?2",
+                args![hash, a.id],
+            )
+            .map(drop)
+        })?;
+        self.get(a.id)
+    }
+
+    /// The owner, as hunts kept them before they had accounts (an address
+    /// and a password's hash, with the settings): account 1 now.
+    fn adopt_kept_owner(&self) -> Result<()> {
+        let kept = |name: &str| -> Result<Option<String>> {
+            self.with(|db| {
+                db.text(
+                    "SELECT value /* all owners */ FROM setting WHERE owner_id = 1 AND name = ?1",
+                    args![name],
+                )
+            })
+        };
+        let (Some(email), Some(hash)) = (kept(crate::setup::EMAIL)?, kept(crate::setup::PASSWORD)?)
+        else {
+            return Ok(());
+        };
+        if self.no_accounts()? {
+            self.bootstrap_admin(&email.to_lowercase(), true)?;
+            self.with(|db| {
+                db.exec(
+                    "UPDATE account SET password_hash = ?1 WHERE id = 1",
+                    args![hash],
+                )
+                .map(drop)
+            })?;
+        }
+        self.with(|db| {
+            db.exec(
+                "DELETE FROM setting /* all owners */ WHERE owner_id = 1 AND name IN (?1, ?2)",
+                args![crate::setup::EMAIL, crate::setup::PASSWORD],
+            )
+            .map(drop)
+        })
+    }
+
+    /// Someone signing up with hunt's own sign-in: their account, pending
+    /// an admin's say (or active, invited); an address with an account
+    /// already, but no password (invited, or an admin named at the start),
+    /// takes this one. Closed to anyone new while sign-ups are.
+    pub fn sign_up(
+        &self,
+        email: &str,
+        password: &str,
+        name: Option<&str>,
+        reason: Option<&str>,
+        terms: Option<&str>,
+    ) -> Result<Account> {
+        let email = email.trim().to_lowercase();
+        if !looks_like_email(&email) {
+            return Err(invalid(format!(
+                "an email address, like you@example.com, not {email:?}"
+            )));
+        }
+        let hash = Password::hash(password)?;
+        if let Some(a) = self.find_email(&email)? {
+            if a.has_password {
+                return Err(Error::Conflict(format!(
+                    "{email} has an account already: sign in"
+                )));
+            }
+            if a.status != "rejected" {
+                self.with(|db| {
+                    db.exec(
+                        "UPDATE account SET password_hash = ?1, name = coalesce(name, ?2) WHERE id = ?3",
+                        &[Sql::Text(hash.clone()), clean(name).into(), Sql::Integer(a.id)],
+                    )
+                    .map(drop)
+                })?;
+                return self.get(a.id);
+            }
+        }
+        let who = Identity {
+            email: Some(email.clone()),
+            token: None,
+        };
+        let a = self.request(&who, name, reason, Some("password"), terms)?;
+        self.with(|db| {
+            db.exec(
+                "UPDATE account SET password_hash = ?1 WHERE id = ?2",
+                args![hash, a.id],
+            )
+            .map(drop)
+        })?;
+        self.get(a.id)
+    }
+
     // ---- hunt-wide settings (the admins') --------------------------------------------------
     //
     // Kept as settings of owner 0, which no account is: nobody's rows, so no
@@ -488,23 +751,11 @@ impl Tenants {
     /// Change what admins say of this hunt; those left out stay, and an
     /// empty one goes back to none.
     pub fn set_site(&self, v: &Value) -> Result<Value> {
-        for (k, most) in SITE {
-            let Some(x) = v.get(k) else {
-                continue;
-            };
-            let value = x.as_str().map(str::trim).unwrap_or("");
-            if value.chars().count() > *most {
-                return Err(invalid(format!("{k}: at most {most} characters")));
-            }
-            if *k == "contact" && !value.is_empty() && !looks_like_email(value) {
-                return Err(invalid(format!(
-                    "contact: an email address, like help@example.com, not {value:?}"
-                )));
-            }
-            if value.is_empty() {
-                self.clear_shared_setting(&format!("site.{k}"))?;
-            } else {
-                self.set_shared_setting(&format!("site.{k}"), value)?;
+        let keys: Vec<&str> = SITE.iter().map(|(k, _)| *k).collect();
+        for (name, value) in site_changes(v, &keys)? {
+            match value {
+                Some(value) => self.set_shared_setting(&name, &value)?,
+                None => self.clear_shared_setting(&name)?,
             }
         }
         self.site()

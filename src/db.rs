@@ -21,7 +21,7 @@ const SCHEMA_POSTGRES: &str = include_str!("schema_postgres.sql");
 const SCHEMA_MYSQL: &str = include_str!("schema_mysql.sql");
 /// "hunt" in ASCII: marks a database as ours.
 const APP_ID: i64 = 0x6875_6e74;
-pub const SCHEMA_VERSION: i64 = 24;
+pub const SCHEMA_VERSION: i64 = 25;
 /// The version schema*.sql describe: a new database is made at it, then
 /// brought up to [`SCHEMA_VERSION`] by the migrations after it.
 const SCHEMA_BASE: i64 = 14;
@@ -52,6 +52,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("migrate_v22.sql"),
     include_str!("migrate_v23.sql"),
     include_str!("migrate_v24.sql"),
+    include_str!("migrate_v25.sql"),
 ];
 /// Upgrades PostgreSQL and MySQL databases can take: (version reached, its
 /// SQL for PostgreSQL, for MySQL). They start at version 8.
@@ -135,6 +136,11 @@ const SERVER_MIGRATIONS: &[(i64, &str, &str)] = &[
         24,
         include_str!("migrate_v24_postgres.sql"),
         include_str!("migrate_v24_mysql.sql"),
+    ),
+    (
+        25,
+        include_str!("migrate_v25_postgres.sql"),
+        include_str!("migrate_v25_mysql.sql"),
     ),
 ];
 
@@ -276,7 +282,8 @@ impl Db {
             if SCHEMA_BASE < SCHEMA_VERSION {
                 db.migrate(SCHEMA_BASE)?;
             }
-            db.seed()?;
+            db.seed_board()?;
+            db.mark_new()?;
         } else if app != APP_ID {
             return Err(Error::ForeignDb("not a hunt database".into()));
         } else if !(1..=SCHEMA_VERSION).contains(&version) {
@@ -317,7 +324,8 @@ impl Db {
                 args![SCHEMA_BASE.to_string()],
             )?;
             db.upgrade_server(SCHEMA_BASE)?;
-            db.atomic(|db| db.seed())?;
+            db.atomic(|db| db.seed_board())?;
+            db.mark_new()?;
             return Ok(db);
         }
         if !has_meta {
@@ -391,12 +399,21 @@ impl Db {
         result
     }
 
+    /// A new account's hunt (with an owner set): its board, as
+    /// [`Db::seed_board`] has it, and a first cycle, named for the season.
+    pub fn seed(&self) -> Result<()> {
+        self.seed_board()?;
+        self.seed_cycle()?;
+        Ok(())
+    }
+
     /// A new database starts with the usual stages, so the board works
-    /// straight away. They can be changed in Settings.
+    /// straight away. They can be changed in Settings. Its first cycle is
+    /// the launcher's to start, or not (see [`crate::setup`]).
     /// A new hunt's stages, and its inactive ones with the reasons for
     /// closing as their lanes: the database's, or (with an owner set) an
     /// account's.
-    pub fn seed(&self) -> Result<()> {
+    pub fn seed_board(&self) -> Result<()> {
         let at = time::stamp(self.clock());
         for (i, name) in DEFAULT_STAGES.iter().enumerate() {
             self.exec(
@@ -428,7 +445,6 @@ impl Db {
             }
         }
         self.seed_swimlanes()?;
-        self.seed_cycle()?;
         Ok(())
     }
 

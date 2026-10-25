@@ -9,7 +9,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type 
 import { enc, get } from "../lib/api";
 import { boardCycle, endedCycles, runningCycles } from "../lib/cycles";
 import { LOC, fmtDay, fmtStamp, fromGbp, HOME, homeK, nf } from "../lib/format";
-import { tenancy } from "../lib/meta";
+import { isAdmin } from "../lib/meta";
 import { go } from "../lib/router";
 import type { Row } from "../lib/types";
 import { initChartKeys } from "../../vendor/arabesque/js/chart.js";
@@ -143,7 +143,7 @@ function StatsBody({ st }: { st: Row }) {
   if (!t.processes) {
     return <>
       <EmptyState title="Nothing to count yet" text="Add a process to the board, and this fills in." action={<a className="al-button al-button--primary" href="/">Open the board</a>} />
-      {!tenancy() ? <ResourcesSection /> : null}
+      {isAdmin() ? <ResourcesSection /> : null}
     </>;
   }
   // ---- headline: one hero number, then tiles ----
@@ -242,7 +242,7 @@ function StatsBody({ st }: { st: Row }) {
       {st.tags.length ? <VizCard title="Tags" sub="Applications with each tag"><HBars rows={st.tags.map((x: Row) => ({ label: x.name, count: x.count }))} /></VizCard> : null}
       <RecordsCard />
     </div>
-    {!tenancy() ? <ResourcesSection /> : null}
+    {isAdmin() ? <ResourcesSection /> : null}
   </>;
 }
 

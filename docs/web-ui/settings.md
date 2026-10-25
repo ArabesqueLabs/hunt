@@ -32,6 +32,35 @@ left or on Enter; Escape puts it back), and says so, with Undo.
 - **Backup and import.**
 - **LinkedIn bookmarklet** (folded at first): the bookmark, the address it
   opens, and what to do about a name already here.
+- **Account:** your account: change your email address or password (with
+  the one now; a new password ends your other sessions), Log out, and
+  delete it, with everything in it. Behind Cloudflare Access or a sign-in
+  proxy, you sign in there instead.
+
+A new hunt asks for the first of these in its launcher, before the board
+(unless it's restored from a backup, which brings them): its owner, the
+region, time zone, currency and the rest of Language and region, whether
+you live in the UK, and the theme.
+
+## Admin
+
+This hunt's admins have **Admin** in the sidebar, under Settings: its
+owner (who set it up: account 1) to begin with, and whoever they make
+admins.
+
+- **General:** this hunt's name (in the sidebar and the browser's tab), a
+  notice above every page, an address people can write to for help, and
+  what new accounts start with.
+- **Info:** its version, how people sign in, and its accounts.
+- **Access and accounts:** whether new people may sign up (closed, on a new
+  hunt), inviting someone, those waiting to be let in, and every account:
+  its status and role, disabling or removing it.
+- **User stats** and **System resources:** how each account uses hunt (by
+  number, not name), and what hunt uses of its machine.
+- **Debugging info:** the health check, the calendar feed, a backup, the
+  API, and the source and image builds.
+
+More in [Several people](../../README.md#several-people-multi-user).
 
 ## Tags
 

@@ -22,6 +22,7 @@ pub mod prep;
 pub mod resource;
 pub mod scope;
 pub mod service;
+pub mod setup;
 pub mod site;
 pub mod stats;
 pub mod store;

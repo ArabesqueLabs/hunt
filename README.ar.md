@@ -9,100 +9,128 @@ hunt برمجيات حرة، بموجب رخصة [GNU AGPL v3](LICENSE): شغّ�
 المستضاف؛ وهو مستودع مستقل،
 [ArabesqueLabs/careerhunt.app](https://github.com/ArabesqueLabs/careerhunt.app).
 
-لتجرّبه على جهازك، بـDocker، أو بـRust وNode (تُبنى واجهة الويب بـNode أولًا)، ثم افتح
-http://localhost:4848:
+لتتجوّل فيه أولًا، ببيانات مُختلَقة في كل صفحة (ولا يُحفظ شيء حين توقفه):
 
 ```sh
-docker run -p 4848:4848 -v hunt-data:/data ghcr.io/arabesquelabs/hunt
-git clone https://github.com/ArabesqueLabs/hunt && cd hunt && make install && hunt serve
+docker run --rm -p 127.0.0.1:4848:4848 ghcr.io/arabesquelabs/hunt:demo
 ```
 
-لا يحتاج hunt الخاص بشخص واحد إلى تسجيل دخول على جهازك. ولتصل إليه من مكان آخر، أعطه كلمة مرور
-(`HUNT_PASSWORD`)، أو ضع تسجيل دخول أمامه: انظر «ما هو عام، وما يحتاج إلى تسجيل الدخول»، أدناه.
-وللعمل على hunt نفسه:
+ولتشغّل نسختك، بـDocker (انظر «Docker»، أدناه)، أو على Kubernetes («Kubernetes»)، أو مبنيًّا من
+المصدر بـRust وNode، ثم افتح http://localhost:4848. وفي نسخة مستنسخة من hunt، يسرد `make help` هدفًا
+لكلٍّ منها:
+
+```sh
+git clone https://github.com/ArabesqueLabs/hunt && cd hunt
+make doctor                     # what you have, and which way it can run
+make docker-up                  # with Docker (deploy/docker): or…
+make k8s-up                     # …on Kubernetes (deploy/kubernetes): or…
+make install && make serve      # …built from source, database ~/.hunt/hunt.db
+make backup                     # save everything in the running hunt to backups/
+```
+
+يُفتح hunt الجديد على مُطلِقه: بضع خطوات لتصنع حساب مالكه (عنوان بريد إلكتروني وكلمة مرور) وتُعدّه (منطقته
+وعملته ومظهره)، أو لتستعيد نسخة احتياطية، ثم
+اللوحة. جديد عليه؟ ابدأ بـ[المقدّمة](docs/start/introduction.md) و[البداية السريعة](docs/start/quick-start.md)،
+ثم [المفاهيم الأساسية](docs/concepts/cycles.md).
+
+لكل hunt مالك، يسجّل الدخول ويديره: يُصنع في المُطلِق، أو من `HUNT_ADMIN_EMAIL` و`HUNT_ADMIN_PASSWORD`.
+ولا ينضمّ غيره إلا كما يقول المالك (التسجيل مغلق على hunt الجديد): انظر «ما هو عام، وما يحتاج إلى تسجيل
+الدخول» و«عدة أشخاص»، أدناه. وللعمل على hunt نفسه:
 
 يشغّل `hunt serve` خدمة واحدة. تملك قاعدة البيانات (SQLite أو PostgreSQL أو MySQL)
 وتقدّم واجهة برمجة JSON، وواجهة ويب تستخدم تلك الواجهة. وبقية أوامر `hunt` تستخدم الواجهة
 نفسها، فيتّفق سطر الأوامر والمتصفح دائمًا.
 
 ```sh
-make serve                      # http://127.0.0.1:4848, database ~/.hunt/hunt.db, for several people (as dev-tenants)
-make dev                        # the same, with a throwaway database in target/
-make demo                       # fill that throwaway database with demo data (replacing it)
+make                            # make dev: http://127.0.0.1:4848, on an empty database each start (the launcher)
+make dev-demo                   # the same, with made-up data in it
+make help                       # every target, by who it's for
 make watch                      # serve it for several people, rebuilding and restarting on every change
-make                            # every target: build, release, test, lint, fmt, ci, install…
+make image && make image-try    # the container image, built and run here, keeping nothing
+make ci                         # what CI runs: format check, lint, every test
 ```
+
+وفي [CONTRIBUTING.md](CONTRIBUTING.md) المزيد، وفي [docs/maintaining.md](docs/maintaining.md) كيف
+يُصدَر hunt.
 
 ## Docker
 
-صورة hunt، ‏[`ghcr.io/arabesquelabs/hunt`](https://github.com/ArabesqueLabs/hunt/pkgs/container/hunt)، صغيرة: بلا صدفة، وتعمل بمستخدم غير الجذر. تستمع على
-:4848، وتحفظ قاعدة بيانات SQLite في `/data` (وحدة تخزين)، وتجيب على `/healthz` حين تجيب قاعدة
-بياناتها.
+صورة hunt، ‏[`ghcr.io/arabesquelabs/hunt`](https://github.com/ArabesqueLabs/hunt/pkgs/container/hunt)، صغيرة: بلا صدفة، وتعمل بمستخدم غير الجذر،
+على معالجات Intel وAMD ‏(`linux/amd64`) وARM ‏(`linux/arm64`: Raspberry Pi، وحواسيب Mac بشرائح
+Apple). تستمع على :4848، وتحفظ قاعدة بيانات SQLite في `/data` (وحدة تخزين)، وتجيب على `/healthz`
+حين تجيب قاعدة بياناتها.
 
 ### المتطلبات
 
-- Docker
-- Docker Compose، لتشغيله من ملف compose (اختياري)
+- Docker، مع Docker Compose
 
-### 1. شغّله
+### 1. اجلب ملف compose وإعداداته
+
+في مجلد خاص به (`mkdir hunt && cd hunt`):
+
+```sh
+curl -fsSLO https://raw.githubusercontent.com/ArabesqueLabs/hunt/main/deploy/docker/compose.yaml
+curl -fsSL https://raw.githubusercontent.com/ArabesqueLabs/hunt/main/deploy/docker/.env.example -o .env
+```
+
+والملف `.env` إعداداته، وكلٌّ منها مشروح فيه: أي hunt ‏(`HUNT_VERSION`)، ومالكه (`HUNT_ADMIN_EMAIL`
+و`HUNT_ADMIN_PASSWORD`، أو اصنعه في المُطلِق)، وأين يستمع (`HUNT_BIND`، `HUNT_PORT`)، وقاعدة بيانات
+PostgreSQL أو MySQL بدل SQLite ‏(`HUNT_DB`).
+
+### 2. شغّله
+
+```sh
+docker compose up -d
+```
+
+وفي نسخة مستنسخة من hunt، يؤدي `make docker-up` الخطوتين، بالملفات في
+[`deploy/docker`](deploy/docker). وبياناتك في وحدة التخزين `hunt-data`، وتبقى حين تُستبدل
+الحاوية. ودون Compose، فالأمر نفسه:
 
 ```sh
 docker run -d --name hunt --restart unless-stopped \
   -p 127.0.0.1:4848:4848 -v hunt-data:/data \
-  ghcr.io/arabesquelabs/hunt:latest
+  ghcr.io/arabesquelabs/hunt:release
 ```
 
-أو بـDocker Compose: احفظ هذا باسم `compose.yaml`، وشغّل `docker compose up -d` بجانبه.
+### 3. افتحه
 
-```yaml
-services:
-  hunt:
-    image: ghcr.io/arabesquelabs/hunt:latest
-    ports: ["127.0.0.1:4848:4848"]
-    volumes: ["hunt-data:/data"]
-    restart: unless-stopped
-volumes:
-  hunt-data:
-```
+زُر http://localhost:4848: يُفتح hunt الجديد على مُطلِقه، لتصنع حساب مالكه وتُعدّه. وما لم يكن له مالك
+فلا شيء يحتاج إلى تسجيل الدخول، ويقصر `127.0.0.1` الوصول إلى hunt على هذا الحاسوب: فاصنعه قبل أن تفتحه
+لشبكة (`HUNT_BIND=0.0.0.0`). انظر «ما هو عام، وما يحتاج إلى تسجيل الدخول».
 
-بياناتك في وحدة التخزين `hunt-data`، وتبقى حين تُستبدل الحاوية.
+### الإصدارات
 
-### 2. افتحه
+| الوسم | ما هو |
+|---|---|
+| `release` | أحدث إصدار: الافتراضي |
+| `v0.17.0`، `v0.17` | إصدار، تبقى عليه حتى تختار الانتقال |
+| `latest`، `sha-…` | أحدث بناء من main، قبل أي إصدار |
+| `demo` | بناء main، ببيانات مُختلَقة، للتجوّل فيه |
 
-زُر http://localhost:4848. ويقصر `127.0.0.1:4848` الوصول إلى hunt على هذا الحاسوب. وقبل أن تفتحه
-لشبكة (`-p 4848:4848`)، أعطه كلمة مرور (`-e HUNT_PASSWORD=…`)، أو ضع تسجيل دخول أمامه: انظر «ما هو
-عام، وما يحتاج إلى تسجيل الدخول».
-
-### 3. اختر إصدارًا (اختياري)
-
-`latest` أحدث بناء من main. وكل إصدار موسوم أيضًا برقمه (`v0.16.0`)، وكل بناء بإيداعه
-(`sha-…`): استخدم أحدها لتختار متى تُرقّي.
-
-### 4. استخدم PostgreSQL أو MySQL (اختياري)
-
-أعطِ الحاوية عنوان قاعدة البيانات في `HUNT_DB` (`-e HUNT_DB=postgres://hunt:secret@db/hunt`):
-انظر «قاعدة البيانات».
+اختر واحدًا بـ`HUNT_VERSION` في `.env`. وملاحظات كل إصدار على
+[GitHub](https://github.com/ArabesqueLabs/hunt/releases).
 
 ### التحديث
 
+انسخ احتياطيًّا أولًا (`make backup`، أو الإعدادات ← النسخ الاحتياطي والاستيراد): فالنسخة
+الاحتياطية لا تُستورد إلا في hunt الذي صنعها أو أحدث منه، فهي طريق العودة. ثم:
+
 ```sh
-docker pull ghcr.io/arabesquelabs/hunt:latest
-docker rm -f hunt        # the data stays, in its volume
+docker compose pull && docker compose up -d
 ```
 
-ثم شغّله من جديد، كما في الخطوة 1. ومع Compose: ‏`docker compose pull && docker compose up -d`.
-ويرقّي hunt الأحدث قاعدة بيانات SQLite في مكانها.
+ويؤدي `make docker-update` الثلاثة. ويرقّي hunt الأحدث قاعدة بيانات SQLite في مكانها.
 
 ### بناء الصورة بنفسك
 
 ```sh
-docker build --platform linux/amd64 -t hunt .
-docker run -p 127.0.0.1:4848:4848 -v hunt-data:/data hunt
+make image                      # hunt:dev, for this machine (TARGET=demo: the demo's)
+make image-try                  # run it, keeping nothing
 ```
 
-يشغّل سير العمل `image` (`.github/workflows/image.yml`) الأمر `make ci`، ثم ينشر
-`ghcr.io/arabesquelabs/hunt` (`latest` من main، و`v<version>`، والبصمة sha لكل إيداع)، فلا
-تحتاج إلى بنائها بنفسك.
+يشغّل سير العمل `image` (`.github/workflows/image.yml`) الأمر `make ci`، ثم يبني كل منصة على مشغّل
+خاص بها، وينشر الوسوم أعلاه، فلا تحتاج إلى بنائها بنفسك.
 
 تعيد عمليات البناء استخدام ما تستطيع. يبني الـDockerfile اعتماديات hunt في طبقة خاصة بها، من
 وصفة [cargo-chef](https://github.com/LukeMathWalker/cargo-chef) (ما يعتمد عليه hunt، دون إصداره
@@ -112,67 +140,39 @@ docker run -p 127.0.0.1:4848:4848 -v hunt-data:/data hunt
 
 ## Kubernetes
 
-hunt حاوية (pod) واحدة بوحدة تخزين واحدة. ولا يمكن تشغيل إلا نسخة واحدة في كل مرة، لأن SQLite
-ملف على تلك الوحدة، فالتحديثات تستبدل الحاوية بدل أن تتدرّج.
+hunt حاوية واحدة (pod) بوحدة تخزين واحدة. ولا تعمل منه إلا نسخة واحدة في كل مرة، لأن SQLite ملف على
+تلك الوحدة، فالتحديثات تستبدل الحاوية بدل أن تتدرّج. وهو في [`deploy/kubernetes`](deploy/kubernetes)،
+لـKustomize (المدمج في kubectl).
 
 ### المتطلبات
 
-- عنقود Kubernetes، فيه فئة تخزين لوحدة التخزين
+- عنقود Kubernetes، بفئة تخزين لوحدة التخزين
 - kubectl
 
-### 1. اكتب الملفات
+### 1. اجلب الملفات، واملأ إعداداتها
 
-احفظ هذا باسم `hunt.yaml`: وحدة التخزين، والنشر، وخدمته.
+من نسخة مستنسخة من hunt، أو نسخة من مجلده `deploy/kubernetes`:
 
-```yaml
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata: { name: hunt-data }
-spec:
-  accessModes: [ReadWriteOnce]
-  resources: { requests: { storage: 1Gi } }
----
-apiVersion: apps/v1
-kind: Deployment
-metadata: { name: hunt }
-spec:
-  replicas: 1
-  strategy: { type: Recreate }
-  selector: { matchLabels: { app: hunt } }
-  template:
-    metadata: { labels: { app: hunt } }
-    spec:
-      securityContext: { fsGroup: 65532 }
-      containers:
-        - name: hunt
-          image: ghcr.io/arabesquelabs/hunt:latest
-          ports: [{ containerPort: 4848 }]
-          volumeMounts: [{ name: data, mountPath: /data }]
-          readinessProbe: { httpGet: { path: /healthz, port: 4848 } }
-          livenessProbe: { httpGet: { path: /healthz, port: 4848 } }
-      volumes:
-        - name: data
-          persistentVolumeClaim: { claimName: hunt-data }
----
-apiVersion: v1
-kind: Service
-metadata: { name: hunt }
-spec:
-  selector: { app: hunt }
-  ports: [{ port: 4848, targetPort: 4848 }]
+```sh
+cd deploy/kubernetes
+cp .env.example .env            # settings (none needed for one person on SQLite)
+cp .secrets.example .secrets    # HUNT_ADMIN_EMAIL and _PASSWORD, HUNT_DB: each optional
 ```
 
-- **نسخة واحدة، تُعاد من جديد:** لا حاويتان على ملف SQLite واحد أبدًا.
-- **‏`fsGroup: 65532`:** تعمل الصورة بذلك المستخدم، فيمنحها هذا وحدة التخزين.
-- **الفحوص:** يجيب `/healthz` بـ«ok» حين يجيب hunt وقاعدة بياناته، ولا يحتاج إلى تسجيل دخول.
+وأي hunt يعمل هو `newTag` في `kustomization.yaml` (`release`، أو إصدار تبقى عليه، أو `latest`).
 
 ### 2. انشره
 
 ```sh
-kubectl create namespace hunt
-kubectl -n hunt apply -f hunt.yaml
+kubectl apply -k .
 kubectl -n hunt rollout status deployment/hunt
 ```
+
+أو `make k8s-up`، من النسخة المستنسخة، الذي ينسخ الأمثلة إن لزم.
+
+- **نسخة واحدة، تُعاد صناعتها:** لا حاويتين على ملف SQLite واحد أبدًا.
+- **`fsGroup: 65532`:** الصورة تعمل بهذا المستخدم، فهذا يعطيها وحدة التخزين.
+- **الفحوص:** يجيب `/healthz` بـ«ok» حين يجيب hunt وقاعدة بياناته، ولا يحتاج إلى تسجيل دخول.
 
 ### 3. افتحه
 
@@ -182,27 +182,24 @@ kubectl -n hunt rollout status deployment/hunt
 kubectl -n hunt port-forward svc/hunt 4848
 ```
 
-ثم زُر http://localhost:4848. ويعمل سطر الأوامر عبره أيضًا (`HUNT_URL=http://127.0.0.1:4848`).
+ثم زُر http://localhost:4848. ويعمل سطر الأوامر و`make backup` عبره أيضًا
+(`HUNT_URL=http://127.0.0.1:4848`).
 
-ولتصل إليه من مكان آخر، وجّه Ingress أو موازن أحمال أو Cloudflare Tunnel إلى المنفذ 4848 في
-الخدمة `hunt`، مع تسجيل دخول أمامه: انظر «ما هو عام، وما يحتاج إلى تسجيل الدخول».
-
-### 4. استخدم PostgreSQL أو MySQL (اختياري)
-
-أعطِ الحاوية عنوان قاعدة البيانات في `HUNT_DB`، من سرّ:
-
-```yaml
-          env:
-            - name: HUNT_DB
-              valueFrom: { secretKeyRef: { name: hunt-db, key: url } }
-```
+ولتصل إليه من مكان آخر، املأ [`ingress.example.yaml`](deploy/kubernetes/ingress.example.yaml)
+وطبّقه، أو وجّه موازن حمل أو Cloudflare Tunnel إلى المنفذ 4848 لخدمة `hunt`، مع تسجيل دخول أمامه:
+انظر «ما هو عام، وما يحتاج إلى تسجيل الدخول».
 
 ### التحديث
 
+انسخ احتياطيًّا أولًا (`make backup`، عبر تحويل المنفذ). ثم، على وسم متحرك (`release`، `latest`)،
+أعد تشغيله ليجلب الأحدث:
+
 ```sh
-kubectl -n hunt rollout restart deployment/hunt     # pulls latest again
-kubectl -n hunt set image deployment/hunt hunt=ghcr.io/arabesquelabs/hunt:v0.16.0   # or a version
+kubectl -n hunt rollout restart deployment/hunt     # or make k8s-update
 ```
+
+وعلى إصدار، غيّر `newTag` وشغّل `kubectl apply -k .` من جديد. ويُنزل `make k8s-down` hunt ويُبقي
+وحدة تخزينه.
 
 ## قاعدة البيانات
 
@@ -226,7 +223,9 @@ hunt serve --db mysql://hunt:secret@localhost:3306/hunt      # MySQL (8.0.16 or 
 
 ## النسخ الاحتياطي
 
-الإعدادات ← **النسخ الاحتياطي والاستيراد**، أو `hunt backup` و`hunt restore`.
+الإعدادات ← **النسخ الاحتياطي والاستيراد**، أو `hunt backup` و`hunt restore`. وفي نسخة مستنسخة من
+hunt، يحفظ `make backup` نسخةً من hunt العامل (وhunt في Docker أيضًا) في `backups/`، مسجّلًا الدخول
+بصفة المالك بـ`HUNT_EMAIL` و`HUNT_PASSWORD`.
 
 - **ما في النسخة:** ملف JSON واحد فيه كل شيء (العمليات، والطلبات، والشركات، والأشخاص، والملفات،
   والوسوم، والإعدادات، وسجل التغييرات). ويُستبعد اتصال Gmail، فلا تكون في نسخة احتياطية أبدًا
@@ -266,37 +265,49 @@ hunt serve --db mysql://hunt:secret@localhost:3306/hunt      # MySQL (8.0.16 or 
 ## ما هو عام، وما يحتاج إلى تسجيل الدخول
 
 التطبيق في `/`، وكل صفحة منه في عنوانها الخاص (`/stats`، `/applications/2`)، وبياناته تحت `/api`:
-وهذه تحتاج إلى تسجيل الدخول. والباقي لا يحتاج إلى أحد: تسجيل الدخول (`/login`)، وفحص السلامة
-(`/healthz`)، والنصوص البرمجية والأنماط والخطوط والشعار، ورابط التقويم المشترك. والعناوين من حين كان
-التطبيق تحت `/app` (`/app/companies/3`) تقود إلى الصفحة نفسها دونه، وصفحات الموقع التي كان hunt
-يقدّمها (`/docs`، `/privacy`، `/terms`، `/data-deletion`، `/screenshots`، و`/ar/…`) تقود إليها في
+وهذه تحتاج إلى تسجيل الدخول. والباقي لا يحتاج إلى أحد: تسجيل الدخول والتسجيل (`/login`، `/signup`)،
+وفحص السلامة (`/healthz`)، والنصوص البرمجية والأنماط والخطوط والشعار، ورابط التقويم المشترك. والعناوين
+من حين كان التطبيق تحت `/app` (`/app/companies/3`) تقود إلى الصفحة نفسها دونه، وصفحات الموقع التي كان
+hunt يقدّمها (`/docs`، `/privacy`، `/terms`، `/data-deletion`، `/screenshots`، و`/ar/…`) تقود إليها في
 الموقع (`HUNT_SITE_URL`، أدناه).
 
-وهناك ثلاث طرق لتسجيل الدخول.
+لكل hunt حسابات، ويسجّل دخولها بنفسه: عنوان بريد إلكتروني وكلمة مرور. ويمكن لوكيل تسجيل دخول أو لـCloudflare
+Access أمامه أن يسجّل دخول الناس بدلًا منه.
 
-### كلمة مرور، لشخص واحد
+### تسجيل hunt الخاص: عنوان بريد إلكتروني وكلمة مرور
+
+أول حساب في hunt هو حساب مالكه: يُصنع في مُطلِق hunt الجديد (ولا يمكن تخطّيه)، أو حين يبدأ hunt. والمالك هو
+الحساب 1، وهو مدير: يدير hunt (الإدارة، في الشريط الجانبي). ولا ينضمّ غيره إلا كما يقول مدير: انظر «عدة
+أشخاص»، أدناه.
 
 ```sh
-HUNT_PASSWORD='a long passphrase' hunt serve
-docker run -e HUNT_PASSWORD='a long passphrase' -p 4848:4848 -v hunt-data:/data ghcr.io/arabesquelabs/hunt
+HUNT_ADMIN_EMAIL=you@example.com HUNT_ADMIN_PASSWORD='a long passphrase' hunt serve
+docker run -e HUNT_ADMIN_EMAIL=you@example.com -e HUNT_ADMIN_PASSWORD='a long passphrase' \
+  -p 4848:4848 -v hunt-data:/data ghcr.io/arabesquelabs/hunt:release
 ```
 
-- **التطبيق وبياناته** يطلبانها، في `/login`، ويتذكرانك 30 يومًا. وفي الشريط الجانبي **تسجيل
-  الخروج**.
-- **سطر الأوامر** يرسل `HUNT_PASSWORD` الخاص به: اضبطه حيث تشغّل `hunt`.
-- **تغييرها** يُخرج الجميع. وتحتاج إلى 8 أحرف أو أكثر؛ والخاطئة تكلّف ثانية.
+- **التطبيق وبياناته** يطلبانهما، في `/login`، ويتذكرانك 30 يومًا. وفي الشريط الجانبي **تسجيل
+  الخروج**؛ ومن الإعدادات ← الحساب تغيّر عنوان بريدك الإلكتروني وكلمة مرورك. وما لم يكن ثمة مالك فلا
+  شيء يحتاج إلى تسجيل الدخول: فاصنعه قبل أن يُوصَل إلى hunt من مكان آخر.
+- **كلمات المرور** تُحفظ تجزئاتٍ بخوارزمية Argon2، مع الحسابات: ولا تكون في نسخة احتياطية أبدًا. والجديدة
+  تُنهي جلسات ذلك الحساب الأخرى. وتحتاج إلى 8 أحرف أو أكثر؛ والخاطئة تكلّف ثانية.
+- **سطر الأوامر** يسجّل الدخول بحساب: اضبط `HUNT_EMAIL` و`HUNT_PASSWORD` حيث تشغّل `hunt`.
+- **نسيتها؟** شغّل hunt مع `HUNT_ADMIN_EMAIL` و`HUNT_ADMIN_PASSWORD` من جديد: فتحلّ كلمة المرور محلّ
+  كلمة ذلك المدير.
+- **`HUNT_PASSWORD`**، التي كانت تقصر hunt على من يعرفها، صارت لسطر الأوامر وحده: فلا يبدأ
+  `hunt serve` بها دون مالك، بدل أن يبدأ مفتوحًا.
 - **عبر الإنترنت**، ضع hunt خلف HTTPS (وكيل عكسي مثل Caddy، الذي يفعل ذلك وحده): فتُعلَّم ملفات
   تعريف الارتباط بأنها آمنة حين يقول الوكيل إن الزيارة كانت عبر HTTPS (`X-Forwarded-Proto`).
 
-### وكيل تسجيل دخول، لعدة أشخاص
+### وكيل تسجيل دخول
 
-إن كنت تُدخل الناس عند وكيل (Authelia، أو Authentik، أو oauth2-proxy، أو Tailscale)، فيمكنه أن
-يخبر hunt بمن يسأل، في ترويسة:
+إن كنت تسجّل دخول الناس عند وكيل (Authelia، Authentik، oauth2-proxy، Tailscale)، فيمكنه أن يخبر hunt
+بمن يسأل، في ترويسة:
 
 ```sh
-hunt serve --tenants --admins you@example.com \
+hunt serve --admins you@example.com \
   --auth-header Remote-Email --trusted-proxies 172.18.0.0/16
-# or HUNT_TENANTS=1 HUNT_ADMINS=… HUNT_AUTH_HEADER=… HUNT_TRUSTED_PROXIES=…
+# or HUNT_ADMINS=… HUNT_AUTH_HEADER=… HUNT_TRUSTED_PROXIES=…
 ```
 
 | الوكيل | ترويسته |
@@ -306,17 +317,18 @@ hunt serve --tenants --admins you@example.com \
 | oauth2-proxy | `X-Auth-Request-Email` (مع `--set-xauthrequest`) |
 | Tailscale (`tailscale serve`) | `Tailscale-User-Login` |
 
-- **`--trusted-proxies`** (أو `HUNT_TRUSTED_PROXIES`) يسرد العناوين، أو النطاقات، التي تأتي منها
-  طلبات الوكيل: هذا الجهاز (`127.0.0.1`، `::1`) ما لم يُذكر غيره، وفي Docker، شبكة الوكيل
-  (`172.18.0.0/16`، مثلًا). ولا تُعتمد الترويسة إلا منها، فلا يستطيع من يصل إلى hunt بطريق آخر أن
-  يدّعي أنه أي أحد. وأبقِ منفذ hunt نفسه بعيدًا عن الإنترنت مع ذلك.
-- **الوكيل** عليه أن يضبط الترويسة بنفسه، فيستبدل أي ترويسة أرسلها الزائر: وإعدادات Authelia
+- **`--trusted-proxies`** (أو `HUNT_TRUSTED_PROXIES`) يسرد العناوين، أو النطاقات، التي تأتي منها طلبات
+  الوكيل: هذا الجهاز (`127.0.0.1`، `::1`) ما لم يُذكر غيره، وفي Docker، شبكة الوكيل (`172.18.0.0/16`
+  مثلًا). ولا تُعتمد الترويسة إلا منها، فلا يستطيع أحد يصل إلى hunt بطريق آخر أن يدّعي أنه أي أحد. وأبقِ
+  منفذ hunt نفسه بعيدًا عن الإنترنت مع ذلك.
+- **الوكيل** عليه أن يضبط الترويسة بنفسه، فيستبدل أي ترويسة أرسلها زائر: وإعدادات Authelia
   وoauth2-proxy المعتادة تفعل ذلك.
-- ثم ينضم الناس ويُدخَلون كما مع Cloudflare Access: انظر «عدة أشخاص»، أدناه.
-- **سطر الأوامر**، من عنوان موثوق (على جهاز hunt نفسه، مثلًا)، يقول بنفسه من يسأل: اضبط
+- **المدراء** يُسمَّون بـ`HUNT_ADMINS` (والأول هو الحساب 1، إن لم يكن ثمة حساب بعد)؛ وينضمّ غيرهم ويُقبلون
+  كما مع Cloudflare Access: انظر «عدة أشخاص»، أدناه.
+- **سطر الأوامر**، من عنوان موثوق (على جهاز hunt نفسه مثلًا)، يقول بنفسه من يسأل: اضبط
   `HUNT_AUTH_HEADER` (الترويسة نفسها) و`HUNT_USER` (بريدك) حيث تشغّله.
 
-مع Caddy وAuthelia، مثلًا:
+مع Caddy وAuthelia مثلًا:
 
 ```
 hunt.example.com {
@@ -328,65 +340,63 @@ hunt.example.com {
 }
 ```
 
-ولا يحتاج hunt الخاص بشخص واحد خلف وكيل تسجيل دخول إلى شيء من hunt: فالوكيل يُبقي الآخرين خارجًا.
-
 ### Cloudflare Access
 
-احمِ اسم المضيف كله (`hunt.example.com`). وتصل فحوص Kubernetes إلى `/healthz` داخل العنقود، لا عبر
-Access؛ وتطبيق التقويم الذي يشترك في رابط تقويم مشترك يحتاج إلى استثناء لـ`/api/calendar/`. وفي hunt
-مشترك، يتحقق hunt أيضًا من الرمز الموقّع من Access في كل طلب للبيانات، فلا يكشف خطأٌ في إعداد Access
-بيانات أحد.
+```sh
+hunt serve --admins you@example.com,other-admin@example.com \
+  --access-team yourteam --access-aud <the Access application's AUD tag>
+# or HUNT_ADMINS=… HUNT_ACCESS_TEAM=… HUNT_ACCESS_AUD=…
+```
 
-خلف Cloudflare Access، في الشريط الجانبي **تسجيل الخروج** (ينهي جلسة Access)، وفي «معلومات
-التصحيح» في مركز الإدارة الهوية التي يحملها Access لك ولوحة تحكم Zero Trust، مع فحص سلامة hunt
-ورابط اشتراك التقويم والنسخة الاحتياطية والشيفرة المصدرية وعمليات بناء الصورة. ويستخدم سطر الأوامر
-رمز خدمة: اضبط `HUNT_ACCESS_CLIENT_ID` و`HUNT_ACCESS_CLIENT_SECRET` على معرّفه وسرّه، و`HUNT_URL`
-على العنوان العام. وإشارة «أرسل إلى hunt» المرجعية تفتح hunt في تبويب، فتسجّل الدخول كأي زيارة
-أخرى.
+احمِ اسم المضيف كله (`hunt.example.com`). يسجّل Access دخول الناس بـGitHub أو LinkedIn (أو أي طريقة دخول
+مضبوطة هناك) ويسلّم hunt رمزًا موقّعًا، يتحقق منه hunt مقابل مفاتيح الفريق ووسم جمهور التطبيق في كل طلب
+للبيانات، فلا يستطيع طلب لم يمرّ عبر Access أن يدّعي أنه أي أحد، ولا يفتح خطأ في إعداد Access بيانات أحد.
+ولكي يطلب الآخرون حسابًا، على سياسة تطبيق Access أن تسمح لهم: Include ← Login Methods ← GitHub وLinkedIn
+(كل من سجّل الدخول بأحدهما)، بدل بريدك. وفحوص Kubernetes تصل إلى `/healthz` داخل العنقود، لا عبر Access؛
+وتطبيق التقويم الذي يشترك في رابط تقويم مشترك يحتاج إلى استثناء لـ`/api/calendar/`.
+
+وخلف Cloudflare Access، في الشريط الجانبي **تسجيل الخروج** (ينهي جلسة Access)، وفي «معلومات التصحيح» في
+مركز الإدارة الهوية التي يحملها Access عنك ولوحة Zero Trust، مع فحص سلامة hunt وموجز التقويم والنسخة
+الاحتياطية والشيفرة المصدرية وعمليات بناء الصورة. ويستخدم سطر الأوامر رمز خدمة: اضبط
+`HUNT_ACCESS_CLIENT_ID` و`HUNT_ACCESS_CLIENT_SECRET` على معرّفه وسرّه، و`HUNT_URL` على العنوان العام،
+واضبط Client ID بوصفه رمز سطر الأوامر للحساب في مركز الإدارة. وإشارة «أرسل إلى hunt» المرجعية تفتح hunt في
+تبويب، فتسجّل الدخول كأي زيارة أخرى.
 
 ## عدة أشخاص (تعدد المستخدمين)
 
-يمكن لـhunt واحد أن يخدم عدة أشخاص، كلٌّ يرى ويغيّر طلباته وشركاته وأشخاصه وملفاته وملاحظاته
-ووسومه وإعداداته وحده. يتشاركون قاعدة بيانات واحدة: كل صف يحمل مالكه، وكل طلب يعمل باسم الحساب
-الذي جاء منه (يقصر `src/scope.rs` كل استعلام على صفوف الحساب، فلا يحتاج شيء إلى أن يتذكّر ذلك).
-وتفعيله يحتفظ بما هو موجود: يصير ملكًا لأول مسؤول.
+يمكن لكل hunt أن يخدم عدة أشخاص، يرى كلٌّ منهم ويغيّر طلباته وشركاته وأشخاصه وملفاته وملاحظاته ووسومه
+وإعداداته وحدها. يتشاركون قاعدة بيانات واحدة: كل صفّ يحمل مالكه، وكل طلب يجري بالحساب الذي جاء منه
+(`src/scope.rs` يقصر كل عبارة على صفوف الحساب، فلا شيء يحتاج إلى التذكّر). وhunt من قبل أن تكون له حسابات
+يحتفظ بما فيه: فهو للمالك، الحساب 1.
 
-```sh
-hunt serve --tenants --admins you@example.com,other-admin@example.com \
-  --access-team yourteam --access-aud <the Access application's AUD tag>
-# or HUNT_TENANTS=1 HUNT_ADMINS=… HUNT_ACCESS_TEAM=… HUNT_ACCESS_AUD=…
-```
+وhunt الجديد لمالكه وحده: **التسجيل مغلق** حتى يفتحه مدير (الإدارة ← الوصول والحسابات)، أو يدعو أحدًا.
 
-- **تسجيل الدخول** مهمة Cloudflare Access: تسجّل دخول الناس بـGitHub وLinkedIn (أو أي طريقة دخول
-  مُعدّة هناك) وتسلّم hunt رمزًا موقّعًا، يتحقق منه hunt بمفاتيح الفريق ووسم جمهور التطبيق. والطلب
-  الذي لم يأتِ عبر Access لا يمكن أن ينتحل صفة أحد. ولكي يطلب الآخرون حسابًا، يجب أن تسمح لهم سياسة
-  تطبيق Access بالدخول: Include ← Login Methods ← GitHub وLinkedIn (أي من سجّل الدخول بأحدهما)،
-  بدل بريدك الإلكتروني.
-- **قائمة الوصول المبكر**: طلب حساب يُقدَّم انضمامًا إلى قائمة وصول مبكر، بلا مواعيد ولا وعود. والقادم
-  الجديد، بعد تسجيل دخوله، لا يرى إلا «انضم إلى قائمة الوصول المبكر»: اسمه، واختياريًا، ما الذي جاء
-  به إلى hunt. وإلى أن يُدخله مسؤول، يرى أنه على القائمة؛ وإن رُفض، يمكنه الانضمام مجددًا.
-- **مركز الإدارة** (/admin، للمسؤولين): قائمة الوصول المبكر، لإدخال الناس أو رفضهم (مع ملاحظة)، وكل
-  حساب: حالته، ودوره (اجعله مسؤولًا آخر)، وطلباته، ومتى شوهد آخر مرة، ورمز سطر الأوامر الخاص به؛
-  عطّله أو فعّله أو أزله (مع كل ما يخصه، إن اخترت)؛ ومفتاح لتحديد ما إذا كان يمكن للجدد طلب حساب
-  أصلًا (مغلقًا، يُقال لهم إن القائمة مغلقة حاليًا؛ والحسابات الموجودة تستمر). وفي «عام» يُسمّى hunt هذا (في الشريط
-  الجانبي وتبويب المتصفح)، ويوضع إشعار أعلى كل صفحة (حتى يغلقه كل شخص)، وعنوان يراسله الناس
-  للمساعدة، وما تبدأ به الحسابات الجديدة؛ وفي «معلومات» إصداره، وكيف يسجّل الناس الدخول، ومن يديره، وعدد
-  حساباته. وفي «معلومات التصحيح»
-  روابط في المتناول: هوية Cloudflare Access الخاصة بك وتسجيل الخروج، وفحص السلامة، ورابط اشتراك
-  التقويم، والنسخة الاحتياطية وواجهة البرمجة، والشيفرة المصدرية وبناء الصور. وهو تحت الإعدادات في الشريط الجانبي. ويرى المسؤولون
-  أيضًا موارد النظام في الإحصاءات؛ ولا يراها غيرهم. والمسؤولون المذكورون في `HUNT_ADMINS` مسؤولون
-  كلما بدأ hunt؛ والأول هو الحساب 1.
-- **سطر الأوامر** يسجّل الدخول برمز خدمة من Access، لا بريد له: اضبط معرّف العميل (Client ID) الخاص
-  به رمزًا لسطر الأوامر للحساب في مركز الإدارة، فيعمل سطر الأوامر باسم ذلك الحساب.
-- **النسخ الاحتياطية** من إصدارات hunt الأقدم (من المخطط 8 فصاعدًا) تُستورد أيضًا، في الوضعين.
-  و**النسخ الاحتياطية** لكل حساب نسخه: النسخة تحوي صفوفه (والملفات التي تستخدمها فقط)، واستيرادها
-  لا يستبدل إلا ما لذلك الحساب، بمعرّفات جديدة لا يمكن أن تتعارض مع غيرها.
-- مزامنة Gmail لـhunt شخص واحد فقط، حاليًا.
-- **التجربة محليًا**: يقدّم `make dev-tenants` (أو `make watch`) الملف `target/dev.db` لعدة أشخاص،
-  مع `ADMINS` (افتراضيًا admin@example.test) مسؤولين. لا يوجد Cloudflare Access، فهوية السائل تؤخذ
-  على الثقة (`--identity-header X-Hunt-User`): في المتصفح، افتح `/dev/as?email=admin@example.test`
-  لتكون المسؤول، أو أي بريد آخر لتكون قادمًا جديدًا يطلب حسابًا؛ و`/dev/as` وحده يسجّل الخروج. لا
-  تشغّله هكذا أبدًا حيث يمكن للآخرين الوصول إلى hunt.
+- **الانضمام**، بتسجيل hunt الخاص: في `/signup`، عنوان بريد إلكتروني واسم وكلمة مرور، واختياريًّا ما الذي
+  يأتي به إلى hunt (وشروط الاستخدام، حيث تكون لـhunt: `HUNT_SITE_URL`). ومن دُعي يسجّل بالعنوان الذي
+  ذهبت إليه الدعوة، فيدخل فورًا، سواء أكان التسجيل مفتوحًا أم لا؛ وكل من سواه ينتظر قول مدير، مسجّل الدخول،
+  يرى أين يقف. وخلف Access أو وكيل، يسجّلون الدخول هناك، ثم ينضمّون إلى «قائمة الوصول المبكر»: اسمهم وما
+  يأتي بهم.
+- **مركز الإدارة** (/admin، للمدراء؛ تحت الإعدادات في الشريط الجانبي):
+  - الوصول والحسابات: هل يمكن لأشخاص جدد التسجيل أصلًا، ودعوة أحد، والمنتظرون (اقبلهم أو ارفضهم، مع
+    ملاحظة)، وكل حساب: حالته، ودوره (اجعل غيره مديرًا)، وطلباته، ومتى شوهد آخر مرة، ورمز سطر أوامره؛
+    عطّله أو فعّله أو أزله (مع كل ما له، إن اختير).
+  - عام: اسم hunt هذا (في الشريط الجانبي وتبويب المتصفح)، وإشعار فوق كل صفحة (حتى يغلقه كل شخص)، وعنوان
+    يكتب إليه الناس طلبًا للمساعدة، وما تبدأ به الحسابات الجديدة.
+  - معلومات: إصداره، وكيف يسجّل الناس الدخول، ومن يديره، وكم حسابًا له. وإحصاءات المستخدمين وموارد
+    النظام: كيف يستخدم كل حساب hunt (برقمه لا باسمه)، والجهاز. ومعلومات التصحيح: روابط في المتناول (فحص
+    السلامة، وموجز التقويم، والنسخة الاحتياطية والواجهة البرمجية، والشيفرة المصدرية وعمليات بناء الصورة،
+    وخلف Access، هويتك هناك).
+- **المدراء** المسمَّون في `HUNT_ADMINS` مدراء كلما بدأ hunt؛ والأول هو الحساب 1، حين لا يكون ثمة حساب بعد.
+- **النسخ الاحتياطية** لكل حساب وحده: تحمل النسخة صفوفه (والملفات التي تستخدمها وحدها)، واستيراد واحدة لا
+  يستبدل إلا صفوف ذلك الحساب، بمعرّفات جديدة كي لا تتصادم مع أحد. ونسخ الإصدارات الأقدم من hunt (من
+  المخطط 8) تُستورد أيضًا.
+- **مزامنة Gmail** للمالك (الحساب 1) وحده، حاليًّا.
+- **`--tenants`** (`HUNT_TENANTS`)، الذي كان يشغّل تعدد الأشخاص، لم تعد له حاجة: ما زال يُقبل، ولا يغيّر
+  شيئًا.
+- **التجربة محليًّا**: يقدّم `make dev-tenants` (أو `make watch`) الملف `target/dev.db` مع `ADMINS`
+  (افتراضيًّا admin@example.test) مدراءَ، ومن يسأل يُؤخذ بالثقة (`--identity-header X-Hunt-User`): في
+  المتصفح، افتح `/dev/as?email=admin@example.test` لتكون المدير، أو أي بريد آخر لتكون شخصًا جديدًا يطلب
+  حسابًا؛ و`/dev/as` وحده يسجّل الخروج. لا تشغّله هكذا أبدًا حيث يمكن لغيرك الوصول إلى hunt.
 
 ## صافي الأجر (المملكة المتحدة)
 

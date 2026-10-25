@@ -1,7 +1,7 @@
 <!doctype html>
-<!-- Signing in to one person's hunt, with its password (HUNT_PASSWORD):
-     src/auth.rs fills in where to go after, and whether the last try was
-     wrong. -->
+<!-- Signing in with hunt's own sign-in (an account's email address and
+     password): src/auth.rs fills in where to go after, whether the last try
+     was wrong, and (while sign-ups are open) the way to sign up. -->
 <html lang="en" dir="ltr">
 <head>
   <meta charset="utf-8">
@@ -21,6 +21,7 @@
     .login-brand img { inline-size: 32px; block-size: 32px; }
     .login form { display: grid; gap: 1rem; }
     .login h1 { margin: 0; font-size: var(--al-text-lg); font-weight: 500; }
+    .login-other { margin: 0; color: var(--al-color-text-muted); }
   </style>
 </head>
 <body>
@@ -30,12 +31,17 @@
       <h1>Sign in</h1>
       <input type="hidden" name="next" value="{{next}}">
       <div class="al-field">
+        <label class="al-label" for="email">Email</label>
+        <input class="al-input" id="email" name="email" type="email" autocomplete="username" required autofocus>
+      </div>
+      <div class="al-field">
         <label class="al-label" for="password">Password</label>
-        <input class="al-input" id="password" name="password" type="password" autocomplete="current-password" required autofocus aria-describedby="login-error">
+        <input class="al-input" id="password" name="password" type="password" autocomplete="current-password" required aria-describedby="login-error">
         {{error}}
       </div>
       <button class="al-button al-button--primary" type="submit">Sign in</button>
     </form>
+    {{signup}}
   </main>
 </body>
 </html>
