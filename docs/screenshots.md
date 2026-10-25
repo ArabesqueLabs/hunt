@@ -201,6 +201,42 @@ Swimlanes, their stages and the stages' sub stages: which stages close a process
   <img src="screenshots/settings-board-light.png" alt="Settings: the board">
 </picture>
 
+## Setting up: welcome
+
+A new hunt opens on its launcher: set it up afresh, or restore a backup from another hunt.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="screenshots/setup-welcome-dark.png">
+  <img src="screenshots/setup-welcome-light.png" alt="Setting up: welcome">
+</picture>
+
+## Setting up: authentication
+
+Your account, as the hunt's owner and admin: an email address and a password.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="screenshots/setup-account-dark.png">
+  <img src="screenshots/setup-account-light.png" alt="Setting up: authentication">
+</picture>
+
+## Setting up: your settings
+
+Region, time zone, currency and the first day of the week, filled in from the browser; and how it looks.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="screenshots/setup-settings-dark.png">
+  <img src="screenshots/setup-settings-light.png" alt="Setting up: your settings">
+</picture>
+
+## A new hunt's board
+
+No job search yet: start a cycle, or carry on from another hunt's backup.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="screenshots/first-cycle-dark.png">
+  <img src="screenshots/first-cycle-light.png" alt="A new hunt's board">
+</picture>
+
 ## In Arabic: the board
 
 Right to left, with Arabic-Indic digits; what people wrote stays as written.

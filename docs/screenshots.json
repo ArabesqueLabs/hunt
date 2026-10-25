@@ -138,6 +138,30 @@
     "phone": false
   },
   {
+    "name": "setup-welcome",
+    "title": "Setting up: welcome",
+    "about": "A new hunt opens on its launcher: set it up afresh, or restore a backup from another hunt.",
+    "phone": false
+  },
+  {
+    "name": "setup-account",
+    "title": "Setting up: authentication",
+    "about": "Your account, as the hunt's owner and admin: an email address and a password.",
+    "phone": false
+  },
+  {
+    "name": "setup-settings",
+    "title": "Setting up: your settings",
+    "about": "Region, time zone, currency and the first day of the week, filled in from the browser; and how it looks.",
+    "phone": false
+  },
+  {
+    "name": "first-cycle",
+    "title": "A new hunt's board",
+    "about": "No job search yet: start a cycle, or carry on from another hunt's backup.",
+    "phone": false
+  },
+  {
     "name": "board-ar",
     "title": "In Arabic: the board",
     "about": "Right to left, with Arabic-Indic digits; what people wrote stays as written.",
