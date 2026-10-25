@@ -38,8 +38,30 @@ COPY --from=web /web/dist ./src/web/dist
 RUN cargo build --release --locked \
     && strip target/release/hunt && mkdir /data
 
+# The demo (`--target demo`, published as :demo): hunt with made-up data
+# (scripts/demo.sh), dated from when it's built, in the image and not in a
+# volume, so `docker run --rm` keeps nothing. Before the image below, which
+# stays the default.
+FROM build AS demo-data
+RUN apt-get update && apt-get install -y --no-install-recommends sqlite3 curl \
+    && rm -rf /var/lib/apt/lists/*
+COPY scripts/demo.sh scripts/demo.sh
+RUN mkdir /demo && HUNT=target/release/hunt scripts/demo.sh /demo/hunt.db
+
+FROM gcr.io/distroless/cc-debian12:nonroot AS demo
+COPY --from=build /src/target/release/hunt /usr/local/bin/hunt
+COPY LICENSE /usr/share/doc/hunt/
+COPY src/web/fonts/README.md src/web/fonts/OFL-*.txt /usr/share/doc/hunt/fonts/
+COPY --from=demo-data --chown=65532:65532 /demo /demo
+ENV HUNT_ADDR=0.0.0.0:4848 \
+    HUNT_DB=/demo/hunt.db
+EXPOSE 4848
+USER nonroot
+ENTRYPOINT ["/usr/local/bin/hunt"]
+CMD ["serve"]
+
 # Distroless: glibc and CA certificates, no shell; runs as uid 65532.
-FROM gcr.io/distroless/cc-debian12:nonroot
+FROM gcr.io/distroless/cc-debian12:nonroot AS hunt
 COPY --from=build /src/target/release/hunt /usr/local/bin/hunt
 # hunt's licence, and the bundled fonts' (each under the SIL Open Font License).
 COPY LICENSE /usr/share/doc/hunt/

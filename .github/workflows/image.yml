@@ -1,6 +1,11 @@
-# Build hunt's container image (linux/amd64) and publish it to GitHub's
-# registry as ghcr.io/arabesquelabs/hunt: `latest` from main, plus the
-# commit's sha, v<version> from Cargo.toml, and any v* tag. Tests run first.
+# Build hunt's container images and publish them to GitHub's registry, for
+# linux/amd64 and linux/arm64 (each built natively, then joined into one
+# multi-platform tag). Tests run first.
+#
+#   ghcr.io/arabesquelabs/hunt:latest, :sha-…   main's newest build
+#   ghcr.io/arabesquelabs/hunt:v0.17.0, :v0.17   a release (a v* git tag: `make publish`)
+#   ghcr.io/arabesquelabs/hunt:release           the newest release
+#   ghcr.io/arabesquelabs/hunt:demo              main's, with made-up data (the Dockerfile's `demo`)
 name: image
 
 on:
@@ -12,6 +17,9 @@ on:
 permissions:
   contents: read
   packages: write
+
+env:
+  IMAGE: ghcr.io/arabesquelabs/hunt
 
 jobs:
   test:
@@ -30,12 +38,21 @@ jobs:
           cache-dependency-path: src/web/package-lock.json
       - run: make ci
 
-  image:
-    permissions:
-      contents: read
-      packages: write
+  # Each image on each platform, on a runner of its own kind (Rust under
+  # emulation takes far too long), pushed by its digest alone.
+  build:
     needs: test
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [hunt, demo]
+        platform: [amd64, arm64]
+        include:
+          - platform: amd64
+            runner: ubuntu-latest
+          - platform: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
@@ -44,29 +61,68 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      # The version in Cargo.toml, so main's image is also tagged v<version>
-      # (v0.12.0) without a git tag. Until the version changes, each push to
-      # main moves that tag to its newer build.
-      - id: version
-        run: echo "version=$(grep -m1 '^version' Cargo.toml | cut -d '"' -f2)" >> "$GITHUB_OUTPUT"
+      - id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: ${{ matrix.target }}
+          platforms: linux/${{ matrix.platform }}
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          # Layers kept in GitHub's cache, a scope per platform: the
+          # dependencies' layer (cargo-chef's) is reused until they change,
+          # and the demo reuses the image's.
+          cache-from: |
+            type=gha,scope=hunt-${{ matrix.platform }}
+            type=gha,scope=${{ matrix.target }}-${{ matrix.platform }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.target }}-${{ matrix.platform }}
+      - run: |
+          mkdir -p /tmp/digests
+          touch "/tmp/digests/${DIGEST#sha256:}"
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ matrix.target }}-${{ matrix.platform }}
+          path: /tmp/digests/*
+          retention-days: 1
+
+  # Each image's platforms, joined under its tags.
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [hunt, demo]
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: digests-${{ matrix.target }}-*
+          merge-multiple: true
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/arabesquelabs/hunt
+          images: ${{ env.IMAGE }}
+          # The image: main's as latest (and its sha); a release as its
+          # version, its minor version and `release`. The demo: main's only.
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=raw,value=v${{ steps.version.outputs.version }},enable={{is_default_branch}}
-            type=sha
-            type=ref,event=tag
-      - uses: docker/build-push-action@v6
-        with:
-          context: .
-          platforms: linux/amd64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          # Layers kept in GitHub's cache between runs, under one name: the
-          # dependencies' layer (cargo-chef's, in the Dockerfile) is reused
-          # until the dependencies change, releases included.
-          cache-from: type=gha,scope=hunt
-          cache-to: type=gha,mode=max,scope=hunt
+            type=raw,value=latest,enable=${{ matrix.target == 'hunt' && github.ref == 'refs/heads/main' }}
+            type=sha,enable=${{ matrix.target == 'hunt' && github.ref == 'refs/heads/main' }}
+            type=semver,pattern=v{{version}},enable=${{ matrix.target == 'hunt' }}
+            type=semver,pattern=v{{major}}.{{minor}},enable=${{ matrix.target == 'hunt' }}
+            type=raw,value=release,enable=${{ matrix.target == 'hunt' && startsWith(github.ref, 'refs/tags/v') }}
+            type=raw,value=demo,enable=${{ matrix.target == 'demo' && github.ref == 'refs/heads/main' }}
+      - if: steps.meta.outputs.tags != ''
+        working-directory: /tmp/digests
+        run: |
+          docker buildx imagetools create \
+            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf "$IMAGE@sha256:%s " *)
+      - if: steps.meta.outputs.tags != ''
+        run: docker buildx imagetools inspect "$(jq -r '.tags[0]' <<< "$DOCKER_METADATA_OUTPUT_JSON")"

@@ -95,8 +95,14 @@ const SHOTS = [
 ];
 
 /** hunt's API: `api("POST", "lanes", {…})`, and what it gives back. */
+// The demo's hunt has an owner (made from HUNT_ADMIN_EMAIL and
+// HUNT_ADMIN_PASSWORD, below): its API is asked as them, as the CLI asks.
+const OWNER = { email: "demo@example.test", password: "screenshots" };
+const AUTH = { Authorization: `Basic ${Buffer.from(`${OWNER.email}:${OWNER.password}`).toString("base64")}` };
+const get = (path) => fetch(`${BASE}/api/${path}`, { headers: AUTH });
+
 async function api(method, path, body) {
-  const r = await fetch(`${BASE}/api/${path}`, { method, headers: { "Content-Type": "application/json" }, body: body && JSON.stringify(body) });
+  const r = await fetch(`${BASE}/api/${path}`, { method, headers: { "Content-Type": "application/json", ...AUTH }, body: body && JSON.stringify(body) });
   if (!r.ok) throw new Error(`${method} ${path}: ${await r.text()}`);
   return r.status === 204 ? null : r.json().catch(() => null);
 }
@@ -151,24 +157,32 @@ async function browser() {
 const work = mkdtempSync(join(tmpdir(), "hunt-shots-db-"));
 const db = join(work, "demo.db");
 if (spawnSync("scripts/demo.sh", [db], { stdio: "inherit" }).status !== 0) process.exit(1);
-const server = spawn(HUNT, ["serve", "--addr", ADDR, "--db", db], { stdio: "ignore" });
+const server = spawn(HUNT, ["serve", "--addr", ADDR, "--db", db], {
+  stdio: "ignore",
+  env: { ...process.env, HUNT_PASSWORD: "", HUNT_ADMIN_EMAIL: OWNER.email, HUNT_ADMIN_PASSWORD: OWNER.password },
+});
 const b = await browser();
 try {
   for (let i = 0; ; i++) {
-    try { if ((await fetch(`${BASE}/api/meta`)).ok) break; } catch { /* starting */ }
+    try { if ((await get("meta")).ok) break; } catch { /* starting */ }
     if (i > 50) throw new Error(`hunt didn't start on ${ADDR}`);
     await sleep(200);
   }
-  const first = async (what, q) => (await (await fetch(`${BASE}/api/${what}?q=${encodeURIComponent(q)}`)).json())[0].id;
+  const first = async (what, q) => (await (await get(`${what}?q=${encodeURIComponent(q)}`)).json())[0].id;
   const ids = {
     app: await first("applications", "Quillnote"),
     company: await first("companies", "Quillnote"),
     person: await first("people", "Dana Kim"),
     document: await first("documents", "Resume"),
   };
-  ids.pastCycle = (await (await fetch(`${BASE}/api/cycles`)).json()).find((c) => c.ended_on).id;
-  const northwind = (await (await fetch(`${BASE}/api/processes?q=Northwind`)).json())[0];
+  ids.pastCycle = (await (await get("cycles")).json()).find((c) => c.ended_on).id;
+  const northwind = (await (await get("processes?q=Northwind")).json())[0];
   Object.assign(ids, { offer: northwind.id, offerStage: northwind.stage_id, offerLane: northwind.lane_id });
+
+  // The browser signs in as the owner, once: its cookie lasts the run.
+  await b.go(`${BASE}/login`);
+  await b.eval(`document.querySelector("#email").value = ${JSON.stringify(OWNER.email)}; document.querySelector("#password").value = ${JSON.stringify(OWNER.password)}; document.querySelector("form").submit(); return 1`);
+  await sleep(1500);
 
   mkdirSync(OUT, { recursive: true });
   for (const f of readdirSync(OUT)) if (f.endsWith(".png")) rmSync(join(OUT, f));

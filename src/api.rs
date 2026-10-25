@@ -35,7 +35,7 @@
 //! | `GET /docs`, `/screenshots`, `/privacy`, `/terms`, `/data-deletion`, `/ar/…` | the website's pages, which hunt once served: redirected there (`HUNT_SITE_URL`); without a website, the docs on GitHub |
 //! | `DELETE /api/account` | delete your own account and everything in it (`{confirm: your email}`) |
 //! | `GET /api/account`, `POST /api/account/request` | with several people (`--tenants`): who's asking and their account; ask for one (`{name, reason, provider, agrees}`: agreeing to the terms of use) |
-//! | `PATCH /api/admin/settings` | admins: `{site}`, this hunt's `name`, an `announcement` on every page and a `contact` address for help; `{signups_open}`, whether new people may ask for an account; `{defaults}`, the language, region, time zone and currency new accounts start with |
+//! | `PATCH /api/admin/settings` | admins: `{site}`, this hunt's `name`, an `announcement` on every page and a `contact` address for help; `{signups_open}`, whether new people may ask for an account; `{defaults}`, the language, region, time zone and currency new accounts start with. One person's hunt: its owner, `{site}`'s `name` and `announcement` |
 //! | `POST /api/admin/invites` | admins: `{email, name?}`, an account for someone, open for sign-ups or not |
 //! | `GET /api/admin/usage` | admins: each account's use of hunt (counts and sizes; no names or addresses) |
 //! | `GET /api/admin/overview`, `POST /api/admin/accounts/{id}/decide`, `PATCH, DELETE /api/admin/accounts/{id}?data=` | admins: every account; approve, reject, disable or enable (`{status, note}`); change role, name or CLI token; remove (with `data=1`, everything of theirs) |
@@ -43,6 +43,8 @@
 //! | `GET /api/stats` | numbers for the Stats page: totals, how far processes got, the weeks, outcomes, sources, pay, time, what's gone quiet |
 //! | `GET /api/backup` | everything tracked, files included, as a JSON download (the Gmail connection left out) |
 //! | `POST /api/backup?confirm=replace` | a backup as the body: replaces everything with it; how many rows each table now has |
+//! | `PUT /api/owner` | one person's hunt: `{email, password}`, its owner (who signs in, and runs it), made by the launcher; then, signed in, `{email?, password?, current}` changes them, this browser staying signed in |
+//! | `POST /api/setup/done` | a new hunt's launcher is done: `GET /api/meta`'s `setup` is false from now on |
 //! | `GET/PATCH /api/settings` | one account's: `{theme: light\|dark\|auto, language, locale, numerals, clock, currency, timezone, week_start, work_hours, calendar_zones, uk_resident, uk_region, desired_take_home, desired_take_home_per, calendar_feed, bookmarklet_url, same_name: ask\|merge\|new}` |
 //! | `GET/PUT/DELETE /api/mail` | the Gmail account (`{address, password, interval}`; signs in to check), the last sync, how much waits in triage |
 //! | `PUT/DELETE /api/mail/google/client` | your Google OAuth client (the JSON file from Google Cloud), for signing in with Google |
@@ -97,23 +99,21 @@ use crate::tenants::{Account, Denied, Identity, Tenants};
 
 type Shared = Arc<Mutex<Db>>;
 
-/// The service's state: the database, and, with several people, their
-/// accounts.
+/// The service's state: the database, and its accounts.
 #[derive(Clone)]
 pub struct AppState {
     db: Shared,
-    tenants: Option<Arc<Tenants>>,
+    /// Its accounts, and who's asking (see [`crate::tenants`]).
+    tenants: Arc<Tenants>,
     /// Its website (the docs and legal pages), who runs it, and its source.
     site: Arc<site::Site>,
     /// Features being tried out, and whom they're on for.
     experiments: Arc<Experiments>,
-    /// One person's hunt's password, if it has one: the app and the API
-    /// need signing in (see [`crate::auth`]).
-    password: Option<Arc<auth::Password>>,
 }
 
 /// The database, as the request's account sees it: its own rows only (see
-/// [`crate::scope`]). With one person's hunt, everything.
+/// [`crate::scope`]). A new hunt, before it has accounts, is account 1's,
+/// its owner-to-be.
 #[derive(Clone)]
 pub struct Scoped {
     db: Shared,
@@ -161,18 +161,19 @@ impl FromRequestParts<AppState> for Scoped {
         parts: &mut Parts,
         state: &AppState,
     ) -> Result<Self, Self::Rejection> {
-        let Some(t) = state.tenants.clone() else {
-            return Ok(Scoped {
-                db: state.db.clone(),
-                owner: None,
-            });
-        };
+        let t = state.tenants.clone();
         let headers = parts.headers.clone();
         let peer = peer(parts);
-        match tokio::task::spawn_blocking(move || t.active(&headers, peer)).await {
+        let check = t.clone();
+        match tokio::task::spawn_blocking(move || check.active(&headers, peer)).await {
             Ok(Ok((_, a))) => Ok(Scoped {
                 db: state.db.clone(),
                 owner: Some(a.id),
+            }),
+            // Nobody yet: a new hunt, open until its launcher makes its owner.
+            Ok(Err(Denied::NotSignedIn(_))) if t.no_accounts().unwrap_or(false) => Ok(Scoped {
+                db: state.db.clone(),
+                owner: Some(1),
             }),
             Ok(Err(d)) => Err(denied(d)),
             Err(e) => Err(ApiError(Error::Db(e.to_string())).into_response()),
@@ -189,25 +190,24 @@ pub struct Viewer {
 }
 
 impl Viewer {
-    /// Their database, if their account may use hunt (always, with one
-    /// person's hunt).
+    /// Their database, if their account may use hunt (or, a new hunt with
+    /// nobody yet, account 1's).
     fn scoped(&self) -> Option<Scoped> {
-        match (&self.app.tenants, &self.account) {
-            (None, _) => Some(Scoped {
-                db: self.app.db.clone(),
-                owner: None,
-            }),
-            (Some(_), Some(a)) if a.status == "active" => Some(Scoped {
+        match &self.account {
+            Some(a) if a.status == "active" => Some(Scoped {
                 db: self.app.db.clone(),
                 owner: Some(a.id),
+            }),
+            None if self.app.tenants.no_accounts().unwrap_or(false) => Some(Scoped {
+                db: self.app.db.clone(),
+                owner: Some(1),
             }),
             _ => None,
         }
     }
 
     /// Whether an experiment is on for them: for someone whose account
-    /// may use hunt, and is one it's on for (with one person's hunt, on if
-    /// it's on at all).
+    /// may use hunt, and is one it's on for.
     fn trying(&self, name: &str) -> bool {
         self.scoped().is_some()
             && self
@@ -233,13 +233,7 @@ impl FromRequestParts<AppState> for Viewer {
         parts: &mut Parts,
         state: &AppState,
     ) -> Result<Self, Self::Rejection> {
-        let Some(t) = state.tenants.clone() else {
-            return Ok(Viewer {
-                app: state.clone(),
-                identity: None,
-                account: None,
-            });
-        };
+        let t = state.tenants.clone();
         let headers = parts.headers.clone();
         let peer = peer(parts);
         let (identity, account) =
@@ -273,13 +267,7 @@ impl FromRequestParts<AppState> for Admin {
         parts: &mut Parts,
         state: &AppState,
     ) -> Result<Self, Self::Rejection> {
-        let Some(t) = state.tenants.clone() else {
-            return Err(ApiError(Error::NotFound(
-                "this hunt is one person's: there's no admin centre (start it with --tenants)"
-                    .into(),
-            ))
-            .into_response());
-        };
+        let t = state.tenants.clone();
         let headers = parts.headers.clone();
         let peer = peer(parts);
         let check = t.clone();
@@ -332,52 +320,48 @@ fn find(name: &str) -> Result<&'static Resource, ApiError> {
         .ok_or_else(|| ApiError(Error::NotFound(format!("no such resource: {name}"))))
 }
 
-/// The whole service, ready to serve or to test: one person's hunt.
+/// The whole service, ready to serve or to test: a hunt with hunt's own
+/// sign-in, and nobody yet (its launcher makes its owner).
 pub fn router(db: Db) -> Router {
     router_trying(db, Experiments::default())
 }
 
-/// One person's hunt, with experiments on (see [`crate::experiments`]).
+/// The same, with experiments on (see [`crate::experiments`]).
 pub fn router_trying(db: Db, experiments: Experiments) -> Router {
-    routes(AppState {
-        db: Arc::new(Mutex::new(db)),
-        tenants: None,
-        site: Arc::new(site::Site::default()),
-        experiments: Arc::new(experiments),
-        password: None,
-    })
+    let db = Arc::new(Mutex::new(db));
+    let tenants =
+        Tenants::open(db.clone(), &[], crate::tenants::IdentitySource::BuiltIn).expect("accounts");
+    router_tenants_trying(db, tenants, experiments)
 }
 
-/// One person's hunt with a password: the app and the API need signing in.
-pub fn router_with_password(db: Db, password: auth::Password) -> Router {
-    routes(AppState {
-        db: Arc::new(Mutex::new(db)),
-        tenants: None,
-        site: Arc::new(site::Site::default()),
-        experiments: Arc::new(Experiments::default()),
-        password: Some(Arc::new(password)),
-    })
+/// A hunt with its owner already (as `HUNT_ADMIN_EMAIL` and
+/// `HUNT_ADMIN_PASSWORD` make one): the app and the API need signing in.
+pub fn router_with_owner(db: Db, email: &str, password: &str) -> Router {
+    let db = Arc::new(Mutex::new(db));
+    let tenants =
+        Tenants::open(db.clone(), &[], crate::tenants::IdentitySource::BuiltIn).expect("accounts");
+    tenants.make_owner(email, password).expect("an owner");
+    router_tenants(db, tenants)
 }
 
-/// The whole service for several people sharing one database, each with an
-/// account (see [`crate::tenants`]).
+/// The whole service, with its accounts (see [`crate::tenants`]): who's
+/// asking told as `tenants` says.
 pub fn router_tenants(db: Arc<Mutex<Db>>, tenants: Tenants) -> Router {
     router_run_by(db, tenants, site::Site::default())
 }
 
-/// Several people's hunt, run by whoever `site` names: with its website's
-/// terms of use, agreed to when asking for an account.
+/// A hunt run by whoever `site` names: with its website's terms of use,
+/// agreed to when asking for an account.
 pub fn router_run_by(db: Arc<Mutex<Db>>, tenants: Tenants, site: site::Site) -> Router {
     routes(AppState {
         db,
-        tenants: Some(Arc::new(tenants)),
+        tenants: Arc::new(tenants),
         site: Arc::new(site),
         experiments: Arc::new(Experiments::default()),
-        password: None,
     })
 }
 
-/// Several people's hunt, with experiments on for some of them.
+/// A hunt with experiments on for some of its accounts.
 pub fn router_tenants_trying(
     db: Arc<Mutex<Db>>,
     tenants: Tenants,
@@ -385,10 +369,9 @@ pub fn router_tenants_trying(
 ) -> Router {
     routes(AppState {
         db,
-        tenants: Some(Arc::new(tenants)),
+        tenants: Arc::new(tenants),
         site: Arc::new(site::Site::default()),
         experiments: Arc::new(experiments),
-        password: None,
     })
 }
 
@@ -401,9 +384,17 @@ fn routes(state: AppState) -> Router {
             "/about",
             get(|| async { axum::response::Redirect::permanent("/") }),
         )
-        // Signing in with the password, for one person's hunt that has one.
+        // Signing in as the owner, for one person's hunt that has one.
         .route("/login", get(login_page).post(login))
         .route("/logout", get(logout).post(logout))
+        // A new hunt's launcher and its owner; signing up; your own sign-in.
+        .route("/api/setup/done", post(finish_setup))
+        .route("/api/owner", axum::routing::put(make_owner))
+        .route("/signup", get(signup_page).post(signup))
+        .route(
+            "/api/account/credentials",
+            axum::routing::put(change_credentials),
+        )
         .route("/docs", get(to_site))
         .route("/screenshots", get(to_site))
         .route("/privacy", get(to_site))
@@ -551,22 +542,24 @@ fn routes(state: AppState) -> Router {
         .with_state(state)
 }
 
-/// Several people sharing hunt: who its admins are, and how to tell who's
-/// asking.
+/// A hunt's accounts, as it starts: admins named (`HUNT_ADMINS`), where
+/// who's asking comes from beside hunt's own sign-in, and its owner, made
+/// (or their password replaced) from `HUNT_ADMIN_EMAIL` and
+/// `HUNT_ADMIN_PASSWORD`.
 pub struct TenancyConfig {
     pub admins: Vec<String>,
     pub identity: crate::tenants::IdentitySource,
+    pub owner_email: Option<String>,
+    pub owner_password: Option<String>,
 }
 
-/// Serve on `addr` until ctrl-c: one person's hunt (behind `password`, if
-/// it has one), or (with `tenancy`) several people's; with `experiments` on
-/// for whom they name.
+/// Serve on `addr` until ctrl-c, with its accounts as `tenancy` says, and
+/// `experiments` on for whom they name.
 pub fn serve(
     db: Db,
     addr: &str,
-    tenancy: Option<TenancyConfig>,
+    tenancy: TenancyConfig,
     experiments: Experiments,
-    password: Option<auth::Password>,
 ) -> crate::error::Result<()> {
     crate::system::mark_started();
     // Uptime carries on across a rollout; then a heartbeat every minute.
@@ -574,21 +567,61 @@ pub fn serve(
     let runtime = tokio::runtime::Runtime::new()?;
     let site = Arc::new(site::Site::from_env()?);
     let state: Shared = Arc::new(Mutex::new(db));
-    let tenants = match tenancy {
-        Some(t) => Some(Arc::new(Tenants::open(
-            state.clone(),
-            &t.admins,
-            t.identity,
-        )?)),
-        None => None,
-    };
-    let shared_hunt = tenants.is_some();
+    let tenants = Arc::new(Tenants::open(
+        state.clone(),
+        &tenancy.admins,
+        tenancy.identity,
+    )?);
+    // The owner, from the environment: made, or their password replaced
+    // (the way back in when it's forgotten).
+    match (&tenancy.owner_email, &tenancy.owner_password) {
+        (Some(email), Some(password)) => {
+            tenants.make_owner(email, password)?;
+        }
+        (None, Some(password)) if !tenants.no_accounts()? => {
+            tenants.set_credentials(1, None, Some(password))?;
+        }
+        (None, Some(_)) => {
+            return Err(Error::Invalid(
+                "HUNT_ADMIN_PASSWORD needs HUNT_ADMIN_EMAIL, to make this hunt's owner".into(),
+            ));
+        }
+        (Some(_), None) => {
+            return Err(Error::Invalid(
+                "HUNT_ADMIN_EMAIL needs HUNT_ADMIN_PASSWORD, to make or change this hunt's owner"
+                    .into(),
+            ));
+        }
+        (None, None) => {}
+    }
+    let built_in = tenants.built_in();
+    if built_in && tenants.no_accounts()? {
+        // HUNT_PASSWORD once kept a hunt to whoever knew it; it doesn't now
+        // (it's the CLI's, beside HUNT_EMAIL). Not starting open where it
+        // was relied on.
+        if std::env::var("HUNT_PASSWORD").is_ok_and(|p| !p.is_empty()) {
+            return Err(Error::Invalid(
+                "HUNT_PASSWORD no longer keeps hunt to whoever knows it: it has an owner, who \
+                 signs in with an email address and a password. Make them with HUNT_ADMIN_EMAIL \
+                 and HUNT_ADMIN_PASSWORD (the same password will do), or unset HUNT_PASSWORD and \
+                 make them in the launcher"
+                    .into(),
+            ));
+        }
+        println!("hunt has no owner yet: open http://{addr} to make their account");
+    } else if built_in
+        && state
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .needs_setup()?
+    {
+        println!("hunt is new: open http://{addr} to set it up");
+    }
     let app = AppState {
         db: state.clone(),
         tenants,
         site,
         experiments: Arc::new(experiments),
-        password: password.map(Arc::new),
     };
     runtime.block_on(async {
         let listener = tokio::net::TcpListener::bind(addr).await?;
@@ -621,11 +654,12 @@ pub fn serve(
                 .await;
             }
         });
-        // Mail syncs on its own, every so often, when Settings say so (one
-        // person's hunt only, for now).
+        // Mail syncs on its own, every so often, when Settings say so (a
+        // hunt with hunt's own sign-in only, for now).
         let mail = state.clone();
         tokio::spawn(async move {
-            if shared_hunt {
+            // Mail for a hunt with hunt's own sign-in (its owner's).
+            if !built_in {
                 return;
             }
             let mut tick = tokio::time::interval(std::time::Duration::from_secs(60));
@@ -698,6 +732,7 @@ fn is_page(path: &str) -> bool {
     let open = matches!(
         path,
         "/login"
+            | "/signup"
             | "/logout"
             | "/healthz"
             | "/about"
@@ -715,30 +750,31 @@ fn is_page(path: &str) -> bool {
     !a_file && !open
 }
 
-/// With a password: the app and the API only for whoever has signed in (the
-/// cookie /login sets, or the CLI's `Authorization: Bearer` password). The
-/// rest (the sign-in page, scripts, styles, fonts, the health check and
-/// shared calendar links) needs nothing.
+/// With hunt's own sign-in, once a hunt has accounts: its pages only for
+/// whoever's signed in (the cookie /login sets), else to /login; its API
+/// says who's asking itself (see [`Scoped`]). The rest (signing in and up,
+/// scripts, styles, fonts, the health check and shared calendar links)
+/// needs nothing; and, until there's an owner, nothing does (the web UI
+/// shows the launcher, to make one). Behind Cloudflare Access or a sign-in
+/// proxy, they sign people in.
 async fn signed_in(
     State(app): State<AppState>,
     req: axum::extract::Request,
     next: axum::middleware::Next,
 ) -> Response {
-    let Some(password) = app.password.clone() else {
-        return next.run(req).await;
-    };
-    let path = req.uri().path();
-    let guarded =
-        is_page(path) || (path.starts_with("/api/") && !path.starts_with("/api/calendar/"));
-    if !guarded || has_signed_in(&password, req.headers()) {
+    let path = req.uri().path().to_string();
+    if !app.tenants.built_in() || !is_page(&path) {
         return next.run(req).await;
     }
-    if path.starts_with("/api/") {
-        return (
-            StatusCode::UNAUTHORIZED,
-            Json(json!({ "error": "sign in first: this hunt has a password (the CLI sends HUNT_PASSWORD)" })),
-        )
-            .into_response();
+    let t = app.tenants.clone();
+    let headers = req.headers().clone();
+    let asking = tokio::task::spawn_blocking(move || {
+        t.no_accounts().unwrap_or(false) || t.identify(&headers, None).is_ok()
+    })
+    .await
+    .unwrap_or(false);
+    if asking {
+        return next.run(req).await;
     }
     let here = req
         .uri()
@@ -746,18 +782,6 @@ async fn signed_in(
         .map(|p| p.as_str())
         .unwrap_or("/");
     axum::response::Redirect::to(&format!("/login?next={}", percent(here))).into_response()
-}
-
-fn has_signed_in(password: &auth::Password, headers: &HeaderMap) -> bool {
-    let bearer = headers
-        .get(header::AUTHORIZATION)
-        .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.strip_prefix("Bearer "));
-    if bearer.is_some_and(|b| password.matches(b)) {
-        return true;
-    }
-    crate::tenants::cookie(headers, auth::COOKIE)
-        .is_some_and(|s| password.valid(&s, jiff::Timestamp::now().as_second()))
 }
 
 /// A query string's value, made safe to put in an address.
@@ -777,57 +801,60 @@ struct LoginQuery {
     next: Option<String>,
 }
 
-/// The sign-in page (only with a password: else, to the app).
+/// Whether a hunt signs people in itself, and has someone to sign in:
+/// else its pages go to the app (or Access, or the proxy, sign people in).
+fn signs_in(app: &AppState) -> bool {
+    app.tenants.built_in() && !app.tenants.no_accounts().unwrap_or(true)
+}
+
+/// The sign-in page (and, while sign-ups are open, the way to one).
 async fn login_page(State(app): State<AppState>, Query(q): Query<LoginQuery>) -> Response {
-    if app.password.is_none() {
+    if !signs_in(&app) {
         return axum::response::Redirect::to("/").into_response();
     }
+    let open = app.tenants.signups_open().unwrap_or(false);
     (
         [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
-        auth::login_page(&auth::safe_next(q.next.as_deref()), false),
+        auth::login_page(&auth::safe_next(q.next.as_deref()), false, open),
     )
         .into_response()
 }
 
 #[derive(Deserialize)]
 struct LoginForm {
+    #[serde(default)]
+    email: String,
     password: String,
     next: Option<String>,
 }
 
-/// Signing in: the right password sets the cookie and goes where they were
-/// going; a wrong one waits a second, and asks again.
+/// Signing in: an account's address and password set the cookie and go
+/// where they were going; a wrong one waits a second, and asks again.
 async fn login(
     State(app): State<AppState>,
     headers: HeaderMap,
     axum::Form(form): axum::Form<LoginForm>,
 ) -> Response {
-    let Some(password) = app.password.clone() else {
+    if !signs_in(&app) {
         return axum::response::Redirect::to("/").into_response();
-    };
+    }
     let next = auth::safe_next(form.next.as_deref());
-    if !password.matches(&form.password) {
+    let t = app.tenants.clone();
+    let (email, password) = (form.email.clone(), form.password.clone());
+    let who = tokio::task::spawn_blocking(move || t.sign_in(&email, &password))
+        .await
+        .ok()
+        .flatten();
+    let Some(cookie) = who.and_then(|a| session_cookie(&app.tenants, &a, &headers)) else {
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        let open = app.tenants.signups_open().unwrap_or(false);
         return (
             StatusCode::UNAUTHORIZED,
             [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
-            auth::login_page(&next, true),
+            auth::login_page(&next, true, open),
         )
             .into_response();
-    }
-    let age = auth::SESSION_DAYS * 24 * 60 * 60;
-    let until = jiff::Timestamp::now().as_second() + age;
-    // Secure where hunt is reached over HTTPS (through a proxy that says so).
-    let https = headers
-        .get("x-forwarded-proto")
-        .and_then(|v| v.to_str().ok())
-        .is_some_and(|p| p.eq_ignore_ascii_case("https"));
-    let cookie = format!(
-        "{}={}; Path=/; Max-Age={age}; HttpOnly; SameSite=Lax{}",
-        auth::COOKIE,
-        password.session(until),
-        if https { "; Secure" } else { "" }
-    );
+    };
     (
         [(header::SET_COOKIE, cookie)],
         axum::response::Redirect::to(&next),
@@ -835,19 +862,218 @@ async fn login(
         .into_response()
 }
 
+#[derive(Deserialize)]
+struct SignupForm {
+    email: String,
+    password: String,
+    #[serde(default)]
+    again: String,
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    reason: Option<String>,
+    /// Ticked: they agree to this hunt's terms of use (where it has some).
+    #[serde(default)]
+    agrees: Option<String>,
+}
+
+/// Signing up: while sign-ups are open, or invited (their address has an
+/// account waiting for a password).
+async fn signup_page(State(app): State<AppState>) -> Response {
+    if !signs_in(&app) {
+        return axum::response::Redirect::to("/").into_response();
+    }
+    (
+        [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
+        auth::signup_page(app.site.url.as_deref(), None),
+    )
+        .into_response()
+}
+
+/// An account made (pending an admin's say), or an invited one's password
+/// set: signed in, to see where it stands.
+async fn signup(
+    State(app): State<AppState>,
+    headers: HeaderMap,
+    axum::Form(form): axum::Form<SignupForm>,
+) -> Response {
+    if !signs_in(&app) {
+        return axum::response::Redirect::to("/").into_response();
+    }
+    let terms = app.site.url.clone();
+    let again = |why: &str| {
+        (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
+            auth::signup_page(terms.as_deref(), Some(why)),
+        )
+            .into_response()
+    };
+    if form.password != form.again {
+        return again("The two passwords don't match.");
+    }
+    if terms.is_some() && form.agrees.is_none() {
+        return again("Agree to the terms of use first.");
+    }
+    let t = app.tenants.clone();
+    let agreed = terms.as_ref().map(|_| site::UPDATED);
+    let made = tokio::task::spawn_blocking(move || {
+        t.sign_up(
+            &form.email,
+            &form.password,
+            form.name.as_deref(),
+            form.reason.as_deref(),
+            agreed,
+        )
+    })
+    .await
+    .map_err(|e| Error::Db(e.to_string()))
+    .and_then(|r| r);
+    match made {
+        Ok(a) => match session_cookie(&app.tenants, &a, &headers) {
+            Some(cookie) => (
+                [(header::SET_COOKIE, cookie)],
+                axum::response::Redirect::to("/"),
+            )
+                .into_response(),
+            None => axum::response::Redirect::to("/login").into_response(),
+        },
+        Err(e) => again(&e.to_string()),
+    }
+}
+
+/// The cookie that keeps an account signed in, for 30 days (none for one
+/// without a password).
+fn session_cookie(tenants: &Tenants, a: &Account, headers: &HeaderMap) -> Option<String> {
+    let age = auth::SESSION_DAYS * 24 * 60 * 60;
+    let until = jiff::Timestamp::now().as_second() + age;
+    let session = tenants.session(a, until)?;
+    // Secure where hunt is reached over HTTPS (through a proxy that says so).
+    let https = headers
+        .get("x-forwarded-proto")
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|p| p.eq_ignore_ascii_case("https"));
+    Some(format!(
+        "{}={session}; Path=/; Max-Age={age}; HttpOnly; SameSite=Lax{}",
+        auth::COOKIE,
+        if https { "; Secure" } else { "" }
+    ))
+}
+
+/// The sign-in cookie, gone.
+fn no_session_cookie() -> String {
+    format!(
+        "{}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax",
+        auth::COOKIE
+    )
+}
+
 /// Signing out: the cookie, gone.
 async fn logout() -> Response {
     (
-        [(
-            header::SET_COOKIE,
-            format!(
-                "{}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax",
-                auth::COOKIE
-            ),
-        )],
+        [(header::SET_COOKIE, no_session_cookie())],
         axum::response::Redirect::to("/login"),
     )
         .into_response()
+}
+
+#[derive(Deserialize)]
+struct Credentials {
+    /// An email address: the owner's first, or a new one.
+    #[serde(default)]
+    email: Option<String>,
+    /// A password: the owner's first, or a new one.
+    #[serde(default)]
+    password: Option<String>,
+    /// The password now, to change either (but while setting up).
+    #[serde(default)]
+    current: Option<String>,
+}
+
+/// A new hunt's owner, made by its launcher: its first account (account 1,
+/// an admin), needing no sign-in, as there's nobody to sign in as yet. This
+/// browser's signed in as them.
+async fn make_owner(
+    State(app): State<AppState>,
+    headers: HeaderMap,
+    Json(c): Json<Credentials>,
+) -> Result<Response, ApiError> {
+    if !app.tenants.built_in() {
+        return Err(ApiError(Error::Invalid(
+            "this hunt's people sign in through Cloudflare Access or a sign-in proxy".into(),
+        )));
+    }
+    if !app.tenants.no_accounts()? {
+        return Err(ApiError(Error::Conflict(
+            "this hunt has an owner: they change their account in Settings → Account".into(),
+        )));
+    }
+    let (Some(email), Some(password)) = (c.email, c.password) else {
+        return Err(ApiError(Error::Invalid(
+            "give an email address and a password".into(),
+        )));
+    };
+    let t = app.tenants.clone();
+    // Hashing takes a moment: not holding up the rest.
+    let owner = tokio::task::spawn_blocking(move || t.make_owner(&email, &password))
+        .await
+        .map_err(|e| ApiError(Error::Db(e.to_string())))??;
+    Ok(signed_in_as(&app, &owner, &headers))
+}
+
+/// Changing your own email address or password, signed in: giving the
+/// password now (a wrong one waits a second), but while setting up (the
+/// owner, in the launcher, back a step). A new password ends your other
+/// sessions, and this browser stays signed in.
+async fn change_credentials(
+    v: Viewer,
+    headers: HeaderMap,
+    Json(c): Json<Credentials>,
+) -> Result<Response, ApiError> {
+    let app = v.app.clone();
+    let Some(me) = v.account.clone().filter(|a| a.has_password) else {
+        return Err(ApiError(Error::Invalid(
+            "sign in with your email address and password first".into(),
+        )));
+    };
+    let setting_up = setup_pending(&app) && me.id == 1;
+    if !setting_up {
+        let t = app.tenants.clone();
+        let (email, current) = (me.email.clone(), c.current.clone().unwrap_or_default());
+        let right = tokio::task::spawn_blocking(move || t.sign_in(&email, &current).is_some())
+            .await
+            .unwrap_or(false);
+        if !right {
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+            return Err(ApiError(Error::Invalid(
+                "That isn't the current password.".into(),
+            )));
+        }
+    }
+    let t = app.tenants.clone();
+    let changed = tokio::task::spawn_blocking(move || {
+        t.set_credentials(me.id, c.email.as_deref(), c.password.as_deref())
+    })
+    .await
+    .map_err(|e| ApiError(Error::Db(e.to_string())))??;
+    Ok(signed_in_as(&app, &changed, &headers))
+}
+
+/// An account's email address, with the cookie that signs this browser in
+/// as it.
+fn signed_in_as(app: &AppState, a: &Account, headers: &HeaderMap) -> Response {
+    let body = Json(json!({ "account": { "id": a.id, "email": a.email } }));
+    match session_cookie(&app.tenants, a, headers) {
+        Some(cookie) => ([(header::SET_COOKIE, cookie)], body).into_response(),
+        None => body.into_response(),
+    }
+}
+
+/// The launcher's done, or skipped: the board, from now on.
+async fn finish_setup(State(app): State<AppState>) -> ApiResult {
+    let db = app.db.lock().unwrap_or_else(|e| e.into_inner());
+    db.finish_setup()?;
+    ok(json!({ "setup": false }))
 }
 
 /// A page that was hunt's and is now its website's (the docs, screenshots
@@ -1056,24 +1282,24 @@ async fn meta(v: Viewer, headers: HeaderMap) -> ApiResult {
     let access = headers.contains_key("cf-access-jwt-assertion").then(|| {
         json!({ "email": headers.get("cf-access-authenticated-user-email").and_then(|v| v.to_str().ok()) })
     });
-    // With several people: who's asking, and their account.
-    let tenancy = v.app.tenants.is_some().then(|| {
-        json!({
-            // Trying it out (a trusted header): be someone at /dev/as.
-            "trying_out": v.app.tenants.as_ref().is_some_and(|t| t.trusts_header()),
-            "signed_in": v.identity.is_some(),
-            "signups_open": v.app.tenants.as_ref().map(|t| t.signups_open().unwrap_or(true)),
-            "email": v.identity.as_ref().and_then(|i| i.email.clone()),
-            "account": v.account.as_ref().map(|a| json!({
-                "id": a.id, "email": a.email, "name": a.name, "status": a.status, "role": a.role,
-            })),
-        })
+    // Who's asking, their account, and how this hunt signs people in.
+    let t = &v.app.tenants;
+    let tenancy = json!({
+        // Trying it out (a trusted header): be someone at /dev/as.
+        "trying_out": t.trusts_header(),
+        // hunt's own sign-in (an email address and a password), not Access
+        // or a sign-in proxy's.
+        "built_in": t.built_in(),
+        "signed_in": v.identity.is_some(),
+        "signups_open": t.signups_open().unwrap_or(false),
+        "email": v.identity.as_ref().and_then(|i| i.email.clone()),
+        "account": v.account.as_ref().map(|a| json!({
+            "id": a.id, "email": a.email, "name": a.name, "status": a.status, "role": a.role,
+            "has_password": a.has_password,
+        })),
     });
     // What the admins say of this hunt, to everyone (signed in or not).
-    let about = match &v.app.tenants {
-        Some(t) => t.site()?,
-        None => json!({ "name": null, "announcement": null, "contact": null }),
-    };
+    let about = t.site()?;
     ok(json!({
         "access": access,
         "tenancy": tenancy,
@@ -1082,8 +1308,10 @@ async fn meta(v: Viewer, headers: HeaderMap) -> ApiResult {
         // to when asking for an account, and whose docs and legal pages the
         // app links to.
         "terms": v.app.site.url.is_some(),
-        // Signed in with the password: the sidebar offers to log out.
-        "password": v.app.password.is_some(),
+        // A new hunt not yet set up, or without its owner: the launcher,
+        // before anything else (with hunt's own sign-in).
+        "setup": t.built_in() && (setup_pending(&v.app) || t.no_accounts().unwrap_or(false)),
+        "setup_pending": t.built_in() && setup_pending(&v.app),
         "site": v.app.site.url,
         // Who runs it, by name: for disclaimers.
         "operator": v.app.site.operator,
@@ -1614,8 +1842,7 @@ async fn shared_calendar(
             "no calendar is shared at this link".into(),
         )));
     };
-    // With several people, the account whose link it is; else the one hunt.
-    let owner = if app.tenants.is_some() { owner } else { None };
+    // The account whose link it is.
     let s = Scoped {
         db: app.db.clone(),
         owner,
@@ -1926,10 +2153,11 @@ fn urlencode(s: &str) -> String {
 }
 
 async fn sync_mail(s: Scoped) -> ApiResult {
-    // Mail is read for one person's hunt only, for now.
-    if s.owner.is_some() {
+    // Mail is read for the hunt's owner (account 1) only, for now: it's
+    // kept as theirs.
+    if s.owner.is_some_and(|o| o != 1) {
         return Err(ApiError(Error::NotFound(
-            "mail sync isn't available when several people share hunt".into(),
+            "mail sync is the hunt's owner's only, for now".into(),
         )));
     }
     let shared = s.db.clone();
@@ -1995,6 +2223,12 @@ async fn ignore_email(s: Scoped, Path(id): Path<i64>, body: Option<Json<IgnoreRu
     let rule = body.and_then(|Json(r)| r.rule);
     let n = with_db(&s, |db| db.ignore_email(id, rule.as_deref()))?;
     ok(json!({ "ignored": n }))
+}
+
+/// Whether one person's hunt hasn't been through the launcher yet.
+fn setup_pending(app: &AppState) -> bool {
+    let db = app.db.lock().unwrap_or_else(|e| e.into_inner());
+    db.needs_setup().unwrap_or(false)
 }
 
 async fn mail_ignores(s: Scoped) -> ApiResult {
@@ -2107,10 +2341,12 @@ async fn stats(s: Scoped, Query(q): Query<StatsQuery>) -> ApiResult {
     ok(with_db(&s, |db| db.stats(q.cycle.as_deref()))?)
 }
 
-/// What hunt uses of the machine: with several people, for admins only,
-/// and read for everyone (it's the machine's, not an account's).
+/// What hunt uses of the machine: for admins only (or a new hunt's, before
+/// it has accounts), and read for everyone (it's the machine's, not an
+/// account's).
 async fn system(v: Viewer) -> ApiResult {
-    if v.app.tenants.is_some() && !v.account.as_ref().is_some_and(Account::is_admin) {
+    let nobody_yet = v.app.tenants.no_accounts().unwrap_or(false);
+    if !nobody_yet && !v.account.as_ref().is_some_and(Account::is_admin) {
         return Err(ApiError(Error::NotFound(
             "only admins see what hunt uses of the machine".into(),
         )));
@@ -2260,7 +2496,7 @@ struct DevAs {
 /// Trying several people's hunt out (`--identity-header`): be someone, in
 /// this browser (`?email=`; none to sign out). Not there behind Access.
 async fn dev_as(v: Viewer, Query(q): Query<DevAs>) -> Response {
-    if !v.app.tenants.as_ref().is_some_and(|t| t.trusts_header()) {
+    if !v.app.tenants.trusts_header() {
         return ApiError(Error::NotFound("nothing at /dev/as".into())).into_response();
     }
     let email = q.email.unwrap_or_default();
@@ -2288,11 +2524,6 @@ async fn dev_as(v: Viewer, Query(q): Query<DevAs>) -> Response {
 
 /// Who's asking, and their account, if any.
 async fn account(v: Viewer) -> ApiResult {
-    if v.app.tenants.is_none() {
-        return Err(ApiError(Error::NotFound(
-            "this hunt is one person's: it has no accounts".into(),
-        )));
-    }
     ok(json!({ "identity": v.identity, "account": v.account }))
 }
 
@@ -2314,9 +2545,10 @@ struct DeleteOwn {
 
 /// Delete your own account, and everything in it, for good.
 async fn delete_account(v: Viewer, Json(b): Json<DeleteOwn>) -> ApiResult {
-    let (Some(t), Some(me)) = (v.app.tenants.clone(), v.account.clone()) else {
+    let t = v.app.tenants.clone();
+    let Some(me) = v.account.clone() else {
         return Err(ApiError(Error::Invalid(
-            "only a shared hunt has accounts to delete".into(),
+            "sign in first, to delete your account".into(),
         )));
     };
     let typed = b.confirm.as_deref().unwrap_or("").trim();
@@ -2332,7 +2564,8 @@ async fn delete_account(v: Viewer, Json(b): Json<DeleteOwn>) -> ApiResult {
 
 /// Ask for an account: pending until an admin approves it.
 async fn request_account(v: Viewer, Json(b): Json<AskFor>) -> ApiResult {
-    let (Some(t), Some(who)) = (v.app.tenants.clone(), v.identity.clone()) else {
+    let t = v.app.tenants.clone();
+    let Some(who) = v.identity.clone() else {
         return Err(ApiError(Error::Invalid(
             "sign in first, then ask for an account".into(),
         )));

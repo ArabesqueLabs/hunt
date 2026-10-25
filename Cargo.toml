@@ -10,6 +10,7 @@ description = "A job application tracking system for job hunters. Provides both 
 
 [dependencies]
 anyhow = "1"
+argon2 = { version = "0.5", features = ["std"] }
 axum = "0.8"
 libc = "0.2"
 ego-tree = "0.11"

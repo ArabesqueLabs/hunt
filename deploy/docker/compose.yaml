@@ -1,0 +1,27 @@
+# hunt, with Docker Compose. Without a clone of hunt:
+#
+#   curl -fsSLO https://raw.githubusercontent.com/ArabesqueLabs/hunt/main/deploy/docker/compose.yaml
+#   curl -fsSL https://raw.githubusercontent.com/ArabesqueLabs/hunt/main/deploy/docker/.env.example -o .env
+#   docker compose up -d
+#
+# (In a clone, `make docker-up` does the same.) Then open
+# http://127.0.0.1:4848, where a new hunt opens on its launcher. Its settings
+# are in .env beside this file: the version, its owner, where it listens.
+# Its SQLite database is in the hunt-data volume, which stays when the
+# container is replaced.
+services:
+  hunt:
+    image: ghcr.io/arabesquelabs/hunt:${HUNT_VERSION:-release}
+    ports: ["${HUNT_BIND:-127.0.0.1}:${HUNT_PORT:-4848}:4848"]
+    volumes: ["hunt-data:/data"]
+    environment:
+      # Its owner, who signs in and runs it. Empty: made in the launcher.
+      HUNT_ADMIN_EMAIL: ${HUNT_ADMIN_EMAIL:-}
+      HUNT_ADMIN_PASSWORD: ${HUNT_ADMIN_PASSWORD:-}
+      # Empty: SQLite, in the volume.
+      HUNT_DB: ${HUNT_DB:-/data/hunt.db}
+    restart: unless-stopped
+volumes:
+  # The same volume `docker run -v hunt-data:/data` uses.
+  hunt-data:
+    name: hunt-data

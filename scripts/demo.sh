@@ -482,6 +482,8 @@ h new stories "title=Disagreed with a staff engineer about the queue design" the
 # Living in the UK (England), so Take-home pay opens on its calculator.
 curl -fs -o /dev/null -X PATCH -H "Content-Type: application/json" \
   -d '{"uk_resident": true, "uk_region": "rest", "desired_take_home": 5000, "desired_take_home_per": "month"}' "$HUNT_URL/api/settings"
+# Set up already: the board, not a new hunt's launcher.
+curl -fs -o /dev/null -X POST "$HUNT_URL/api/setup/done"
 
 # ---- into place -----------------------------------------------------------------------------
 

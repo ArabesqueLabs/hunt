@@ -9,7 +9,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { attempt, del, get, patch, post } from "../lib/api";
 import { fmtDay, fmtStamp, nf, parseLocal, zonedNow } from "../lib/format";
-import { CURRENCIES, isAdmin, myAccount, sitePage, tenancy } from "../lib/meta";
+import { CURRENCIES, builtInSignIn, isAdmin, myAccount, sitePage, tenancy } from "../lib/meta";
 import { settle } from "../lib/router";
 import { baseTitle, sectionNav } from "../lib/shell";
 import { S, changed, useShared } from "../lib/state";
@@ -112,7 +112,7 @@ function AskForAccount({ head, who }: { head: ReactNode; who: ReactNode }) {
 // ---- the admin centre ------------------------------------------------------------------
 
 /** The admin centre's tabs: each one's key, name, what's in it, and its icon. */
-const ADMIN_TABS: [string, string, string, string][] = [
+const ALL_ADMIN_TABS: [string, string, string, string][] = [
   ["general", "General", "Name, notice, new accounts", "sliders"],
   ["info", "Info", "Version, sign-in, accounts", "info"],
   ["access", "Access and accounts", "Sign-ups, invites, accounts", "key"],
@@ -120,6 +120,9 @@ const ADMIN_TABS: [string, string, string, string][] = [
   ["system", "System resources", "The machine, by account", "server"],
   ["debug", "Debugging info", "Sign-in, health, the API", "bug"],
 ];
+
+/** The tabs, every hunt's. */
+const adminTabs = () => ALL_ADMIN_TABS;
 
 /** How many accounts a page of the admin's tables shows. */
 const ADMIN_PAGE = 25;
@@ -197,9 +200,10 @@ const BreakdownHead = ({ one, back }: { one: Row; back: () => void }) => (
 );
 
 export function AdminPage() {
+  const tabs = adminTabs();
   const [tab] = useState(() => {
     const q = new URLSearchParams(location.search);
-    return ADMIN_TABS.some(([k]) => k === q.get("tab")) ? q.get("tab")! : "general";
+    return tabs.some(([k]) => k === q.get("tab")) ? q.get("tab")! : "general";
   });
   const [data, setData] = useState<Row | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -207,7 +211,7 @@ export function AdminPage() {
   const reload = () => setVersion((n) => n + 1);
   // Its sections are in the sidebar, in the app's place.
   useEffect(() => {
-    sectionNav.set({ label: "Admin sections", base: "admin", tabs: ADMIN_TABS, tab });
+    sectionNav.set({ label: "Admin sections", base: "admin", tabs, tab });
     document.title = `Admin · ${baseTitle()}`;
     return () => sectionNav.set(null);
   }, [tab]);
@@ -261,25 +265,31 @@ function AdminGeneral({ data }: { data: Row }) {
       <SettingRow id="site-announcement" label="Notice" hint="Above every page, for everyone, until they close it: for upkeep, or news. Leave it empty for none.">
         <TextSetting id="site-announcement" value={about.announcement || ""} placeholder="e.g. hunt is down for upkeep on Sunday, 22:00–23:00" maxLength={280} autoComplete="off" save={site("announcement")} />
       </SettingRow>
-      <SettingRow id="site-contact" label="Address for help" hint="Where people can write to the admins: on the account screen, and in Settings.">
+      {<SettingRow id="site-contact" label="Address for help" hint="Where people can write to the admins: on the account screen, and in Settings.">
         <TextSetting id="site-contact" type="email" value={about.contact || ""} placeholder="help@example.com" maxLength={254} autoComplete="off" save={site("contact")} />
-      </SettingRow>
+      </SettingRow>}
     </SettingsPanel>
-    <SettingsPanel title="New accounts start with" intro="Each account can change these in its own Settings. Leave one as it is for hunt's own default.">
+    {<SettingsPanel title="New accounts start with" intro="Each account can change these in its own Settings. Leave one as it is for hunt's own default.">
       <SettingRow id="def-language" label="Language">{pick("def-language", "language", S.META.languages.map((o) => [o.value, o.label]), "English (hunt's default)")}</SettingRow>
       <SettingRow id="def-region" label="Region">{pick("def-region", "region", REGIONS, "The browser's")}</SettingRow>
       <SettingRow id="def-timezone" label="Time zone">{pick("def-timezone", "timezone", TIME_ZONES.map((z) => [z, z.replaceAll("_", " ")]), "The machine's")}</SettingRow>
       <SettingRow id="def-currency" label="Currency">{pick("def-currency", "currency", CURRENCIES.map((c) => [c, currencyName(c)]), "GBP (hunt's default)")}</SettingRow>
-    </SettingsPanel>
+    </SettingsPanel>}
   </>;
 }
+
+/** How people sign in to this hunt. */
+const signIn = () => (S.META.access ? "Cloudflare Access, and hunt's own (an email address and a password)"
+  : tenancy()?.trying_out ? "Who's asking, as the server is told (for trying it out)"
+    : builtInSignIn() ? "hunt's own: an email address and a password, at /login"
+      : "A sign-in proxy, and hunt's own (an email address and a password)");
 
 /** Info: what this hunt is: its version, how people sign in, who runs it, and its accounts. */
 const AdminInfo = ({ data }: { data: Row }) => (
   <SettingsPanel title="This hunt">
     <Facts rows={[
       ["Version", `hunt ${S.META.version}`],
-      ["Sign-in", S.META.access ? "Cloudflare Access" : "Who's asking, as the server is told (for trying it out)"],
+      ["Sign-in", signIn()],
       ...(S.META.operator ? [["Run by", <span translate="no">{S.META.operator}</span>] as [string, ReactNode]] : []),
       ["Accounts", `${nf(data.totals.active)} active, ${nf(data.totals.admins)} of them admins`],
     ]} />
@@ -318,7 +328,9 @@ function AdminAccess({ data, reload }: { data: Row; reload: () => void }) {
       <p className="muted small">Closed, someone new sees that the list is closed for now; those already on it, those invited, and accounts already here are as they are.</p>
     </SettingsPanel>
     {/* Inviting someone: an account for them, open or closed. */}
-    <SettingsPanel title="Invite someone" intro="They can use hunt as soon as they sign in with this address, whether sign-ups are open or not.">
+    <SettingsPanel title="Invite someone" intro={builtInSignIn()
+      ? "They sign up at /signup with this address, whether sign-ups are open or not, and can use hunt straight away."
+      : "They can use hunt as soon as they sign in with this address, whether sign-ups are open or not."}>
       <form className="admin-invite" onSubmit={async (e) => {
         e.preventDefault();
         if (sending) return;
@@ -327,7 +339,7 @@ function AdminAccess({ data, reload }: { data: Row; reload: () => void }) {
         setSending(false);
         if (!made) return;
         try { await navigator.clipboard.writeText(`${location.origin}/app`); } catch { /* the toast says where */ }
-        toast(`Invited ${made.email}. The link to send them: ${location.origin}/app`);
+        toast(`Invited ${made.email}. The link to send them: ${location.origin}${builtInSignIn() ? "/signup" : "/"}`);
         reload();
       }}>
         <Field><Label htmlFor="invite-email">Email address</Label><Input id="invite-email" type="email" required autoComplete="off" placeholder="name@example.com" value={email} onChange={(e) => setEmail(e.target.value)} /></Field>

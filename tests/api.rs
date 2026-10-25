@@ -4726,7 +4726,16 @@ async fn take_home_pay_is_for_uk_residents() {
 #[tokio::test]
 async fn cycles_run_side_by_side_and_an_ended_one_keeps_its_board() {
     let app = app();
-    // A new hunt starts with one cycle, running.
+    // A new hunt has none: its launcher starts the first, or not.
+    let cycles = ok(&app, "GET", "/api/cycles", None).await;
+    assert_eq!(cycles.as_array().unwrap().len(), 0);
+    ok(
+        &app,
+        "POST",
+        "/api/cycles/start",
+        Some(json!({ "name": "Autumn 2026" })),
+    )
+    .await;
     let cycles = ok(&app, "GET", "/api/cycles", None).await;
     assert_eq!(cycles.as_array().unwrap().len(), 1);
     let first = cycles[0]["id"].as_i64().unwrap();
@@ -5238,7 +5247,14 @@ async fn an_ended_cycle_can_be_resumed() {
 #[tokio::test]
 async fn a_cycle_can_end_in_your_own_words() {
     let app = app();
-    let first = ok(&app, "GET", "/api/cycles", None).await[0]["id"].clone();
+    let first = ok(
+        &app,
+        "POST",
+        "/api/cycles/start",
+        Some(json!({ "name": "Autumn" })),
+    )
+    .await["id"]
+        .clone();
     // Your own words are kept as they are; the usual ones by name become their code.
     let ended = ok(
         &app,
@@ -5590,96 +5606,6 @@ async fn a_stage_has_a_default_sub_stage() {
 }
 
 #[tokio::test]
-async fn a_password_keeps_the_app_and_its_data_to_whoever_signs_in() {
-    let app = hunt::api::router_with_password(
-        test_db(),
-        hunt::auth::Password::new("correct horse").unwrap(),
-    );
-    let send = |req: Request<Body>| {
-        let app = app.clone();
-        async move { app.oneshot(req).await.unwrap() }
-    };
-    let get = |path: &str| Request::get(path).body(Body::empty()).unwrap();
-    // Not signed in: the app sends you to sign in, where you were going kept;
-    // the API says so.
-    let res = send(get("/board?mode=table")).await;
-    assert!(res.status().is_redirection());
-    assert_eq!(
-        res.headers()["location"],
-        "/login?next=/board%3Fmode%3Dtable"
-    );
-    assert_eq!(
-        send(get("/api/meta")).await.status(),
-        StatusCode::UNAUTHORIZED
-    );
-    // What needs nobody: the sign-in page, the health check, the styles, and
-    // a shared calendar's link (its own secret, so not this).
-    assert_eq!(send(get("/login")).await.status(), StatusCode::OK);
-    assert_eq!(send(get("/healthz")).await.status(), StatusCode::OK);
-    assert_eq!(send(get("/style.css")).await.status(), StatusCode::OK);
-    assert_ne!(
-        send(get("/api/calendar/nothing.ics")).await.status(),
-        StatusCode::UNAUTHORIZED
-    );
-    let login = |password: &str| {
-        Request::post("/login")
-            .header("content-type", "application/x-www-form-urlencoded")
-            .body(Body::from(format!("password={password}&next=%2Fstats")))
-            .unwrap()
-    };
-    // The wrong password: asked again.
-    assert_eq!(
-        send(login("wrong+one")).await.status(),
-        StatusCode::UNAUTHORIZED
-    );
-    // The right one: a cookie, and where you were going.
-    let res = send(login("correct+horse")).await;
-    assert!(res.status().is_redirection());
-    assert_eq!(res.headers()["location"], "/stats");
-    let cookie = res.headers()["set-cookie"].to_str().unwrap().to_string();
-    assert!(
-        cookie.contains("HttpOnly") && cookie.contains("SameSite=Lax"),
-        "{cookie}"
-    );
-    let session = cookie.split(';').next().unwrap().to_string();
-    let with = |path: &str, header: (&str, &str)| {
-        Request::get(path)
-            .header(header.0, header.1)
-            .body(Body::empty())
-            .unwrap()
-    };
-    assert_eq!(
-        send(with("/api/meta", ("cookie", &session))).await.status(),
-        StatusCode::OK
-    );
-    assert_eq!(
-        send(with("/", ("cookie", &session))).await.status(),
-        StatusCode::OK
-    );
-    // The CLI: the password itself.
-    assert_eq!(
-        send(with("/api/meta", ("authorization", "Bearer correct horse")))
-            .await
-            .status(),
-        StatusCode::OK
-    );
-    assert_eq!(
-        send(with("/api/meta", ("authorization", "Bearer guess")))
-            .await
-            .status(),
-        StatusCode::UNAUTHORIZED
-    );
-    // Signing out: the cookie, gone.
-    let res = send(get("/logout")).await;
-    assert!(
-        res.headers()["set-cookie"]
-            .to_str()
-            .unwrap()
-            .contains("Max-Age=0")
-    );
-}
-
-#[tokio::test]
 async fn the_theme_is_kept_with_the_settings() {
     let app = app();
     assert_eq!(
@@ -5706,4 +5632,469 @@ async fn the_theme_is_kept_with_the_settings() {
     )
     .await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+}
+
+#[tokio::test]
+async fn a_new_hunt_opens_on_its_launcher_until_its_done() {
+    let app = app();
+    let meta = ok(&app, "GET", "/api/meta", None).await;
+    assert_eq!(meta["setup"], true, "a database hunt has just made");
+    assert_eq!(
+        meta["tenancy"]["account"],
+        Value::Null,
+        "no owner yet: the launcher makes them"
+    );
+    // Not kept in a backup: another hunt importing it is set up already.
+    let backup = ok(&app, "GET", "/api/backup", None).await;
+    let names: Vec<&str> = backup["tables"]["setting"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|s| s["name"].as_str())
+        .collect();
+    assert!(!names.contains(&"setup.pending"), "{names:?}");
+    ok(&app, "POST", "/api/setup/done", None).await;
+    // Done, but still without its owner: their account, before anything.
+    let meta = ok(&app, "GET", "/api/meta", None).await;
+    assert_eq!(meta["setup_pending"], false);
+    assert_eq!(meta["setup"], true);
+    ok(
+        &app,
+        "PUT",
+        "/api/owner",
+        Some(json!({ "email": "me@example.com", "password": "correct horse" })),
+    )
+    .await;
+    assert_eq!(ok(&app, "GET", "/api/meta", None).await["setup"], false);
+}
+
+#[tokio::test]
+async fn a_hunt_from_before_accounts_asks_only_for_its_owner() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("hunt.db");
+    drop(Db::open(&path).unwrap());
+    // As a database from before: no mark, and nobody.
+    rusqlite::Connection::open(&path)
+        .unwrap()
+        .execute("DELETE FROM setting WHERE name = 'setup.pending'", [])
+        .unwrap();
+    let app = hunt::api::router(Db::open(&path).unwrap());
+    let meta = ok(&app, "GET", "/api/meta", None).await;
+    assert_eq!(meta["setup_pending"], false, "set up already");
+    assert_eq!(meta["setup"], true, "but its owner's account to make");
+}
+
+/// A request, with headers.
+fn request(
+    method: &str,
+    path: &str,
+    headers: &[(&str, &str)],
+    body: Option<Value>,
+) -> Request<Body> {
+    let mut req = Request::builder().method(method).uri(path);
+    for (k, v) in headers {
+        req = req.header(*k, *v);
+    }
+    match body {
+        Some(b) => req
+            .header("content-type", "application/json")
+            .body(Body::from(b.to_string())),
+        None => req.body(Body::empty()),
+    }
+    .unwrap()
+}
+
+/// The CLI's sign-in: the owner's address and password.
+fn basic(email: &str, password: &str) -> String {
+    hunt::auth::basic_header(email, password)
+}
+
+/// The cookie a response sets, as a request sends it back.
+fn session(res: &axum::response::Response) -> String {
+    res.headers()["set-cookie"]
+        .to_str()
+        .unwrap()
+        .split(';')
+        .next()
+        .unwrap()
+        .to_string()
+}
+
+#[tokio::test]
+async fn an_owner_keeps_the_app_and_its_data_to_themselves() {
+    let app = hunt::api::router_with_owner(test_db(), "me@example.com", "correct horse");
+    let send = |req: Request<Body>| {
+        let app = app.clone();
+        async move { app.oneshot(req).await.unwrap() }
+    };
+    // Not signed in: the app sends you to sign in, where you were going kept;
+    // the API says so (but what it is, its meta, which holds nobody's data).
+    let res = send(request("GET", "/board?mode=table", &[], None)).await;
+    assert!(res.status().is_redirection());
+    assert_eq!(
+        res.headers()["location"],
+        "/login?next=/board%3Fmode%3Dtable"
+    );
+    assert_eq!(
+        send(request("GET", "/api/board", &[], None)).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    // What needs nobody: the sign-in page, the health check, the styles, and
+    // a shared calendar's link (its own secret, so not this).
+    for open in ["/login", "/healthz", "/style.css", "/api/meta"] {
+        assert_eq!(
+            send(request("GET", open, &[], None)).await.status(),
+            StatusCode::OK,
+            "{open}"
+        );
+    }
+    assert_ne!(
+        send(request("GET", "/api/calendar/nothing.ics", &[], None))
+            .await
+            .status(),
+        StatusCode::UNAUTHORIZED
+    );
+    let login = |form: &str| {
+        Request::post("/login")
+            .header("content-type", "application/x-www-form-urlencoded")
+            .body(Body::from(form.to_string()))
+            .unwrap()
+    };
+    // The wrong password, or someone else's address: asked again.
+    for wrong in [
+        "email=me%40example.com&password=wrong+one&next=%2Fstats",
+        "email=you%40example.com&password=correct+horse&next=%2Fstats",
+    ] {
+        assert_eq!(
+            send(login(wrong)).await.status(),
+            StatusCode::UNAUTHORIZED,
+            "{wrong}"
+        );
+    }
+    // The right ones (the address's case aside): a cookie, and where you were going.
+    let res = send(login(
+        "email=Me%40Example.com&password=correct+horse&next=%2Fstats",
+    ))
+    .await;
+    assert!(res.status().is_redirection());
+    assert_eq!(res.headers()["location"], "/stats");
+    let cookie = res.headers()["set-cookie"].to_str().unwrap().to_string();
+    assert!(
+        cookie.contains("HttpOnly") && cookie.contains("SameSite=Lax"),
+        "{cookie}"
+    );
+    let signed_in = session(&res);
+    for path in ["/api/board", "/"] {
+        assert_eq!(
+            send(request("GET", path, &[("cookie", &signed_in)], None))
+                .await
+                .status(),
+            StatusCode::OK,
+            "{path}"
+        );
+    }
+    // The CLI: the address and password themselves.
+    let cli = basic("me@example.com", "correct horse");
+    assert_eq!(
+        send(request(
+            "GET",
+            "/api/board",
+            &[("authorization", &cli)],
+            None
+        ))
+        .await
+        .status(),
+        StatusCode::OK
+    );
+    let guess = basic("me@example.com", "guess");
+    assert_eq!(
+        send(request(
+            "GET",
+            "/api/board",
+            &[("authorization", &guess)],
+            None
+        ))
+        .await
+        .status(),
+        StatusCode::UNAUTHORIZED
+    );
+    // Signing out: the cookie, gone.
+    let res = send(request("GET", "/logout", &[], None)).await;
+    assert!(
+        res.headers()["set-cookie"]
+            .to_str()
+            .unwrap()
+            .contains("Max-Age=0")
+    );
+}
+
+#[tokio::test]
+async fn the_launcher_makes_the_owner_who_changes_themselves_and_restarts_keep() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("hunt.db");
+    let app = hunt::api::router(Db::open(&path).unwrap());
+    let send = |req: Request<Body>| {
+        let app = app.clone();
+        async move { app.oneshot(req).await.unwrap() }
+    };
+    // No owner yet: the launcher, and nothing needs signing in.
+    let meta = ok(&app, "GET", "/api/meta", None).await;
+    assert_eq!(meta["tenancy"]["account"], Value::Null);
+    assert_eq!(meta["setup"], true);
+    // What isn't an owner: refused, and still open.
+    for wrong in [
+        json!({ "email": "me@example.com" }),
+        json!({ "email": "not an address", "password": "correct horse" }),
+        json!({ "email": "me@example.com", "password": "short" }),
+    ] {
+        let res = send(request("PUT", "/api/owner", &[], Some(wrong.clone()))).await;
+        assert_eq!(res.status(), StatusCode::UNPROCESSABLE_ENTITY, "{wrong}");
+    }
+    ok(&app, "GET", "/api/meta", None).await;
+    // Made: this browser stays signed in; anyone else is asked.
+    let res = send(request(
+        "PUT",
+        "/api/owner",
+        &[],
+        Some(json!({ "email": "me@example.com", "password": "correct horse" })),
+    ))
+    .await;
+    assert_eq!(res.status(), StatusCode::OK);
+    let first = session(&res);
+    assert_eq!(
+        send(request("GET", "/api/board", &[], None)).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    let res = send(request("GET", "/api/meta", &[("cookie", &first)], None)).await;
+    let meta: Value =
+        serde_json::from_slice(&res.into_body().collect().await.unwrap().to_bytes()).unwrap();
+    assert_eq!(meta["tenancy"]["account"]["email"], "me@example.com");
+    assert_eq!(
+        meta["tenancy"]["account"]["role"], "admin",
+        "the owner runs it"
+    );
+    assert_eq!(
+        meta["tenancy"]["signups_open"], false,
+        "a new hunt's closed to others"
+    );
+    // Nobody else makes themselves the owner now.
+    let res = send(request(
+        "PUT",
+        "/api/owner",
+        &[],
+        Some(json!({ "email": "them@example.com", "password": "their password" })),
+    ))
+    .await;
+    assert_eq!(res.status(), StatusCode::CONFLICT);
+    // Still setting up, back a step in the launcher: changed as they made it.
+    let res = send(request(
+        "PUT",
+        "/api/account/credentials",
+        &[("cookie", &first)],
+        Some(json!({ "email": "me@example.org" })),
+    ))
+    .await;
+    assert_eq!(res.status(), StatusCode::OK);
+    let first = session(&res);
+    let done = send(request(
+        "POST",
+        "/api/setup/done",
+        &[("cookie", &first)],
+        None,
+    ))
+    .await;
+    assert_eq!(done.status(), StatusCode::OK);
+    // Set up: changing them needs the password now.
+    let res = send(request(
+        "PUT",
+        "/api/account/credentials",
+        &[("cookie", &first)],
+        Some(json!({ "password": "battery staple", "current": "a guess" })),
+    ))
+    .await;
+    assert_eq!(res.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    let res = send(request(
+        "PUT",
+        "/api/account/credentials",
+        &[("cookie", &first)],
+        Some(json!({ "email": "new@example.com", "password": "battery staple", "current": "correct horse" })),
+    ))
+    .await;
+    assert_eq!(res.status(), StatusCode::OK);
+    let second = session(&res);
+    // Everyone else signed out; this browser not.
+    assert_eq!(
+        send(request("GET", "/api/board", &[("cookie", &first)], None))
+            .await
+            .status(),
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        send(request("GET", "/api/board", &[("cookie", &second)], None))
+            .await
+            .status(),
+        StatusCode::OK
+    );
+    // Never in a backup.
+    let res = send(request("GET", "/api/backup", &[("cookie", &second)], None)).await;
+    let backup =
+        String::from_utf8(res.into_body().collect().await.unwrap().to_bytes().to_vec()).unwrap();
+    assert!(
+        !backup.contains("auth.password") && !backup.contains("new@example.com"),
+        "the owner, backed up"
+    );
+    drop(app);
+    // Started again: still theirs.
+    let again = hunt::api::router(Db::open(&path).unwrap());
+    let res = again
+        .clone()
+        .oneshot(request("GET", "/api/board", &[], None))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+    let cli = basic("new@example.com", "battery staple");
+    let res = again
+        .oneshot(request(
+            "GET",
+            "/api/board",
+            &[("authorization", &cli)],
+            None,
+        ))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn the_owner_runs_the_hunt_and_a_new_one_is_closed_to_others() {
+    let app = hunt::api::router_with_owner(test_db(), "me@example.com", "correct horse");
+    let me = basic("me@example.com", "correct horse");
+    let send = |req: Request<Body>| {
+        let app = app.clone();
+        async move { app.oneshot(req).await.unwrap() }
+    };
+    let json_of = |res: axum::response::Response| async move {
+        serde_json::from_slice::<Value>(&res.into_body().collect().await.unwrap().to_bytes())
+            .unwrap()
+    };
+    // Its admin centre: the owner's, and nobody else's.
+    assert_eq!(
+        send(request("GET", "/api/admin/overview", &[], None))
+            .await
+            .status(),
+        StatusCode::UNAUTHORIZED
+    );
+    let overview = json_of(
+        send(request(
+            "GET",
+            "/api/admin/overview",
+            &[("authorization", &me)],
+            None,
+        ))
+        .await,
+    )
+    .await;
+    assert_eq!(overview["signups_open"], false, "closed, on a new hunt");
+    // Its name and notice, as any hunt's admins set theirs.
+    let saved = json_of(
+        send(request(
+            "PATCH",
+            "/api/admin/settings",
+            &[("authorization", &me)],
+            Some(json!({ "site": { "name": "My search", "announcement": "Back up on Sunday" } })),
+        ))
+        .await,
+    )
+    .await;
+    assert_eq!(saved["site"]["name"], "My search");
+    let about = ok(&app, "GET", "/api/meta", None).await["about"].clone();
+    assert_eq!(about["name"], "My search");
+    assert_eq!(about["announcement"], "Back up on Sunday");
+    // Closed: nobody signs up.
+    let signup = |form: &str| {
+        Request::post("/signup")
+            .header("content-type", "application/x-www-form-urlencoded")
+            .body(Body::from(form.to_string()))
+            .unwrap()
+    };
+    let res = send(signup(
+        "email=you%40example.com&password=their+password&again=their+password",
+    ))
+    .await;
+    assert_eq!(
+        res.status(),
+        StatusCode::UNPROCESSABLE_ENTITY,
+        "sign-ups are closed"
+    );
+    // Invited: they sign up, and are in.
+    let invited = send(request(
+        "POST",
+        "/api/admin/invites",
+        &[("authorization", &me)],
+        Some(json!({ "email": "friend@example.com" })),
+    ))
+    .await;
+    assert_eq!(invited.status(), StatusCode::OK);
+    let res = send(signup(
+        "email=friend%40example.com&password=their+password&again=their+password",
+    ))
+    .await;
+    assert!(res.status().is_redirection(), "{}", res.status());
+    let friend = basic("friend@example.com", "their password");
+    assert_eq!(
+        send(request(
+            "GET",
+            "/api/board",
+            &[("authorization", &friend)],
+            None
+        ))
+        .await
+        .status(),
+        StatusCode::OK
+    );
+    // Opened: anyone may ask, and waits for the owner's say.
+    let opened = send(request(
+        "PATCH",
+        "/api/admin/settings",
+        &[("authorization", &me)],
+        Some(json!({ "signups_open": true })),
+    ))
+    .await;
+    assert_eq!(opened.status(), StatusCode::OK);
+    let res = send(signup(
+        "email=you%40example.com&password=their+password&again=their+password",
+    ))
+    .await;
+    assert!(res.status().is_redirection());
+    let you = basic("you@example.com", "their password");
+    let res = send(request(
+        "GET",
+        "/api/board",
+        &[("authorization", &you)],
+        None,
+    ))
+    .await;
+    assert_eq!(res.status(), StatusCode::FORBIDDEN, "pending");
+    // Each sees their own: the friend has a board of their own, empty.
+    let mine = json_of(
+        send(request(
+            "GET",
+            "/api/companies",
+            &[("authorization", &me)],
+            None,
+        ))
+        .await,
+    )
+    .await;
+    let theirs = json_of(
+        send(request(
+            "GET",
+            "/api/companies",
+            &[("authorization", &friend)],
+            None,
+        ))
+        .await,
+    )
+    .await;
+    assert_eq!(mine, theirs, "both empty, and apart");
 }

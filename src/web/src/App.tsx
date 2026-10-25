@@ -27,6 +27,7 @@ import { Home } from "./pages/Board";
 import { CalendarPage } from "./pages/Calendar";
 import { CelebratePage } from "./pages/Celebrate";
 import { CyclesPage } from "./pages/Cycles";
+import { Launcher } from "./pages/Launcher";
 import { ContactsPage, ListPage, NewRecord } from "./pages/Lists";
 import { GMAIL, InboxPage } from "./pages/Mail";
 import { NotesPage } from "./pages/Notes";
@@ -125,8 +126,10 @@ function Elsewhere() {
 export function App() {
   useShared();
   const visit = useVisit();
-  // Shared, and not (yet) theirs: the account screen, and nothing else.
-  const account = !!(tenancy() && tenancy()?.account?.status !== "active");
+  // A new hunt, or one without an owner yet: its launcher, until it's done.
+  const launching = !!S.META.setup;
+  // Not (yet) theirs: the account screen, and nothing else.
+  const account = !launching && tenancy()?.account?.status !== "active";
   const [, page = "", arg] = location.pathname.split("/");
   const section = sectionOf(page, new URLSearchParams(location.search));
   // Settings and the admin centre have the sidebar to themselves, each in its own colour.
@@ -141,17 +144,20 @@ export function App() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "n" || e.metaKey || e.ctrlKey || e.altKey || e.defaultPrevented) return;
       if ((e.target as Element).closest?.("input, textarea, select, [contenteditable], dialog[open]") || document.querySelector("dialog[open]")) return;
-      if (account || !runningCycles().length || viewedCycle()) return;
+      if (account || launching || !runningCycles().length || viewedCycle()) return;
       e.preventDefault();
       newApplication();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [account]);
+  }, [account, launching]);
   // Leaving the board lets go of what's selected on it.
   useEffect(() => { if (page !== "") BOARD_SEL.clear(); }, [page]);
   // The sidebar and the page in the page's own <aside> and <main>, the
   // shell's children; what floats over them, here.
+  if (launching) {
+    return <>{createPortal(<Launcher />, document.getElementById("view")!)}<ModalHost /><DialogStack /><Toaster /></>;
+  }
   return (
     <>
       {createPortal(<Sidebar page={page} section={section} account={account} />, document.getElementById("sidebar")!)}

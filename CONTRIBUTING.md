@@ -26,9 +26,19 @@ hunt (`make web` on its own), so building with `cargo` alone needs it built
 first.
 
 ```sh
-make demo     # a throwaway database in target/, with made-up data
-make watch    # serve it for several people, rebuilding on every change (needs cargo-watch)
-make ci       # what CI runs: format check, clippy, every test
+make               # make dev: hunt as it is here, on an empty database each start
+make dev-demo      # the same, with made-up data in it
+make watch         # serve it for several people, rebuilding on every change (needs cargo-watch)
+make ci            # what CI runs: format check, clippy, every test
+```
+
+`make help` lists the rest, under "Work on hunt" and "Test". For what a
+newcomer sees:
+
+```sh
+make dev-password  # signing in, as dev@example.test (dev-password), made from HUNT_ADMIN_EMAIL and _PASSWORD
+make image         # the container image, as CI builds it (TARGET=demo: the demo's)
+make image-try     # run it, keeping nothing: Docker and the launcher together
 ```
 
 `make test-all` also runs the tests on PostgreSQL and MySQL (needs Docker).

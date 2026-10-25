@@ -40,6 +40,8 @@ fn shared_hunt() -> Router {
         IdentitySource::Header("x-hunt-user".into()),
     )
     .unwrap();
+    // A new hunt starts closed to anyone new: opened, as its admin would.
+    tenants.set_signups_open(true).unwrap();
     hunt::api::router_tenants(db, tenants)
 }
 
@@ -53,6 +55,7 @@ fn hosted_hunt() -> Router {
         IdentitySource::Header("x-hunt-user".into()),
     )
     .unwrap();
+    tenants.set_signups_open(true).unwrap();
     let site = hunt::site::Site {
         url: Some("https://careerhunt.app".into()),
         operator: Some("Arabesque Labs Ltd".into()),
@@ -875,6 +878,10 @@ async fn people_can_delete_their_own_account_and_everything_in_it() {
 
 #[tokio::test]
 async fn admins_can_close_sign_ups() {
+    // A new hunt starts closed to anyone new.
+    let db = Arc::new(Mutex::new(test_db()));
+    let closed = Tenants::open(db, &[ADMIN.to_string()], IdentitySource::BuiltIn).unwrap();
+    assert!(!closed.signups_open().unwrap());
     let app = shared_hunt();
     let overview = ok(&app, ADMIN, "GET", "/api/admin/overview", None).await;
     assert_eq!(overview["signups_open"], true);
@@ -1169,6 +1176,7 @@ async fn take_home_pay_is_for_each_account_in_the_uk() {
         IdentitySource::Header("x-hunt-user".into()),
     )
     .unwrap();
+    tenants.set_signups_open(true).unwrap();
     let experiments =
         hunt::experiments::Experiments::parse(&[format!("take-home={}", ADMIN.to_uppercase())])
             .unwrap();
@@ -1453,6 +1461,7 @@ fn proxied_hunt(trusted: &[&str]) -> Router {
             .collect(),
     };
     let tenants = Tenants::open(db.clone(), &[ADMIN.to_string()], identity).unwrap();
+    tenants.set_signups_open(true).unwrap();
     hunt::api::router_tenants(db, tenants)
 }
 

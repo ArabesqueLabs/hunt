@@ -4,7 +4,7 @@
 // Edit opens them for changes.
 
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { api, attempt, del, get, patch, post } from "../lib/api";
+import { api, attempt, del, get, patch, post, put } from "../lib/api";
 import { LOC, fmtDay, fmtStamp, fmtTime, HOME, homeK, zonedNow } from "../lib/format";
 import { LANG, setLanguage } from "../lib/i18n";
 import { CURRENCIES, choiceLabel, myAccount, reloadMeta, reloadTags, sitePage, takeHomeOn, tenancy } from "../lib/meta";
@@ -104,7 +104,7 @@ export function SettingsPage() {
     calendar: () => <><CalendarSettings /><CalendarFeedSettings /></>,
     connections: () => <><LinkedinSettings />{GMAIL ? <GmailSettings /> : null}</>,
     data: () => <><BackupSettings /><AuditSettings /></>,
-    account: () => (myAccount() ? <AccountSettings /> : <SignInSettings />),
+    account: () => (myAccount() ? <><AccountSettings />{myAccount().has_password ? <SignInDetails /> : null}</> : <SignInSettings />),
   };
   return (
     <div className="page settings">
@@ -179,6 +179,54 @@ const SignInSettings = () => (
   </SettingsPanel>
 );
 
+// ---- your sign-in (hunt's own) -----------------------------------------------------------
+
+/**
+ * Signing in with hunt's own sign-in: your email address and password,
+ * each changed here, with your password now. A new password ends your
+ * other sessions.
+ */
+function SignInDetails() {
+  const me = myAccount();
+  const change = async (what: "email" | "password") => {
+    const d = await ask({
+      title: what === "email" ? "Change your email address" : "Change your password",
+      ok: "Change it",
+      body: <div className="fields">
+        {what === "email"
+          ? <Field><Label htmlFor="own-email">New email address</Label>
+            <Input id="own-email" name="email" type="email" autoComplete="username" required defaultValue={me?.email} /></Field>
+          : <>
+            <Field><Label htmlFor="own-new">New password</Label>
+              <Input id="own-new" name="password" type="password" autoComplete="new-password" minLength={8} required />
+              <span className="al-hint">8 characters or more. A few words make a good one.</span></Field>
+            <Field><Label htmlFor="own-again">The same again</Label>
+              <Input id="own-again" name="again" type="password" autoComplete="new-password" minLength={8} required /></Field>
+          </>}
+        <Field><Label htmlFor="own-current">Your password now</Label>
+          <Input id="own-current" name="current" type="password" autoComplete="current-password" required /></Field>
+      </div>,
+    });
+    if (!d) return;
+    if (what === "password" && d.get("password") !== d.get("again")) { toast("The two new passwords don't match", "error"); return; }
+    const change = what === "email" ? { email: d.get("email") } : { password: d.get("password") };
+    if (await attempt(() => put("account/credentials", { ...change, current: d.get("current") }))) {
+      await reloadMeta();
+      toast(what === "email" ? "Email address changed" : "Password changed: you're signed out everywhere else");
+    }
+  };
+  return (
+    <SettingsPanel title="Signing in" intro="With your email address and password, at /login.">
+      <div className="actions">
+        <button className="al-button" type="button" onClick={() => change("email")}>Change email address…</button>
+        <button className="al-button" type="button" onClick={() => change("password")}>Change password…</button>
+        <a className="al-button al-button--quiet" href="/logout">Log out</a>
+      </div>
+      {me?.role === "admin" ? <p className="muted small">Forgotten an admin's password? Start hunt with HUNT_ADMIN_EMAIL and HUNT_ADMIN_PASSWORD set: it replaces it.</p> : null}
+    </SettingsPanel>
+  );
+}
+
 // ---- your account (a shared hunt) ---------------------------------------------------------
 
 function AccountSettings() {
@@ -199,7 +247,7 @@ function AccountSettings() {
         if (!d) return;
         if (await attempt(() => api("DELETE", "account", { confirm: d.get("confirm") || "" }))) {
           // Gone: signed out of Access too, where there is one.
-          location.href = tenancy()?.trying_out ? "/" : "/cdn-cgi/access/logout";
+          location.href = tenancy()?.trying_out ? "/" : me.has_password ? "/logout" : "/cdn-cgi/access/logout";
         }
       }}>Delete my account…</button></div>
       <ContactLine />
@@ -227,7 +275,7 @@ export async function saveSettings(change: Row, message = "Saved") {
 }
 
 /** Another language, or other digits: saved, and everything drawn again in them. */
-async function relanguage(change: Row) {
+export async function relanguage(change: Row) {
   const saved = await attempt(() => patch("settings", change));
   if (!saved) return false;
   S.PREFS = saved;
@@ -328,7 +376,7 @@ export function currencyName(code: string) {
 }
 
 /** A choice list's {value, label}s, as a select's options. */
-const optionsOf = (choices: Row[]): [string, string][] => choices.map((o) => [o.value, o.label]);
+export const optionsOf = (choices: Row[]): [string, string][] => choices.map((o) => [o.value, o.label]);
 
 function LocaleSettings() {
   const P = S.PREFS;
@@ -374,7 +422,7 @@ function zoneName(zone: string) {
 }
 
 /** Every time zone, as a select's options. */
-const zoneOptions = (): [string, string][] => TIME_ZONES.map((z) => [z, z.replaceAll("_", " ")]);
+export const zoneOptions = (): [string, string][] => TIME_ZONES.map((z) => [z, z.replaceAll("_", " ")]);
 
 /**
  * The calendar: your time zone (hunt's, and the one interview times are
@@ -583,36 +631,43 @@ function LinkedinSettings() {
 
 // ---- backups ---------------------------------------------------------------------------
 
+/**
+ * Import a backup file, replacing everything here: checked first, and what
+ * it holds said, before asking. True once it's in.
+ */
+export async function importBackup(f: File, say: (status: string) => void = () => {}) {
+  // Check it's a backup, and say what's in it, before anything is replaced.
+  let backup: Row;
+  try { backup = JSON.parse(await f.text()); } catch { toast(`${f.name} isn't a hunt backup`, "error"); return false; }
+  if (!backup || backup.hunt_backup == null || !backup.tables) { toast(`${f.name} isn't a hunt backup`, "error"); return false; }
+  const c = backup.counts || {};
+  const n = (k: string) => c[k] ?? (backup.tables[k] || []).length;
+  const ok = await ask({
+    title: "Replace everything with this backup?",
+    body: <div className="fields">
+      <p>{`${f.name}, made ${backup.made_at ? fmtStamp(backup.made_at) : "at an unknown time"}: `}
+        {`${n("process")} processes, ${n("application")} applications, ${n("company")} companies, ${n("person")} people, `}
+        {`${n("version")} file versions, and ${n("activity")} changes in the log.`}</p>
+      <p><b>Everything here now is replaced</b>, including Settings (but not the Gmail connection). It can't be undone, so{" "}
+        <a href="/api/backup">download a backup of what's here</a> first if you might want it.</p>
+    </div>,
+    ok: "Replace everything", danger: true,
+  });
+  if (!ok) return false;
+  say("Importing…");
+  const res = await fetch("/api/backup?confirm=replace", { method: "POST", headers: { "Content-Type": "application/json" }, body: f });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) { say(""); toast(data.error || "The import didn't work", "error"); return false; }
+  say(`Imported ${f.name}.`);
+  toast("Backup imported");
+  await reloadMeta();
+  return true;
+}
+
 /** Settings: save everything to a file, or bring a saved one back. */
 function BackupSettings() {
   const [status, setStatus] = useState("");
-  const picker = useFilePicker("application/json,.json", async (f) => {
-    // Check it's a backup, and say what's in it, before anything is replaced.
-    let backup: Row;
-    try { backup = JSON.parse(await f.text()); } catch { toast(`${f.name} isn't a hunt backup`, "error"); return; }
-    if (!backup || backup.hunt_backup == null || !backup.tables) { toast(`${f.name} isn't a hunt backup`, "error"); return; }
-    const c = backup.counts || {};
-    const n = (k: string) => c[k] ?? (backup.tables[k] || []).length;
-    const ok = await ask({
-      title: "Replace everything with this backup?",
-      body: <div className="fields">
-        <p>{`${f.name}, made ${backup.made_at ? fmtStamp(backup.made_at) : "at an unknown time"}: `}
-          {`${n("process")} processes, ${n("application")} applications, ${n("company")} companies, ${n("person")} people, `}
-          {`${n("version")} file versions, and ${n("activity")} changes in the log.`}</p>
-        <p><b>Everything here now is replaced</b>, including Settings (but not the Gmail connection). It can't be undone, so{" "}
-          <a href="/api/backup">download a backup of what's here</a> first if you might want it.</p>
-      </div>,
-      ok: "Replace everything", danger: true,
-    });
-    if (!ok) return;
-    setStatus("Importing…");
-    const res = await fetch("/api/backup?confirm=replace", { method: "POST", headers: { "Content-Type": "application/json" }, body: f });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) { setStatus(""); toast(data.error || "The import didn't work", "error"); return; }
-    setStatus(`Imported ${f.name}.`);
-    toast("Backup imported");
-    await reloadMeta();
-  });
+  const picker = useFilePicker("application/json,.json", (f) => importBackup(f, setStatus));
   return (
     <section className="al-panel panel settings-panel backup">
       <div className="panel-head"><h2>Backup</h2></div>

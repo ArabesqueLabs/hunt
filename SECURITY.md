@@ -28,9 +28,12 @@ don't degrade the hosted service while testing.
 - **`--identity-header`** trusts a request header to say who someone is.
   It's for trying hunt out on your own machine, never for a hunt others can
   reach.
-- **One person's hunt** needs no sign-in on your own machine. Anywhere
-  else, give it a password (`HUNT_PASSWORD`), behind HTTPS, or put a
-  sign-in in front of it.
+- **Every hunt** has accounts, signing in with an email address and a
+  password (Argon2 hashes in the database, never in a backup). The first,
+  its owner and admin, is made in the launcher or from `HUNT_ADMIN_EMAIL`
+  and `HUNT_ADMIN_PASSWORD`; until then, nothing needs signing in: make
+  them before hunt can be reached from elsewhere, and put it behind HTTPS.
+  A new hunt's sign-ups are closed until an admin opens them.
 - **`--auth-header`** takes a sign-in proxy's word for who someone is, only
   from `--trusted-proxies`: keep that list to the proxy, and hunt's own port
   off the internet.

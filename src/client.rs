@@ -4,14 +4,17 @@ use anyhow::{Context, Result, anyhow, bail};
 use serde_json::Value;
 use ureq::Agent;
 
+use crate::auth::basic_header as hunt_basic;
+
 pub const DEFAULT_URL: &str = "http://127.0.0.1:4848";
 
 /// A Cloudflare Access service token, for a hunt behind Access: its client
 /// id and secret, from these variables.
 const ACCESS_ID_VAR: &str = "HUNT_ACCESS_CLIENT_ID";
 const ACCESS_SECRET_VAR: &str = "HUNT_ACCESS_CLIENT_SECRET";
-/// One person's hunt's password, for a hunt that has one (HUNT_PASSWORD on
-/// both sides).
+/// One person's hunt's owner, once it has one: their email address and
+/// password, as they sign in at /login.
+const EMAIL_VAR: &str = "HUNT_EMAIL";
 const PASSWORD_VAR: &str = "HUNT_PASSWORD";
 /// Behind a sign-in proxy, from an address hunt trusts as the proxy's (the
 /// same machine, say): its header (HUNT_AUTH_HEADER), saying who's asking
@@ -23,7 +26,7 @@ pub struct Client {
     base: String,
     agent: Agent,
     access: Option<(String, String)>,
-    password: Option<String>,
+    owner: Option<(String, String)>,
     user: Option<(String, String)>,
 }
 
@@ -44,7 +47,10 @@ impl Client {
             base: base.trim_end_matches('/').to_string(),
             agent,
             access,
-            password: std::env::var(PASSWORD_VAR).ok().filter(|p| !p.is_empty()),
+            owner: match (std::env::var(EMAIL_VAR), std::env::var(PASSWORD_VAR)) {
+                (Ok(e), Ok(p)) if !e.is_empty() && !p.is_empty() => Some((e, p)),
+                _ => None,
+            },
             user: match (std::env::var(AUTH_HEADER_VAR), std::env::var(USER_VAR)) {
                 (Ok(h), Ok(u)) if !h.is_empty() && !u.is_empty() => Some((h, u)),
                 _ => None,
@@ -53,11 +59,11 @@ impl Client {
     }
 
     /// A request to the API, with the service token if there is one, the
-    /// password if there's one of those, and who's asking, behind a sign-in
-    /// proxy.
+    /// owner's address and password if there are those, and who's asking,
+    /// behind a sign-in proxy.
     fn with_access<B>(&self, req: ureq::RequestBuilder<B>) -> ureq::RequestBuilder<B> {
-        let req = match &self.password {
-            Some(p) => req.header("Authorization", format!("Bearer {p}")),
+        let req = match &self.owner {
+            Some((email, password)) => req.header("Authorization", hunt_basic(email, password)),
             None => req,
         };
         let req = match &self.user {

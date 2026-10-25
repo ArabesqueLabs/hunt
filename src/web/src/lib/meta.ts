@@ -41,9 +41,12 @@ export const sitePage = (path: string) => `${S.META.site}${path}`;
 
 // ---- several people ----------------------------------------------------------------------
 
-/** Whether hunt is shared, and this person may use it: else the account screen. */
+/** Who's asking, their account, and how this hunt signs people in. */
 export const tenancy = () => S.META.tenancy || null;
 export const myAccount = () => tenancy()?.account || null;
+/** Whether this hunt signs people in itself (an email address and a password), not Access or a proxy. */
+export const builtInSignIn = () => !!tenancy()?.built_in;
+/** Whoever runs this hunt: its admins (its owner, the first). */
 export const isAdmin = () => myAccount()?.role === "admin" && myAccount()?.status === "active";
 
 /** This hunt's name: as its admins name it, or hunt's own. */

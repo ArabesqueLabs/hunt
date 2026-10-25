@@ -1,0 +1,29 @@
+# One replica, recreated on update: never two pods on one SQLite file.
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: hunt }
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector: { matchLabels: { app: hunt } }
+  template:
+    metadata: { labels: { app: hunt } }
+    spec:
+      # The image runs as 65532: this gives it the volume.
+      securityContext: { fsGroup: 65532 }
+      containers:
+        - name: hunt
+          image: ghcr.io/arabesquelabs/hunt
+          # `release` and `latest` move: a restart takes the newest.
+          imagePullPolicy: Always
+          ports: [{ containerPort: 4848 }]
+          envFrom:
+            - configMapRef: { name: hunt-config }
+            - secretRef: { name: hunt-secrets }
+          volumeMounts: [{ name: data, mountPath: /data }]
+          # "ok" once hunt and its database answer; needs no sign-in.
+          readinessProbe: { httpGet: { path: /healthz, port: 4848 } }
+          livenessProbe: { httpGet: { path: /healthz, port: 4848 } }
+      volumes:
+        - name: data
+          persistentVolumeClaim: { claimName: hunt-data }

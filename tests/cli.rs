@@ -236,7 +236,7 @@ fn every_command_has_a_page_with_its_help() {
 }
 
 #[test]
-fn the_cli_signs_in_with_the_password() {
+fn the_cli_signs_in_as_the_owner() {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let url = format!("http://{}", listener.local_addr().unwrap());
     listener.set_nonblocking(true).unwrap();
@@ -245,9 +245,10 @@ fn the_cli_signs_in_with_the_password() {
             .unwrap()
             .block_on(async move {
                 let listener = tokio::net::TcpListener::from_std(listener).unwrap();
-                let app = hunt::api::router_with_password(
+                let app = hunt::api::router_with_owner(
                     Db::open_in_memory().unwrap(),
-                    hunt::auth::Password::new("correct horse").unwrap(),
+                    "me@example.com",
+                    "correct horse",
                 );
                 axum::serve(listener, app).await.unwrap();
             });
@@ -256,9 +257,11 @@ fn the_cli_signs_in_with_the_password() {
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_hunt"));
         cmd.args(["list", "stages"])
             .env("HUNT_URL", &url)
+            .env_remove("HUNT_EMAIL")
             .env_remove("HUNT_PASSWORD");
         if let Some(p) = password {
-            cmd.env("HUNT_PASSWORD", p);
+            cmd.env("HUNT_EMAIL", "me@example.com")
+                .env("HUNT_PASSWORD", p);
         }
         let out = cmd.output().unwrap();
         (
