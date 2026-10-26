@@ -250,6 +250,7 @@ async function saveAdmin(change: Row, was: Row, then: (saved: Row) => void) {
 function AdminGeneral({ data }: { data: Row }) {
   useShared();
   const [defaults, setDefaults] = useState<Row>(data.defaults || {});
+  const [undo, setUndo] = useState<number>(data.undo_seconds ?? 5);
   const about = S.META.about;
   const said = (saved: Row) => { S.META.about = saved.site; changed(); };
   const site = (key: string) => (v: string) => saveAdmin({ site: { [key]: v } }, { site: { [key]: about[key as keyof typeof about] || "" } }, said);
@@ -268,6 +269,12 @@ function AdminGeneral({ data }: { data: Row }) {
       {<SettingRow id="site-contact" label="Address for help" hint="Where people can write to the admins: on the account screen, and in Settings.">
         <TextSetting id="site-contact" type="email" value={about.contact || ""} placeholder="help@example.com" maxLength={254} autoComplete="off" save={site("contact")} />
       </SettingRow>}
+    </SettingsPanel>
+    <SettingsPanel title="Undo" intro="After a change that can be undone, a message says what changed, with Undo.">
+      <SettingRow id="undo-seconds" label="Seconds to undo" hint="How long the message stays, for everyone: 5 unless changed, at most 60. 0 keeps it until it's used or closed.">
+        <TextSetting id="undo-seconds" type="number" inputMode="numeric" min={0} max={60} step={1} value={String(undo)} autoComplete="off"
+          save={async (v) => /^\d+$/.test(v) && Number(v) <= 60 ? saveAdmin({ undo_seconds: Number(v) }, { undo_seconds: undo }, (saved) => { S.META.undo_seconds = saved.undo_seconds; setUndo(saved.undo_seconds); changed(); }) : false} />
+      </SettingRow>
     </SettingsPanel>
     {<SettingsPanel title="New accounts start with" intro="Each account can change these in its own Settings. Leave one as it is for hunt's own default.">
       <SettingRow id="def-language" label="Language">{pick("def-language", "language", S.META.languages.map((o) => [o.value, o.label]), "English (hunt's default)")}</SettingRow>

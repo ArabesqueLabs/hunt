@@ -174,6 +174,9 @@ const DEFAULTS: &[&str] = &[
     "locale.currency",
 ];
 
+/// How long a toast with Undo stays, in seconds, unless admins change it.
+pub const UNDO_SECONDS: u32 = 5;
+
 /// What admins say of this hunt (General, in the admin centre), each with
 /// the most characters it may have.
 const SITE: &[(&str, usize)] = &[("name", 40), ("announcement", 280), ("contact", 254)];
@@ -816,6 +819,24 @@ impl Tenants {
         self.defaults()
     }
 
+    /// How long a toast with Undo stays, in seconds: 5 unless changed, and 0
+    /// for until it's used or dismissed.
+    pub fn undo_seconds(&self) -> Result<u32> {
+        Ok(self
+            .shared_setting("ui.undo_seconds")?
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(UNDO_SECONDS))
+    }
+
+    pub fn set_undo_seconds(&self, seconds: u32) -> Result<()> {
+        if seconds > 60 {
+            return Err(invalid(format!(
+                "undo_seconds: 60 at most (0 keeps it until it's used or dismissed), not {seconds}"
+            )));
+        }
+        self.set_shared_setting("ui.undo_seconds", &seconds.to_string())
+    }
+
     // ---- asking for an account ------------------------------------------------------------
 
     /// Ask for an account: pending until an admin decides. Asking again
@@ -1150,6 +1171,7 @@ impl Tenants {
             "signups_open": self.signups_open()?,
             "defaults": self.defaults()?,
             "site": self.site()?,
+            "undo_seconds": self.undo_seconds()?,
             "accounts": rows,
             "totals": {
                 "active": count("active"), "pending": count("pending"),

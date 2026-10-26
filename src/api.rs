@@ -35,7 +35,7 @@
 //! | `GET /docs`, `/screenshots`, `/privacy`, `/terms`, `/data-deletion`, `/ar/…` | the website's pages, which hunt once served: redirected there (`HUNT_SITE_URL`); without a website, the docs on GitHub |
 //! | `DELETE /api/account` | delete your own account and everything in it (`{confirm: your email}`) |
 //! | `GET /api/account`, `POST /api/account/request` | with several people (`--tenants`): who's asking and their account; ask for one (`{name, reason, provider, agrees}`: agreeing to the terms of use) |
-//! | `PATCH /api/admin/settings` | admins: `{site}`, this hunt's `name`, an `announcement` on every page and a `contact` address for help; `{signups_open}`, whether new people may ask for an account; `{defaults}`, the language, region, time zone and currency new accounts start with. One person's hunt: its owner, `{site}`'s `name` and `announcement` |
+//! | `PATCH /api/admin/settings` | admins: `{site}`, this hunt's `name`, an `announcement` on every page and a `contact` address for help; `{signups_open}`, whether new people may ask for an account; `{defaults}`, the language, region, time zone and currency new accounts start with; `{undo_seconds}`, how long a toast with Undo stays (5; 0 until dismissed, 60 at most). One person's hunt: its owner, `{site}`'s `name` and `announcement` |
 //! | `POST /api/admin/invites` | admins: `{email, name?}`, an account for someone, open for sign-ups or not |
 //! | `GET /api/admin/usage` | admins: each account's use of hunt (counts and sizes; no names or addresses) |
 //! | `GET /api/admin/overview`, `POST /api/admin/accounts/{id}/decide`, `PATCH, DELETE /api/admin/accounts/{id}?data=` | admins: every account; approve, reject, disable or enable (`{status, note}`); change role, name or CLI token; remove (with `data=1`, everything of theirs) |
@@ -1304,6 +1304,8 @@ async fn meta(v: Viewer, headers: HeaderMap) -> ApiResult {
         "access": access,
         "tenancy": tenancy,
         "about": about,
+        // How long a toast with Undo stays, in seconds (0: until dismissed).
+        "undo_seconds": t.undo_seconds()?,
         // Run for others, with a website whose terms of use people agree
         // to when asking for an account, and whose docs and legal pages the
         // app links to.
@@ -2630,6 +2632,8 @@ struct AdminSettings {
     defaults: Option<Value>,
     /// What it says of itself, to everyone: `{name, announcement, contact}`.
     site: Option<Value>,
+    /// How long a toast with Undo stays, in seconds (0: until dismissed).
+    undo_seconds: Option<u32>,
 }
 
 /// Hunt-wide settings: its name, notice and address for help; whether new
@@ -2645,10 +2649,14 @@ async fn admin_settings(a: Admin, Json(s): Json<AdminSettings>) -> ApiResult {
         if let Some(d) = &s.defaults {
             a.tenants.set_defaults(d)?;
         }
+        if let Some(n) = s.undo_seconds {
+            a.tenants.set_undo_seconds(n)?;
+        }
         Ok::<_, Error>(json!({
             "signups_open": a.tenants.signups_open()?,
             "defaults": a.tenants.defaults()?,
             "site": a.tenants.site()?,
+            "undo_seconds": a.tenants.undo_seconds()?,
         }))
     })
     .await

@@ -9,6 +9,9 @@ device you sign in on. General, Calendar, and Pay and tax are changed
 where they are: each setting is saved as it's changed (a field, once it's
 left or on Enter; Escape puts it back), and says so, with Undo.
 
+Undo is offered for a change, a move or a removal, for 5 seconds (or as
+long as Admin → General says); adding something is said, without Undo.
+
 - **Appearance:** the theme (light, dark, or matching the system; also in
   the sidebar's foot), and language and region:
   the language (English or Arabic; see
@@ -49,8 +52,10 @@ owner (who set it up: account 1) to begin with, and whoever they make
 admins.
 
 - **General:** this hunt's name (in the sidebar and the browser's tab), a
-  notice above every page, an address people can write to for help, and
-  what new accounts start with.
+  notice above every page, an address people can write to for help, how
+  long Undo is offered after a change (5 seconds unless changed, at most
+  60; 0 keeps it until it's used or closed), and what new accounts start
+  with.
 - **Access and accounts:** whether new people may sign up (closed, on a new
   hunt), inviting someone, those waiting to be let in, and every account:
   its status and role, disabling or removing it.

@@ -23,17 +23,19 @@ It reads first, top to bottom:
   top;
 - people, with their email and phone to click (to write or call); emails,
   as threads (by Gmail's thread, or by subject), folded until opened, each
-  message with its time; files sent;
+  message with its time; attached files;
 - the company, folded until opened, and the change log;
 - tags, then Import from link…, Archive… and Delete at the bottom.
 
-Every section folds from its header, and stays as you left it.
+Every section folds from its header, and stays as you left it. The
+timeline has Collapse and Expand in its head, and starts expanded.
 
 ## Adding and editing
 
-- Reading, the page shows no forms: "+ Add a person", "+ Add an email" and
-  "+ Send a file" open theirs, and "+ Add a step", "+ Add an event" or
-  "+ Add a note" start editing there.
+- Reading, the page shows no forms: **Add**, at the top before Stage,
+  adds a note, an interview or a reminder to the timeline, each in a
+  dialog; "+ Add a person", "+ Add an email" and "+ Link file" open
+  theirs.
 - **Edit** turns the page into one form: change anything, move the stage,
   add or remove steps and timeline entries, then **Save changes** (⌘S) or
   **Discard**. Leaving with unsaved changes asks first.

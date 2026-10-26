@@ -686,7 +686,7 @@ function BackupSettings() {
 
 // ---- the board: swimlanes, stages, sub stages --------------------------------------------
 
-type Done = (message: string, undo: () => Promise<unknown>, then?: { focus?: string | number | null }) => void;
+type Done = (message: string, undo: (() => Promise<unknown>) | null, then?: { focus?: string | number | null }) => void;
 type Redraw = (o?: { focus?: string | number | null }) => void;
 
 interface SubSpec {
@@ -697,7 +697,6 @@ interface SubSpec {
   remove: (x: Row, it: Row) => Promise<(() => Promise<unknown>) | null>;
   reorder: (it: Row, ids: number[]) => Promise<unknown>;
   add: (it: Row, name: string) => Promise<Row>;
-  drop: (added: Row) => Promise<unknown>;
 }
 
 interface OrderedProps {
@@ -706,7 +705,6 @@ interface OrderedProps {
   remove: (it: Row) => Promise<(() => Promise<unknown>) | null>;
   reorder: (ids: number[]) => Promise<unknown>;
   add: (name: string) => Promise<Row>;
-  drop: (added: Row) => Promise<unknown>;
   placeholder: string; sub?: SubSpec | null; extra?: ((it: Row, done: Done) => ReactNode) | null;
   rowClass?: ((it: Row) => string) | null; nest?: ((it: Row) => ReactNode) | null; scope?: string; bare?: boolean; before?: ReactNode;
 }
@@ -743,10 +741,10 @@ function NameField({ it, label, save, redraw }: { it: Row; label: string; save: 
  * once and says so, with Undo. `sub`, when given, lists what belongs to
  * each item indented under it (a stage's lanes), edited the same way.
  * `remove` removes (asking first only where something must go elsewhere)
- * and gives back what puts it back, or null if nothing was removed; `drop`
- * takes away one just added.
+ * and gives back what puts it back, or null if nothing was removed.
+ * Adding one is said, without Undo.
  */
-function OrderedSettings({ list, title, intro, items, noun, focus, redraw, rename, remove, reorder, add, drop, placeholder, sub = null, extra = null, rowClass = null, nest = null, scope = "", bare = false, before = null }: OrderedProps) {
+function OrderedSettings({ list, title, intro, items, noun, focus, redraw, rename, remove, reorder, add, placeholder, sub = null, extra = null, rowClass = null, nest = null, scope = "", bare = false, before = null }: OrderedProps) {
   const listEl = useRef<HTMLOListElement>(null);
   const nameBox = useRef<HTMLInputElement>(null);
   const [dragOrder, setDragOrder] = useState<number[] | null>(null);
@@ -754,11 +752,12 @@ function OrderedSettings({ list, title, intro, items, noun, focus, redraw, renam
   // What's focused after drawing, as this list names it (`scope` keeps a
   // nested list's apart from its row's): a row's id, or new, new-ID, sub-ID.
   const at = (f: string | number | null | undefined) => (f == null ? null : `${scope}${f}`);
-  // Done: drawn again, and said, with Undo, which draws it again once undone.
+  // Done: drawn again, and said, with Undo (unless it was an addition),
+  // which draws it again once undone.
   const done: Done = (message, undo, then = {}) => {
     const t = { ...then, focus: at(then.focus) };
     redraw(t);
-    toast(message, "info", { label: "Undo", onclick: async () => {
+    toast(message, "info", undo && { label: "Undo", onclick: async () => {
       if (await attempt(async () => { await undo(); return true; })) { toast("Undone"); redraw(t); }
     } });
   };
@@ -873,7 +872,7 @@ function OrderedSettings({ list, title, intro, items, noun, focus, redraw, renam
         const v = (nameBox.current?.value || "").trim();
         if (!v) return;
         const added = await attempt(() => add(v));
-        if (added) { if (nameBox.current) nameBox.current.value = ""; done(`Added ${v}`, () => drop(added), { focus: "new" }); }
+        if (added) { if (nameBox.current) nameBox.current.value = ""; done(`Added ${v}`, null, { focus: "new" }); }
       }}>
         <Input ref={nameBox} aria-label={`New ${noun}`} placeholder={placeholder} required />
         <button className="al-button al-button--primary" type="submit">{`Add ${noun}`}</button>
@@ -898,7 +897,7 @@ function SubAdd({ it, sub, redraw, done, focusKey }: { it: Row; sub: SubSpec; re
         const name = (box.current?.value || "").trim();
         if (!name) return;
         const added = await attempt(() => sub.add(it, name));
-        if (added) done(`Added ${name} to ${it.name}`, () => sub.drop(added), { focus: `new-${it.id}` });
+        if (added) done(`Added ${name} to ${it.name}`, null, { focus: `new-${it.id}` });
       }}>
         <Input ref={box} aria-label={`New ${sub.noun} in ${it.name}`} placeholder={`New ${sub.noun}, e.g. Accepted`} data-focus={focusKey}
           onKeyDown={(e) => { if (e.key === "Escape") redraw(); }} />
@@ -1064,15 +1063,13 @@ function BoardSettings() {
         },
         reorder: (st, ids) => post(`stages/${st.id}/lanes/order`, { ids }),
         add: (st, name) => post("lanes", { stage_id: st.id, name }),
-        drop: (l) => del(`lanes/${l.id}`),
       }}
       items={inGroup(w)}
       placeholder={w.name ? `New stage in ${w.name}, e.g. Take-home` : "New stage, e.g. Take-home"}
       rename={(st, name) => patch(`stages/${st.id}`, { name })}
       remove={(st) => deleteStage(st, stages, lanes)}
       reorder={(ids) => post("stages/order", { ids: order(w, ids) })}
-      add={(name) => post("stages", w.id ? { name, swimlane_id: w.id } : { name })}
-      drop={(st) => del(`stages/${st.id}`)} />
+      add={(name) => post("stages", w.id ? { name, swimlane_id: w.id } : { name })} />
   );
   const intro = "The board's swimlanes, top to bottom, each with its stages, its columns, in order (a stage in none is in the first). A folded swimlane starts as its heading on the board, until opened there. A process in a terminal stage is closed, and its sub stage is the reason (Their Decision: They rejected me, Role filled …). Under a stage, its sub stages, top to bottom; cards in none stay at the column's top. A folded stage's cards start as packs, a card on the rest, until unfolded on the board.";
   return (
@@ -1101,7 +1098,6 @@ function BoardSettings() {
       }}
       reorder={(ids) => post("swimlanes/order", { ids })}
       add={(name) => post("swimlanes", { name })}
-      drop={(w) => del(`swimlanes/${w.id}`)}
       // No swimlanes: the stages on their own, before adding one.
       before={!swimlanes.length ? stageList(groups[0]) : null} />
   );
