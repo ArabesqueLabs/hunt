@@ -832,7 +832,9 @@ async fn people_can_delete_their_own_account_and_everything_in_it() {
         ok(&app, BOB, "GET", "/api/meta", None).await["tenancy"]["account"]["why_not_delete"],
         Value::Null
     );
-    let why = ok(&app, ADMIN, "GET", "/api/meta", None).await["tenancy"]["account"]["why_not_delete"].clone();
+    let why =
+        ok(&app, ADMIN, "GET", "/api/meta", None).await["tenancy"]["account"]["why_not_delete"]
+            .clone();
     assert!(why.as_str().unwrap().contains("only admin"), "{why}");
     // Not without typing DELETE.
     let (status, v) = as_(
@@ -919,11 +921,22 @@ async fn people_can_clear_their_data_and_keep_their_account() {
     )
     .await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{v}");
-    let cleared = ok(&app, BOB, "DELETE", "/api/data", Some(json!({ "confirm": "CLEAR" }))).await;
+    let cleared = ok(
+        &app,
+        BOB,
+        "DELETE",
+        "/api/data",
+        Some(json!({ "confirm": "CLEAR" })),
+    )
+    .await;
     assert!(cleared["rows_removed"].as_i64().unwrap() > 0, "{cleared}");
     // Theirs gone, the board's stages kept; the admin's untouched.
     for what in ["applications", "processes", "companies", "people", "cycles"] {
-        assert_eq!(ok(&app, BOB, "GET", &format!("/api/{what}"), None).await, json!([]), "{what}");
+        assert_eq!(
+            ok(&app, BOB, "GET", &format!("/api/{what}"), None).await,
+            json!([]),
+            "{what}"
+        );
     }
     assert_eq!(ok(&app, BOB, "GET", "/api/stages", None).await, stages);
     assert_eq!(
@@ -936,7 +949,10 @@ async fn people_can_clear_their_data_and_keep_their_account() {
 async fn admins_set_how_long_undo_stays() {
     let app = shared_hunt();
     // 5 seconds, unless changed: in meta, for everyone, and the overview.
-    assert_eq!(ok(&app, BOB, "GET", "/api/meta", None).await["undo_seconds"], 5);
+    assert_eq!(
+        ok(&app, BOB, "GET", "/api/meta", None).await["undo_seconds"],
+        5
+    );
     assert_eq!(
         ok(&app, ADMIN, "GET", "/api/admin/overview", None).await["undo_seconds"],
         5
@@ -950,7 +966,10 @@ async fn admins_set_how_long_undo_stays() {
     )
     .await;
     assert_eq!(saved["undo_seconds"], 12);
-    assert_eq!(ok(&app, BOB, "GET", "/api/meta", None).await["undo_seconds"], 12);
+    assert_eq!(
+        ok(&app, BOB, "GET", "/api/meta", None).await["undo_seconds"],
+        12
+    );
     // 0 keeps it until dismissed; over a minute isn't taken.
     let (status, v) = as_(
         &app,
@@ -971,7 +990,10 @@ async fn admins_set_how_long_undo_stays() {
     )
     .await;
     assert!(!status.is_success());
-    assert_eq!(ok(&app, BOB, "GET", "/api/meta", None).await["undo_seconds"], 12);
+    assert_eq!(
+        ok(&app, BOB, "GET", "/api/meta", None).await["undo_seconds"],
+        12
+    );
 }
 
 #[tokio::test]
