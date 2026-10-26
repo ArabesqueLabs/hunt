@@ -3,11 +3,11 @@
 //! its source is; and the footer under its pages.
 //!
 //! hunt is free software (the GNU AGPL v3), made by Arabesque Labs, who also
-//! run it for others. Their website, careerhunt.app, is a repository of its
-//! own (ArabesqueLabs/careerhunt.app): it has the docs, screenshots and legal
-//! pages. A hunt run for others names its website with `HUNT_SITE_URL`, and
-//! people agree to its terms when they ask for an account. Without one, as
-//! for someone running hunt for themselves, the footer links to the docs on
+//! run it for others. Their website, careerhunt.app, is kept apart from hunt,
+//! with their other websites: it has the docs, screenshots and legal pages.
+//! A hunt run for others names its website with `HUNT_SITE_URL`, and people
+//! agree to its terms when they ask for an account. Without one, as for
+//! someone running hunt for themselves, the footer links to the docs on
 //! GitHub. Either way it links to the source, as the AGPL asks of a service
 //! people use over a network.
 
