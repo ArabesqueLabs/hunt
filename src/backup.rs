@@ -202,6 +202,26 @@ impl Db {
         }))
     }
 
+    /// Clear everything tracked, for good: what [`Self::restore`] replaces,
+    /// but the settings, the board's stages, swimlanes and lanes, the Gmail
+    /// connection's ignores, and what's shared (file contents no longer
+    /// referred to go). How many rows went.
+    pub fn clear_data(&self) -> Result<Value> {
+        const KEEP: &[&str] = &["swimlane", "stage", "lane", "setting", "mail_ignore"];
+        self.atomic(|db| {
+            let mut rows = 0;
+            db.exec("UPDATE application SET via_id = NULL", &[])?;
+            for table in TABLES.iter().rev() {
+                if KEEP.contains(table) || SHARED.contains(table) {
+                    continue;
+                }
+                rows += db.exec(&format!("DELETE FROM {table}"), &[])?;
+            }
+            db.prune_blobs()?;
+            Ok(json!({ "rows_removed": rows }))
+        })
+    }
+
     /// Replace everything with a backup's contents. How many rows each
     /// table now has.
     pub fn restore(&self, backup: &Value) -> Result<Value> {

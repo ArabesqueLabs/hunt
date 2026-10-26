@@ -119,7 +119,7 @@ function Disclaimer() {
   const who = S.META.operator || "the authors and contributors of hunt";
   return (
     <aside className="th-disclaimer" aria-label="Disclaimer">
-      <p><b>Experimental.</b>{" "}<span>Take-home pay is an experimental tool, still being tried out, and is for general information only. It isn't tax, financial, legal or employment advice, and mustn't be relied on as such.</span></p>
+      <p><b>Experimental.</b>{" "}<span>Pay calculator is an experimental tool, still being tried out, and is for general information only. It isn't tax, financial, legal or employment advice, and mustn't be relied on as such.</span></p>
       <p><span>Its figures are estimates. They may be incomplete, out of date or wrong, and they leave out much that affects what you pay: other income, how and when you're actually paid, how HMRC and your employer operate your tax code, and the terms of any share plan. Check anything you rely on with HMRC (gov.uk) or a qualified adviser before you decide anything: accepting an offer, setting a rate, or filing a tax return.</span></p>
       <p><span>The tool is provided “as is”, without warranty of any kind. To the fullest extent the law allows,</span>{" "}
         <span translate="no">{who}</span>{", "}
@@ -189,10 +189,10 @@ function TakeHomeGate({ opened }: { opened: () => void }) {
   const [region, setRegion] = useState<string>(S.PREFS.uk_region || S.META.uk_regions?.[0]?.value || "");
   return (
     <div className="page take-home">
-      <div className="al-page-head page-head"><h1>Take-home pay</h1><span className="al-badge al-badge--warning">Experimental</span></div>
+      <div className="al-page-head page-head"><h1>Pay calculator</h1><span className="al-badge al-badge--warning">Experimental</span></div>
       <section className="al-panel panel th-gate">
         <h2>Only for UK residents</h2>
-        <p>Take-home pay works out what you'd keep after UK income tax, National Insurance, student loans and pension, so it's for those who live in the UK. Your settings don't say you do.</p>
+        <p>Pay calculator works out what you'd keep after UK income tax, National Insurance, student loans and pension, so it's for those who live in the UK. Your settings don't say you do.</p>
         <div className="location-fields">
           <label className="check al-choice"><input type="checkbox" id="th-gate-uk" checked={uk} onChange={(e) => setUk(e.target.checked)} /><span>I live in the UK (a UK resident, for tax)</span></label>
           <Field hidden={!uk}><Label htmlFor="th-gate-region">Part of the UK</Label>
@@ -623,7 +623,7 @@ function Calculator({ options }: { options: Row }) {
   const problemNote = problem ? <Notice kind="danger" role="status" className="th-problem">{problem}</Notice> : null;
   return (
     <div className="page take-home">
-      <div className="al-page-head page-head"><h1>Take-home pay</h1><span className="al-badge al-badge--warning">Experimental</span>
+      <div className="al-page-head page-head"><h1>Pay calculator</h1><span className="al-badge al-badge--warning">Experimental</span>
         {/* Where you live (Settings → Location) and the tax year: what the rates are. */}
         <div className="th-meta">
           <div className="th-where"><span className="th-head-label">Where you live</span>
@@ -1213,7 +1213,7 @@ export function PayPanel({ a, p, stages, onAdd }: { a: Row; p: Row | null; stage
           </tbody>
         </table>
         <p className="muted small">{`Uses your settings: ${savedNumber(saved, "pension", 0)}% pension, ${loans ? `${loans} student loan${loans === 1 ? "" : "s"}` : "no student loan"}. `}
-          <a href="/take-home">Change in Take-home pay</a></p>
+          <a href="/take-home">Change in Pay calculator</a></p>
       </div>
     </details>);
 }

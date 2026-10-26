@@ -1097,20 +1097,27 @@ impl Tenants {
         self.erase(a.id, data)
     }
 
-    /// Someone deleting their own account, and everything in it, for good.
-    /// The last admin can't: hunt would be left with nobody to run it.
+    /// Why someone can't delete their own account, if they can't: the last
+    /// admin, or the last account, would leave hunt with nobody to run it.
+    pub fn why_not_delete(&self, me: &Account) -> Result<Option<&'static str>> {
+        let accounts = self.list()?;
+        let active = |a: &&Account| a.status == "active";
+        if me.is_admin() && accounts.iter().filter(active).filter(|a| a.is_admin()).count() <= 1 {
+            return Ok(Some(
+                "you're the only admin: make someone else an admin first, so hunt still has one",
+            ));
+        }
+        if accounts.iter().filter(|a| a.id != me.id).filter(active).count() == 0 {
+            return Ok(Some("yours is the only account: hunt would have nobody to run it"));
+        }
+        Ok(None)
+    }
+
+    /// Someone deleting their own account, and everything in it, for good;
+    /// not when [`Self::why_not_delete`] says why not.
     pub fn delete_own(&self, me: &Account) -> Result<Value> {
-        if me.is_admin() {
-            let admins = self
-                .list()?
-                .iter()
-                .filter(|a| a.is_admin() && a.status == "active")
-                .count();
-            if admins <= 1 {
-                return Err(invalid(
-                    "you're the only admin: make someone else an admin first, so hunt still has one",
-                ));
-            }
+        if let Some(why) = self.why_not_delete(me)? {
+            return Err(invalid(why));
         }
         self.erase(me.id, true)
     }
