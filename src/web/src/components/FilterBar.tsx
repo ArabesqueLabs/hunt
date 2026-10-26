@@ -1,32 +1,37 @@
-// Applications' filters, as controls: the common ones in a row, the
-// rest under "More filters" (lib/filters.ts says what they mean).
+// Applications' filters, as controls: what needs doing in a row, beside the
+// page's own (the board's cycles); searching, and every other filter, in a
+// dialog behind the magnifier (lib/filters.ts says what they mean).
 
 import { useRef, useState, type ReactNode } from "react";
 import { FILTER_KEYS, activeFilters, setFilters, type FilterRow, type Filters } from "../lib/filters";
 import { homeK } from "../lib/format";
 import { R } from "../lib/meta";
 import { S } from "../lib/state";
-import { store, stored } from "../lib/storage";
 import { toast } from "../lib/toast";
 import type { Row } from "../lib/types";
-import { Input, SearchBox, Select } from "./ui";
+import { Field, Input, Label, SearchBox, Select, SysIcon } from "./ui";
 
+/** The filters in the search dialog, after the search itself. */
 const MORE = ["watch", "pay", "source", "company", "person", "added", "applied", "closing", "loc", "emp", "reason", "has", "status", "tag"] as const;
 
+/** Everything the search dialog sets: what its button counts. */
+const SEARCHED = ["q", "mode", ...MORE] as const;
+
 /**
- * `rows` supply the choices (sources, companies, people in use).
+ * `rows` supply the choices (sources, companies, people in use). `lead`
+ * starts the row (the board's cycles); `extra` ends it (its Detailed switch).
  * `onChange(filters)` runs after each change; `shown` of `total` pass.
  * Each filter that's on is a chip under the controls, to take off on its
  * own; or all of them at once, with Undo.
  */
-export function FilterBar({ rows, initial, onChange, shown, total, extra = null }: {
-  rows: FilterRow[]; initial: Filters; onChange: (f: Filters) => void; shown: number; total: number; extra?: ReactNode;
+export function FilterBar({ rows, initial, onChange, shown, total, lead = null, extra = null }: {
+  rows: FilterRow[]; initial: Filters; onChange: (f: Filters) => void; shown: number; total: number; lead?: ReactNode; extra?: ReactNode;
 }) {
   const [f, setF] = useState<Filters>(initial);
   const [q, setQ] = useState(initial.q);
   const [loc, setLoc] = useState(initial.loc);
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-  const [moreOpen, setMoreOpen] = useState(MORE.some((k) => initial[k]) || stored("moreFilters") === "open");
+  const dialog = useRef<HTMLDialogElement>(null);
   const opts = (resource: string, name: string) => R(resource).fields.find((x) => x.name === name)!.options;
   const uniq = <T,>(xs: T[], key: (x: T) => unknown) => [...new Map(xs.filter((x) => key(x)).map((x) => [key(x), x])).values()];
   const sources = [...new Set(rows.map((r) => (r.source || "").trim()).filter(Boolean).map((s) => s.toLowerCase()))].sort();
@@ -66,13 +71,15 @@ export function FilterBar({ rows, initial, onChange, shown, total, extra = null 
     status: ["Status", [["active", "active"], ["archived", "closed"], ["none", "not on the board"]]],
     tag: ["Tag", S.TAGS.map((t) => [t.name, t.name])],
   };
+  /** A filter in the dialog: its name, and its choices, Any first. */
   const select = (k: keyof Filters, any = "Any") => {
     const [label, options] = CHOICES[k]!;
     return (
-      <Select aria-label={label} className={f[k] ? "set" : undefined} value={f[k]} onChange={(e) => change(k, e.target.value)}>
-        <option value="">{`${label}: ${any}`}</option>
-        {options.map(([v, l]) => <option key={v} value={v}>{`${label}: ${l}`}</option>)}
-      </Select>
+      <Field key={k}><Label htmlFor={`filter-${k}`}>{label}</Label>
+        <Select id={`filter-${k}`} className={f[k] ? "set" : undefined} value={f[k]} onChange={(e) => change(k, e.target.value)}>
+          <option value="">{any}</option>
+          {options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+        </Select></Field>
     );
   };
   /** What a filter that's on says, as its chip: as its control says it. */
@@ -80,7 +87,7 @@ export function FilterBar({ rows, initial, onChange, shown, total, extra = null 
     const v = f[k];
     if (k === "q") return `Search: ${v}`;
     if (k === "loc") return `Location: ${v}`;
-    if (k === "attn") return v === "next" ? "Has a next step" : "Overdue";
+    if (k === "attn") return v === "next" ? "Due next" : "Overdue";
     if (k === "mode") return opts("applications", "work_mode").find(([x]) => x === v)?.[1] || v;
     if (k === "payknown") return "Known pay only";
     const [label, options] = CHOICES[k]!;
@@ -92,48 +99,72 @@ export function FilterBar({ rows, initial, onChange, shown, total, extra = null 
     onChange(next);
   };
   const on = FILTER_KEYS.filter((k) => f[k]);
-  const n = MORE.filter((k) => f[k]).length;
+  const n = SEARCHED.filter((k) => f[k]).length;
   return (
     <div className="filter-bar">
       <div className="filter-row">
-        <div className="filter-search">
-          <SearchBox aria-label="Search" placeholder="Search company, role or person" className={q ? "set" : undefined} value={q} onValue={(v) => typed("q", v)} />
-        </div>
-        {/* What needs doing: everything, what has a next step, what's overdue. */}
+        {lead}
+        {/* What needs doing: everything, what's due next, what's overdue. */}
         <div className="al-segmented" role="group" aria-label="Show">
-          {([["", "All"], ["next", "Has a next step"], ["overdue", "Overdue"]] as [string, string][]).map(([v, l]) => (
+          {([["", "All"], ["next", "Due next"], ["overdue", "Overdue"]] as [string, string][]).map(([v, l]) => (
             <button key={v} type="button" aria-pressed={String(f.attn === v) as "true" | "false"} onClick={() => change("attn", v)}>{l}</button>
           ))}
         </div>
-        <Select className={`filter-mode${f.mode ? " set" : ""}`} aria-label="Work mode" value={f.mode} onChange={(e) => change("mode", e.target.value)}>
-          <option value="">Any work mode</option>
-          {opts("applications", "work_mode").map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-        </Select>
-        {/* More filters: a toggle in this row; what it shows opens under it. */}
-        <button className="al-button al-button--quiet al-button--sm filter-more-toggle" type="button" aria-controls="filter-more" aria-expanded={String(moreOpen) as "true" | "false"}
-          onClick={() => { store("moreFilters", !moreOpen ? "open" : "closed"); setMoreOpen(!moreOpen); }}>{n ? `More filters (${n})` : "More filters"}</button>
+        {/* Search and the other filters: a magnifier, opening them in a dialog; how many are on, beside it. */}
+        <button className={`al-button filter-search-toggle${n ? " set" : ""}`} type="button" aria-haspopup="dialog" aria-controls="filter-search"
+          aria-label={n ? `Search and filter: ${n} on` : "Search and filter"} title="Search and filter" onClick={() => dialog.current?.showModal()}>
+          <SysIcon name="search" />{n ? <span className="al-badge al-badge--count">{n}</span> : null}
+        </button>
         {/* Something of the page's own, at the row's end (the board's Detailed switch). */}
         {extra ? <span className="filter-extra">{extra}</span> : null}
       </div>
-      <div className="filter-row filter-more" id="filter-more" hidden={!moreOpen}>
-        {select("watch", "all")}
-        {select("pay")}
-        <label className="check al-choice" hidden={!f.pay}>
-          <input type="checkbox" checked={!!f.payknown} onChange={(e) => change("payknown", e.target.checked ? "1" : "")} />Known pay only
-        </label>
-        {select("source")}
-        {select("company")}
-        {select("person")}
-        {select("added")}
-        {select("applied")}
-        {select("closing")}
-        <Input type="search" aria-label="Location" placeholder="Location, e.g. London" className={loc ? "set" : undefined} value={loc} onChange={(e) => typed("loc", e.target.value)} />
-        {select("emp")}
-        {select("reason")}
-        {select("has")}
-        {select("status")}
-        {S.TAGS.length ? select("tag") : null}
-      </div>
+      <dialog ref={dialog} id="filter-search" className="al-dialog al-dialog--md filter-dialog" aria-labelledby="filter-search-title"
+        onClick={(e) => { if (e.target === e.currentTarget) dialog.current?.close(); }}>
+        <div className="al-dialog__inner">
+          <h2 className="al-dialog__title" id="filter-search-title">Search and filter</h2>
+          <div className="al-dialog__body">
+            <SearchBox aria-label="Search" placeholder="Search company, role or person" autoFocus className={q ? "set" : undefined} value={q} onValue={(v) => typed("q", v)} />
+            <div className="filter-fields">
+              <Field><Label htmlFor="filter-mode">Work mode</Label>
+                <Select id="filter-mode" className={f.mode ? "set" : undefined} value={f.mode} onChange={(e) => change("mode", e.target.value)}>
+                  <option value="">Any</option>
+                  {opts("applications", "work_mode").map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                </Select></Field>
+              <Field><Label htmlFor="filter-loc">Location</Label>
+                <Input id="filter-loc" type="search" placeholder="e.g. London" className={loc ? "set" : undefined} value={loc} onChange={(e) => typed("loc", e.target.value)} /></Field>
+              {select("watch", "All")}
+              <Field><Label htmlFor="filter-pay">Pay</Label>
+                <Select id="filter-pay" className={f.pay ? "set" : undefined} value={f.pay} onChange={(e) => change("pay", e.target.value)}>
+                  <option value="">Any</option>
+                  {CHOICES.pay![1].map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                </Select>
+                <label className="check al-choice" hidden={!f.pay}>
+                  <input type="checkbox" checked={!!f.payknown} onChange={(e) => change("payknown", e.target.checked ? "1" : "")} />Known pay only
+                </label></Field>
+              {select("source")}
+              {select("company")}
+              {select("person")}
+              {select("added")}
+              {select("applied")}
+              {select("closing")}
+              {select("emp")}
+              {select("reason")}
+              {select("has")}
+              {select("status")}
+              {S.TAGS.length ? select("tag") : null}
+            </div>
+          </div>
+          <div className="al-dialog__actions">
+            <span className="filter-count muted small" aria-live="polite">{`${shown} of ${total} shown`}</span>
+            <button className="al-button al-button--quiet" type="button" disabled={!n} onClick={() => {
+              const before = f;
+              apply({ ...f, ...Object.fromEntries(SEARCHED.map((k) => [k, ""])), payknown: "" } as Filters);
+              toast("Search and filters cleared", "info", { label: "Undo", onclick: () => apply(before) });
+            }}>Clear all</button>
+            <button className="al-button al-button--primary" type="button" onClick={() => dialog.current?.close()}>Done</button>
+          </div>
+        </div>
+      </dialog>
       {/* What's on, each a chip to take off; how many pass; and taking them all off, with Undo. */}
       {activeFilters(f) ? (
         <div className="filter-chips">

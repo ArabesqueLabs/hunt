@@ -976,29 +976,33 @@ fieldset.group > legend { padding: 0; padding-inline-end: 0.5rem; font-size: 0.8
 /* ---- the Applications filters ----------------------------------------------------- */
 .filter-bar { display: flex; flex-direction: column; gap: 0.5rem; }
 .filter-row { display: flex; flex-wrap: wrap; gap: var(--al-space-3); align-items: center; }
-.filter-search { flex: 1 1 16rem; max-inline-size: 22rem; }
-.filter-search .al-search { width: 100%; }
-.filter-row > .filter-mode { width: auto; }
+/* Search and the other filters: a magnifier at the row's end, opening them
+   in a dialog, how many are on in its badge; the fields there two across. */
+.filter-search-toggle { gap: var(--al-space-1-5); }
+.filter-search-toggle:not(:has(.al-badge)) { inline-size: var(--al-field-height); padding: 0; justify-content: center; }
+.filter-dialog .al-search { inline-size: 100%; }
+.filter-dialog .al-search > input { inline-size: 100%; }
+.filter-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: var(--al-space-3) var(--al-space-4); }
+.filter-fields select, .filter-fields input { inline-size: 100%; }
+.filter-dialog .set { border-color: var(--al-color-accent); box-shadow: 0 0 0 1px var(--al-color-accent); }
+.filter-dialog .check { align-items: center; font-size: 0.85rem; margin-block-start: var(--al-space-1); }
+.filter-dialog .check[hidden] { display: none; }
+.filter-dialog .al-dialog__actions { align-items: center; }
+.filter-dialog .filter-count { margin-inline-end: auto; font-variant-numeric: tabular-nums; }
 /* The filters that are on, as chips to take off; how many pass; and Clear all. */
 .filter-chips { display: flex; flex-wrap: wrap; gap: var(--al-space-2) var(--al-space-3); align-items: center; }
 .filter-chips ul { display: flex; flex-wrap: wrap; gap: var(--al-space-2); list-style: none; margin: 0; padding: 0; }
 .filter-chips .filter-count { font-size: var(--al-text-sm); font-variant-numeric: tabular-nums; }
-.filter-row select, .filter-row input[type="search"] { width: auto; max-width: 14rem; font-size: 0.875rem; padding-block: 0.3rem; }
-.filter-row input[type="search"] { width: 16rem; }
-.filter-more .al-search { flex: none; width: 16rem; }
-.filter-row .al-search > input { width: 100%; max-width: none; }
 .filter-row .set { border-color: var(--al-color-accent); box-shadow: 0 0 0 1px var(--al-color-accent); }
 /* The page's own control at the end of the filters' row: a switch. */
 .filter-extra { margin-inline-start: auto; }
 .switch { align-items: center; font-size: 0.85rem; user-select: none; }
-.filter-row .check { align-items: center; font-size: 0.85rem; }
 
 
 
 .filter-status { display: flex; gap: 0.75rem; align-items: baseline; font-size: 0.85rem; }
 .filter-status[hidden] { display: none; }
 .filter-count { color: var(--al-color-text-muted); }
-.filter-row .check[hidden] { display: none; }
 
 /* ---- pages for companies, people and documents ---------------------------------------- */
 .record-page .doc-icon { display: inline-grid; place-items: center; width: 48px; height: 48px; border: 1px solid var(--al-color-line); border-radius: var(--al-radius-sm); color: var(--al-color-accent); font-size: 1.4rem; }
@@ -1095,6 +1099,7 @@ td.row-icons { padding-block: 0.25rem; }
 .nested-list .stage-list { margin-bottom: var(--al-space-2); }
 .stage-switches { display: flex; flex-wrap: wrap; gap: var(--al-space-3); align-items: center; justify-content: flex-end; }
 .stage-switches .stage-swimlane { inline-size: auto; min-block-size: 0; padding: 0.2rem 1.75rem 0.2rem 0.5rem; font-size: var(--al-text-sm); }
+.stage-switches .stage-icon { gap: var(--al-space-1); }
 .stage-active { font-size: var(--al-text-sm); color: var(--al-color-text-muted); white-space: nowrap; }
 .stage-list li.stage.inactive .inline-name { color: var(--al-color-text-muted); }
 .stage-list li.sub-row { display: flex; align-items: center; gap: 0.5rem; padding-inline-start: 3.2rem; }
@@ -1165,14 +1170,15 @@ td.row-select input, th.row-select input { inline-size: 1.125rem; block-size: 1.
 /* ---- a new hunt's launcher: the page to itself, no sidebar or footer ----------------- */
 body.launching { grid-template-columns: minmax(0, 1fr); }
 body.launching > .al-sidebar, body.launching .site-foot { display: none; }
-.launcher { max-inline-size: 44rem; margin: 0 auto; min-block-size: calc(100dvh - 2 * var(--al-space-8)); display: flex; flex-direction: column; gap: var(--al-space-6); }
+.launcher { max-inline-size: 44rem; margin: 0 auto; display: flex; flex-direction: column; gap: var(--al-space-6); }
 .launcher-head { display: flex; flex-direction: column; align-items: center; gap: var(--al-space-4); }
 .launcher-brand { display: inline-flex; align-items: center; gap: 0.6rem; font: 500 1.4rem var(--al-font-display); }
 .launcher-dots { display: flex; gap: var(--al-space-2); list-style: none; margin: 0; padding: 0; }
 .launcher-dots li { block-size: 0.375rem; inline-size: 0.375rem; border-radius: var(--al-radius-full); background: var(--al-color-surface-sunk); transition: inline-size var(--al-duration-fast) var(--al-ease-standard); }
 .launcher-dots li.done { background: color-mix(in oklch, var(--al-color-accent) 50%, transparent); }
 .launcher-dots li.now { inline-size: 2rem; background: var(--al-color-accent); }
-.launcher-step { flex: 1; display: flex; flex-direction: column; justify-content: flex-start; gap: var(--al-space-5); padding: var(--al-space-4) 0 var(--al-space-10); }
+/* Its step, and Back and Continue right after it: not pinned to the window's foot. */
+.launcher-step { display: flex; flex-direction: column; justify-content: flex-start; gap: var(--al-space-5); padding: var(--al-space-4) 0 var(--al-space-2); }
 .launcher-step h1 { font-size: 2.2rem; margin: 0; text-align: center; }
 .launcher-step h1:focus { outline: none; }
 .launcher-lead { font-family: var(--al-font-serif); font-size: 1.15rem; margin: 0 auto; max-inline-size: 36rem; text-align: center; color: var(--al-color-text-muted); }
@@ -1186,11 +1192,17 @@ body.launching > .al-sidebar, body.launching .site-foot { display: none; }
 .launcher-choice input { margin-block-start: 0.25rem; accent-color: var(--al-color-accent); }
 .launcher-choice:has(input:focus-visible) { outline: var(--al-border-focus) solid var(--al-color-focus); outline-offset: 2px; }
 .launcher-choice:has(input:disabled) { opacity: 0.6; cursor: default; }
-.launcher-form { display: flex; flex-direction: column; gap: var(--al-space-4); max-inline-size: 24rem; }
+.launcher-form { display: flex; flex-direction: column; gap: var(--al-space-4); inline-size: 100%; max-inline-size: 24rem; margin-inline: auto; }
+/* A password with its eye at the end, inside the field: shows it, and hides it again. */
+.password-field { position: relative; display: flex; align-items: center; min-inline-size: 0; }
+.password-field > .al-input { inline-size: 100%; padding-inline-end: calc(var(--al-space-2) * 2 + 1.75rem); }
+.password-field__eye { position: absolute; inset-inline-end: var(--al-space-1); display: grid; place-items: center; inline-size: 1.75rem; block-size: 1.75rem; padding: 0; border: 0; border-radius: var(--al-radius-sm); background: none; color: var(--al-color-text-muted); cursor: pointer; }
+.password-field__eye:hover { color: var(--al-color-text); }
+.password-field__eye:focus-visible { outline: var(--al-border-focus) solid var(--al-color-focus); outline-offset: 1px; }
 .launcher-grid { display: grid; gap: var(--al-space-4) var(--al-space-5); grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); }
 .launcher-grid select { inline-size: 100%; }
 .launcher-uk { margin: var(--al-space-2) 0 0; }
-.launcher-account { display: flex; flex-direction: column; gap: var(--al-space-3); max-inline-size: 28rem; }
+.launcher-account { display: flex; flex-direction: column; gap: var(--al-space-3); inline-size: 100%; max-inline-size: 28rem; margin-inline: auto; }
 .launcher-sub { font-size: var(--al-text-lg); font-weight: 500; margin: var(--al-space-2) 0 0; }
 /* Half the size of the other choices: three small cards, a row of them. */
 .launcher-themes { grid-template-columns: repeat(3, 7rem); gap: var(--al-space-2); }
@@ -1461,30 +1473,12 @@ body:is(.admin-mode, .settings-mode) :is(.app-nav, #cycle-box) { display: none; 
 .app-titles h1 { margin: 0; font-family: var(--al-font-display); font-weight: 400; font-size: var(--al-text-2xl); }
 .app-sub { display: flex; flex-wrap: wrap; gap: var(--al-space-3); align-items: center; color: var(--al-color-text-muted); }
 .app-sub a { color: var(--al-color-text); }
-/* Where it stands: the stage in words, the moves, and the board's stages as
-   a bar to read (not buttons: moving is done on purpose, from the buttons). */
-.app-status { display: flex; flex-direction: column; gap: var(--al-space-4); }
-.app-status-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--al-space-3) var(--al-space-6); }
-.app-status-now { display: flex; flex-direction: column; gap: var(--al-space-1); min-inline-size: 0; }
-.app-status-stage { font-family: var(--al-font-display); font-size: var(--al-text-xl); display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--al-space-2); }
-.app-status-lane { font-family: var(--al-font-sans, inherit); font-size: var(--al-text-sm); color: var(--al-color-text-muted); padding: 0.1rem var(--al-space-2); border: 1px solid var(--al-color-line); border-radius: var(--al-radius-full, 999px); }
-.app-progress { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(var(--stages, 5), minmax(0, 1fr)); gap: var(--al-space-1); }
-.app-progress li { border-block-start: 4px solid var(--al-color-line); padding-block-start: var(--al-space-1-5); font-size: var(--al-text-xs); color: var(--al-color-text-muted); min-inline-size: 0; }
-.app-progress-name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.app-progress li.past { border-block-start-color: color-mix(in oklch, var(--al-color-accent) 55%, transparent); }
-.app-progress li.current { border-block-start-color: var(--al-color-accent); color: var(--al-color-text); font-weight: 500; }
-.app-progress.archived { opacity: 0.55; }
-/* On a phone, the names don't fit: the bar alone, and the stage in words above it. */
-@media (max-width: 40rem) { .app-progress-name { display: none; } }
+.app-status { display: flex; flex-direction: column; gap: var(--al-space-3); }
 .app-status .al-notice { margin: 0; }
 .al-menu__item.app-menu-lane { padding-inline-start: var(--al-space-6); font-size: var(--al-text-sm); color: var(--al-color-text-muted); }
 .al-menu__item.app-menu-lane::before { content: "↳"; margin-inline-end: var(--al-space-1-5); }
 :dir(rtl) .al-menu__item.app-menu-lane::before { content: "↲"; }
 .tl-status { color: var(--al-color-text); }
-.tl-step.is-failed .tl-dot { border-color: var(--al-color-danger); background: var(--al-color-danger); }
-.tl-step.is-cancelled .tl-dot { border-color: var(--al-color-line-strong); background: transparent; }
-.tl-step:is(.is-passed, .is-completed, .is-done) .tl-dot { background: var(--al-color-accent); }
-.tl-step.is-cancelled .tl-title { color: var(--al-color-text-muted); text-decoration: line-through; }
 .page.application .app-standing { margin: 0; }
 .app-layout { display: flex; flex-wrap: wrap; gap: var(--al-space-8); align-items: flex-start; }
 .app-main { display: flex; flex-direction: column; gap: var(--al-space-6); min-inline-size: 0; flex: 999 1 32rem; }
@@ -1499,21 +1493,41 @@ body:is(.admin-mode, .settings-mode) :is(.app-nav, #cycle-box) { display: none; 
 .composer-half { grid-column: span 2; }
 @media (max-width: 40rem) { .composer-half { grid-column: 1 / -1; } }
 .composer-foot { display: flex; flex-wrap: wrap; gap: var(--al-space-2) var(--al-space-3); align-items: center; }
-.tl { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
-.tl-item { display: grid; grid-template-columns: 1.25rem minmax(0, 1fr) auto; gap: var(--al-space-3); padding-block: var(--al-space-3); border-block-end: 1px solid var(--al-color-line); }
-.tl-dot { justify-self: center; inline-size: 0.375rem; block-size: 0.375rem; border-radius: 50%; margin-block-start: 0.55rem; background: var(--al-color-line-strong); }
-.tl-note-item .tl-dot { background: var(--al-color-text); }
-.tl-step .tl-dot { inline-size: 0.75rem; block-size: 0.75rem; margin-block-start: 0.35rem; border: 2px solid var(--al-color-accent); background: transparent; }
-.tl-step.done .tl-dot { background: var(--al-color-accent); }
-.tl-what { display: flex; flex-direction: column; gap: var(--al-space-0-5); min-inline-size: 0; }
-.tl-title { text-wrap: pretty; }
-.tl-step .tl-title { font-weight: 500; }
-.tl-event .tl-title { color: var(--al-color-text-muted); }
 .tl-serif { font-family: var(--al-font-serif); white-space: pre-line; }
 .tl-sub { font-size: var(--al-text-sm); color: var(--al-color-text-muted); }
-.tl-where { font-size: var(--al-text-sm); align-self: flex-start; }
 .tl-prep, .tl-note { font-size: var(--al-text-sm); font-family: var(--al-font-serif); padding-inline-start: var(--al-space-3); border-inline-start: 2px solid var(--al-color-line); margin-block-start: var(--al-space-1); white-space: pre-line; }
-.tl-when { font-size: var(--al-text-sm); color: var(--al-color-text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* The timeline, the system's, made compact: smaller markers, closer
+   entries, and each entry's buttons and time on its title's line. The
+   stages to come are greyed, their markers dashed; the one it's in, filled. */
+.app-tl > li { padding-block-end: var(--al-space-3); }
+.app-tl > li:last-child { padding-block-end: 0; }
+.app-tl > li:not(:last-child)::before { inset-block-start: 1.5rem; inset-inline-start: calc(0.75rem - var(--al-border-hairline) / 2); }
+.app-tl .al-timeline__marker { inline-size: 1.5rem; block-size: 1.5rem; }
+.app-tl .al-timeline__marker svg { inline-size: 0.8rem; block-size: 0.8rem; }
+.app-tl .al-timeline__marker:empty::after { inline-size: 0.4rem; block-size: 0.4rem; }
+.app-tl .al-timeline__event { flex: 1; gap: var(--al-space-0-5); padding-block-start: 0.125rem; }
+.app-tl-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--al-space-1) var(--al-space-2); }
+.app-tl-head .al-timeline__title { text-wrap: pretty; min-inline-size: 0; }
+.app-tl-tools { display: inline-flex; flex-wrap: wrap; gap: var(--al-space-1); }
+.app-tl-tools .al-button--sm { min-block-size: 1.5rem; padding-block: 0; padding-inline: var(--al-space-2); font-size: var(--al-text-xs); }
+.app-tl-head .al-timeline__time { margin-inline-start: auto; white-space: nowrap; }
+.app-tl .al-timeline__time.is-late { color: var(--al-color-warning); }
+.app-tl .al-timeline__body { display: flex; flex-direction: column; gap: var(--al-space-0-5); font-size: var(--al-text-sm); }
+.app-tl-stage .al-timeline__title { font-family: var(--al-font-display); }
+.app-tl-stage.is-future { opacity: 0.55; }
+.app-tl-stage.is-future .al-timeline__marker { border-style: dashed; }
+.app-tl-stage.is-future .al-timeline__marker:empty::after { content: none; }
+.app-tl-stage.is-future .al-timeline__title { color: var(--al-color-text-muted); font-weight: 400; }
+.app-tl-stage.is-current .al-timeline__marker { background: var(--al-color-accent); border-color: var(--al-color-accent); color: var(--al-color-surface); }
+.app-tl-stage.is-current .al-timeline__title { font-size: var(--al-text-lg); }
+.app-tl-stage.is-current .al-timeline__time { color: var(--al-color-accent); font-weight: var(--al-weight-medium); }
+.app-tl-lane { margin-inline-start: var(--al-space-2); font-family: var(--al-font-sans, inherit); font-size: var(--al-text-sm); font-weight: 400; color: var(--al-color-text-muted); padding: 0.05rem var(--al-space-2); border: 1px solid var(--al-color-line); border-radius: var(--al-radius-full, 999px); }
+.app-tl-here { margin-inline-start: var(--al-space-2); vertical-align: middle; font-family: var(--al-font-sans, inherit); font-size: var(--al-text-xs); font-weight: var(--al-weight-medium); }
+.app-tl-note .al-timeline__title { font-weight: 400; }
+.app-tl-step.is-cancelled .al-timeline__title { color: var(--al-color-text-muted); text-decoration: line-through; }
+/* A posting, read: its first sentences, and Read more opens the rest in place, not in a box that scrolls. */
+.app-posting .posting-text { max-height: none; overflow: visible; }
+.app-more { padding: 0; border: 0; background: none; font: inherit; font-size: var(--al-text-sm); text-decoration: underline; text-decoration-color: var(--al-color-accent); cursor: pointer; }
 .app-facts { margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--al-space-2) var(--al-space-4); font-size: var(--al-text-sm); }
 .app-facts dt { color: var(--al-color-text-muted); }
 .app-facts dd { margin: 0; overflow-wrap: anywhere; }
@@ -1579,8 +1593,6 @@ body:is(.admin-mode, .settings-mode) :is(.app-nav, #cycle-box) { display: none; 
 .al-segmented > button[aria-pressed="true"] .al-badge--accent { background: transparent; color: inherit; box-shadow: inset 0 0 0 1px currentColor; }
 .board-cycles .al-segmented { max-inline-size: 100%; overflow-x: auto; }
 .board-cycles .al-segmented > button { flex: none; }
-.filter-more-toggle { white-space: nowrap; }
-.filter-more[hidden] { display: none; }
 .admin-users { display: flex; flex-direction: column; gap: var(--al-space-4); }
 .admin-sub { margin: 0; font-size: var(--al-text-lg); }
 .admin-invite { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: var(--al-space-3); align-items: end; }
@@ -1664,19 +1676,10 @@ body:is(.admin-mode, .settings-mode) :is(.app-nav, #cycle-box) { display: none; 
 .rich-editor .tox-tinymce:focus-within { border-color: var(--al-color-focus); }
 .app-head-more { inline-size: var(--al-button-height); padding: 0; justify-content: center; }
 .app-page-head + .app-status { border-block-start: 0; padding-block-start: 0; }
-/* The timeline: what's coming, then what happened. */
-.tl-group { padding-block: var(--al-space-3) var(--al-space-1); font-size: var(--al-text-xs); letter-spacing: 0.12em; text-transform: uppercase; font-weight: 500; color: var(--al-color-text-muted); border-block-end: 1px solid var(--al-color-line); }
-.tl-group:not(:first-child) { margin-block-start: var(--al-space-4); }
-.tl-coming .tl-title { font-weight: 500; }
-.tl-icon { display: inline-grid; justify-items: center; margin-block-start: 0.15rem; color: var(--al-color-text-muted); }
-.tl-icon.is-late, .tl-when.is-late { color: var(--al-color-warning); }
-.tl-tools { display: flex; flex-wrap: wrap; gap: var(--al-space-2); margin-block-start: var(--al-space-2); }
 /* The application, as it reads: one line over each section, and no more.
    Lists inside a section are spaced apart, not ruled. */
-.page.application.reading :is(.app-page-head, .tl-item, .tl-group, .app-emails, .app-emails li, .al-summary-list__row, .files li, .al-disclosure, .email-msg + .email-msg) { border: 0; }
+.page.application.reading :is(.app-page-head, .app-emails, .app-emails li, .al-summary-list__row, .files li, .al-disclosure, .email-msg + .email-msg) { border: 0; }
 .page.application.reading .app-page-head { padding-block-end: 0; }
-.page.application.reading .tl-item { padding-block: var(--al-space-2); }
-.page.application.reading .tl-group:not(:first-child) { margin-block-start: var(--al-space-3); }
 .page.application.reading .al-summary-list__row { padding-block: var(--al-space-1-5); }
 .page.application.reading .email-msg + .email-msg { padding-top: var(--al-space-4); }
 /* On a wide screen, the moves stay on the title's row; a long title wraps instead. */

@@ -17,7 +17,7 @@ import { forget, forgetHere, store, storeHere, stored, storedHere } from "../lib
 import { applyTheme, chooseTheme, currentTheme } from "../lib/theme";
 import { toast } from "../lib/toast";
 import { useFilePicker } from "../components/files";
-import { Facts, Field, Icon, Input, Label, Select } from "../components/ui";
+import { Facts, Field, Icon, Input, Label, PasswordInput, Select } from "../components/ui";
 import { importBackup, optionsOf, REGIONS, TIME_ZONES, currencyName } from "./Settings";
 
 /** The steps, in order: each one's key, and its name for the progress dots. */
@@ -330,11 +330,11 @@ function AccountStep({ ready }: { ready: (fn: () => Promise<boolean>) => void })
           <Input id="launch-email" ref={first} type="email" autoComplete="username" value={email} autoFocus aria-invalid={invalid("email")}
             onChange={(e) => setEmail(e.target.value)} /></Field>
         <Field><Label htmlFor="launch-password">{me ? "New password" : "Password"}</Label>
-          <Input id="launch-password" type="password" autoComplete="new-password" minLength={8} value={pass}
+          <PasswordInput id="launch-password" autoComplete="new-password" minLength={8} value={pass}
             aria-describedby="launch-password-hint" aria-invalid={invalid("password")} onChange={(e) => setPass(e.target.value)} />
           <span className="al-hint" id="launch-password-hint">{me ? "Leave it empty to keep yours." : "8 characters or more. A few words make a good one."}</span></Field>
         <Field><Label htmlFor="launch-again">The same again</Label>
-          <Input id="launch-again" type="password" autoComplete="new-password" value={again} aria-invalid={invalid("again")}
+          <PasswordInput id="launch-again" autoComplete="new-password" value={again} aria-invalid={invalid("again")}
             onChange={(e) => setAgain(e.target.value)} /></Field>
         {wrong ? <p className="al-error" role="alert">{wrong.text}</p> : null}
       </div>}

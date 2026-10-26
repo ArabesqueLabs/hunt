@@ -274,6 +274,8 @@ pub static RESOURCES: &[Resource] = &[
             defaulted(field("active", "Active", Number)),
             // 1: its cards folded into packs, until unfolded; 0: all shown.
             defaulted(field("folded", "Folded", Number)),
+            // Its icon on an application's timeline, by name; none, a plain marker.
+            field("icon", "Icon", Text),
             // The board's row it's in; none, the first.
             field(
                 "swimlane_id",

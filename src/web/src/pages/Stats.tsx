@@ -9,7 +9,6 @@ import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type 
 import { enc, get } from "../lib/api";
 import { boardCycle, endedCycles, runningCycles } from "../lib/cycles";
 import { LOC, fmtDay, fmtStamp, fromGbp, HOME, homeK, nf } from "../lib/format";
-import { isAdmin } from "../lib/meta";
 import { go } from "../lib/router";
 import type { Row } from "../lib/types";
 import { initChartKeys } from "../../vendor/arabesque/js/chart.js";
@@ -143,7 +142,6 @@ function StatsBody({ st }: { st: Row }) {
   if (!t.processes) {
     return <>
       <EmptyState title="Nothing to count yet" text="Add a process to the board, and this fills in." action={<a className="al-button al-button--primary" href="/">Open the board</a>} />
-      {isAdmin() ? <ResourcesSection /> : null}
     </>;
   }
   // ---- headline: one hero number, then tiles ----
@@ -240,9 +238,7 @@ function StatsBody({ st }: { st: Row }) {
         ) : <p className="muted small">Nothing's gone quiet.</p>}
       </VizCard>
       {st.tags.length ? <VizCard title="Tags" sub="Applications with each tag"><HBars rows={st.tags.map((x: Row) => ({ label: x.name, count: x.count }))} /></VizCard> : null}
-      <RecordsCard />
     </div>
-    {isAdmin() ? <ResourcesSection /> : null}
   </>;
 }
 
@@ -293,8 +289,8 @@ function Heat({ st }: { st: Row }) {
   );
 }
 
-/** What's kept, table by table. */
-function RecordsCard() {
+/** What the database keeps, table by table, every account's: in Admin → System resources. */
+export function RecordsCard() {
   const [rows, setRows] = useState<{ label: string; count: number }[] | null>(null);
   useEffect(() => {
     get("system").then((sys) => setRows(Object.entries(sys.database.rows as Record<string, number>).map(([k, n]) => ({ label: TABLE_NAMES[k] || k, count: n }))

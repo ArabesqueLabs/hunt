@@ -18,7 +18,7 @@ import type { Row } from "../lib/types";
 import { ask } from "../components/dialogs";
 import { Facts, Field, Input, Label, LoadingBlock, Notice, SearchBox, Select, Table, TextArea } from "../components/ui";
 import { ChoiceSetting, ContactLine, REGIONS, SettingRow, SettingsPanel, TIME_ZONES, TextSetting, currencyName } from "./Settings";
-import { ResourcesSection, Tile, fmtBytes, pct } from "./Stats";
+import { RecordsCard, ResourcesSection, Tile, fmtBytes, pct } from "./Stats";
 
 /** What Cloudflare Access says about who's signed in: their name, and how. */
 async function accessIdentity(): Promise<{ name?: string | null; provider?: string | null }> {
@@ -114,11 +114,10 @@ function AskForAccount({ head, who }: { head: ReactNode; who: ReactNode }) {
 /** The admin centre's tabs: each one's key, name, what's in it, and its icon. */
 const ALL_ADMIN_TABS: [string, string, string, string][] = [
   ["general", "General", "Name, notice, new accounts", "sliders"],
-  ["info", "Info", "Version, sign-in, accounts", "info"],
   ["access", "Access and accounts", "Sign-ups, invites, accounts", "key"],
   ["users", "User stats", "How accounts use hunt", "users"],
   ["system", "System resources", "The machine, by account", "server"],
-  ["debug", "Debugging info", "Sign-in, health, the API", "bug"],
+  ["debug", "Debugging info", "Version, sign-in, health, the API", "bug"],
 ];
 
 /** The tabs, every hunt's. */
@@ -203,7 +202,9 @@ export function AdminPage() {
   const tabs = adminTabs();
   const [tab] = useState(() => {
     const q = new URLSearchParams(location.search);
-    return tabs.some(([k]) => k === q.get("tab")) ? q.get("tab")! : "general";
+    // Info was a tab of its own: it's atop Debugging info now.
+    const asked = q.get("tab") === "info" ? "debug" : q.get("tab");
+    return tabs.some(([k]) => k === asked) ? asked! : "general";
   });
   const [data, setData] = useState<Row | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -223,11 +224,10 @@ export function AdminPage() {
       <div className="settings-content" role="region" aria-labelledby={`admin-tab-${tab}`}>
         {error ? <Notice kind="danger">{error}</Notice> : data ? (
           tab === "general" ? <AdminGeneral data={data} />
-            : tab === "info" ? <AdminInfo data={data} />
             : tab === "access" ? <AdminAccess data={data} reload={reload} />
               : tab === "users" ? <AdminUsers />
                 : tab === "system" ? <AdminSystem />
-                  : <AdminDebug />
+                  : <AdminDebug data={data} />
         ) : <LoadingBlock />}
       </div>
     </div>
@@ -284,7 +284,7 @@ const signIn = () => (S.META.access ? "Cloudflare Access, and hunt's own (an ema
     : builtInSignIn() ? "hunt's own: an email address and a password, at /login"
       : "A sign-in proxy, and hunt's own (an email address and a password)");
 
-/** Info: what this hunt is: its version, how people sign in, who runs it, and its accounts. */
+/** What this hunt is, atop Debugging info: its version, how people sign in, who runs it, and its accounts. */
 const AdminInfo = ({ data }: { data: Row }) => (
   <SettingsPanel title="This hunt">
     <Facts rows={[
@@ -478,15 +478,16 @@ function AdminUsers() {
   </>;
 }
 
-/** Debugging info: links worth having to hand, about this hunt and around it. */
-function AdminDebug() {
+/** Debugging info: what this hunt is, then links worth having to hand, about it and around it. */
+function AdminDebug({ data }: { data: Row }) {
   const here = location.origin;
   const link = (href: string, label: string, about: string) => (
     <li key={href}><a href={href} {...(href.startsWith("http") && !href.startsWith(here) ? { target: "_blank", rel: "noreferrer" } : {})}>{label}</a>
       <span className="muted small">{` — ${about}`}</span></li>
   );
   const group = (title: string, ...items: ReactNode[]) => <><h4>{title}</h4><ul className="plain links">{items}</ul></>;
-  return (
+  return <>
+    <AdminInfo data={data} />
     <section className="al-panel panel settings-panel">
       {S.META.access
         ? group("Sign-in (Cloudflare Access)",
@@ -504,17 +505,18 @@ function AdminDebug() {
         link("https://github.com/ArabesqueLabs/hunt/actions/workflows/image.yml", "Image builds", "the workflow that tests and publishes the container image"),
         link("https://github.com/orgs/ArabesqueLabs/packages/container/package/hunt", "Container image", "ghcr.io/arabesquelabs/hunt and its tags"))}
     </section>
-  );
+  </>;
 }
 
-/** System resources: the machine, and what each account takes of the database. */
+/** System resources: the machine, what the database keeps, and what each account takes of it. */
 function AdminSystem() {
   const { accounts, chosen, choose, out, pick } = useUsage();
-  if (!accounts) return <ResourcesSection />;
+  const machine = <><ResourcesSection /><div className="viz-grid"><RecordsCard /></div></>;
+  if (!accounts) return machine;
   const all = accounts.reduce((n, a) => n + a.rows, 0);
   const one = accounts.find((a) => String(a.id) === String(chosen));
   return <>
-    <ResourcesSection />
+    {machine}
     <div className="admin-users" ref={out}>
       {one ? <BreakdownHead one={one} back={() => choose("")} /> : <h2 className="admin-sub">By account</h2>}
       {one ? (

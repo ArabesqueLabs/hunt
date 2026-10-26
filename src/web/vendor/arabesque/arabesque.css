@@ -553,6 +553,90 @@ button, [role="button"] { cursor: pointer; }
 }
 
 @layer al.components {
+/* css/components/attribution.css */
+/* Attribution: the line each of the company's products carries, in its
+   footer or its about page: "A product of Arabesque Labs", or "By Arabesque
+   Labs", after the mark (2em, so never under 24px; brand.md), or the star
+   where it's small (--star). A quiet pill, or the words alone (--plain), at
+   the text's size or a step up (--lg). */
+.al-attribution {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  padding-block: 0.3em;
+  padding-inline: 0.5em 0.9em;
+  border: var(--al-border-hairline) solid var(--al-color-line-strong);
+  border-radius: var(--al-radius-full);
+  background: var(--al-color-surface);
+  color: var(--al-color-text-muted);
+  font-family: var(--al-font-sans);
+  font-size: var(--al-text-xs);
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.al-attribution .al-mark { inline-size: 2em; block-size: 2em; color: var(--al-color-text); }
+.al-attribution--star { gap: 0.45em; padding-block: 0.45em; padding-inline-start: 0.65em; }
+.al-attribution--star .al-mark { inline-size: 1.25em; block-size: 1.25em; }
+.al-attribution__name {
+  color: var(--al-color-text);
+  font-family: var(--al-font-display);
+  font-weight: var(--al-weight-medium);
+  letter-spacing: var(--al-tracking-wide);
+}
+a.al-attribution:hover { border-color: var(--al-color-text-muted); color: var(--al-color-text); }
+a.al-attribution:hover .al-attribution__name { text-decoration: underline; text-underline-offset: 0.2em; }
+a.al-attribution:focus-visible { outline: var(--al-border-focus) solid var(--al-color-focus); outline-offset: 2px; }
+.al-attribution--plain { padding: 0; border: 0; background: none; }
+.al-attribution--lg { font-size: var(--al-text-sm); }
+@media (forced-colors: active) {
+  .al-attribution { border-color: CanvasText; }
+  .al-attribution--plain { border: 0; }
+}
+
+}
+
+@layer al.components {
+/* css/components/back-to-top.css */
+/* Back to top: on a long page, a link back up, in the corner at the end of
+   the line. Hidden until the page has scrolled two screens
+   (js/back-to-top.js), and until that's wired, so it doesn't flash on
+   load; without JavaScript, always there. */
+.al-back-to-top {
+  position: fixed;
+  inset-block-end: var(--al-space-4);
+  inset-inline-end: var(--al-space-4);
+  z-index: var(--al-z-sticky);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--al-space-2);
+  min-block-size: 2.75rem;
+  padding-inline: var(--al-space-4);
+  border: var(--al-border-hairline) solid var(--al-color-line-strong);
+  border-radius: var(--al-radius-full);
+  background: var(--al-color-surface);
+  color: var(--al-color-text);
+  font-size: var(--al-text-sm);
+  text-decoration: none;
+  transition: opacity var(--al-duration-base) var(--al-ease-standard), translate var(--al-duration-base) var(--al-ease-standard), visibility 0s;
+}
+.al-back-to-top[data-al-hidden] {
+  opacity: 0;
+  translate: 0 var(--al-space-2);
+  visibility: hidden;
+  transition-timing-function: var(--al-ease-exit);
+  transition-delay: 0s, 0s, var(--al-duration-base);
+}
+@media (scripting: enabled) { .al-back-to-top:not([data-al-wired]) { opacity: 0; visibility: hidden; } }
+.al-back-to-top:hover { border-color: var(--al-color-text-muted); }
+.al-back-to-top:focus-visible { outline: var(--al-border-focus) solid var(--al-color-focus); outline-offset: 2px; }
+body[data-al-top]:focus { outline: none; }
+@media print { .al-back-to-top { display: none; } }
+@media (forced-colors: active) { .al-back-to-top { border-color: CanvasText; } }
+
+}
+
+@layer al.components {
 /* css/components/badge.css */
 /* Badge: a short status beside something ("Active", "Experimental", "3").
    Sentence case, never capitals; its meaning in words, not colour alone.
@@ -802,6 +886,20 @@ button, [role="button"] { cursor: pointer; }
 .al-button[aria-busy="true"] { cursor: progress; pointer-events: none; }
 /* Its spinner (the star) is drawn by css/components/progress.css. */
 
+/* Button group: related actions joined in a row (or a column), one border
+   between each, no gap: Left, Centre, Right; Day, Week, Month as links.
+   Each is still its own button; the group (role="group") has a name. */
+.al-button-group { display: inline-flex; align-self: flex-start; }
+.al-button-group > .al-button { position: relative; border-radius: 0; --_border: var(--al-color-control); }
+.al-button-group > .al-button:is(:hover, :focus-visible) { z-index: 1; }
+.al-button-group > .al-button + .al-button { margin-inline-start: calc(-1 * var(--al-border-hairline)); }
+.al-button-group > :first-child { border-start-start-radius: var(--al-button-radius); border-end-start-radius: var(--al-button-radius); }
+.al-button-group > :last-child { border-start-end-radius: var(--al-button-radius); border-end-end-radius: var(--al-button-radius); }
+.al-button-group--vertical { flex-direction: column; }
+.al-button-group--vertical > .al-button + .al-button { margin: calc(-1 * var(--al-border-hairline)) 0 0; }
+.al-button-group--vertical > :first-child { border-radius: var(--al-button-radius) var(--al-button-radius) 0 0; }
+.al-button-group--vertical > :last-child { border-radius: 0 0 var(--al-button-radius) var(--al-button-radius); }
+
 /* Bigger targets for fingers. */
 @media (pointer: coarse) {
   .al-button { min-block-size: var(--al-size-target-touch); }
@@ -837,6 +935,12 @@ button, [role="button"] { cursor: pointer; }
 .al-card__header { display: flex; flex-direction: column; gap: var(--al-space-1); }
 .al-card__header h2, .al-card__header h3 { font-size: var(--al-text-lg); font-weight: var(--al-weight-medium); letter-spacing: var(--al-tracking-none); }
 .al-card__description { font-size: var(--al-text-sm); color: var(--al-color-text-muted); }
+/* Its actions, at its foot, after a hairline, at the end of the line. */
+.al-card__footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--al-space-2); margin-block-start: auto; padding-block-start: var(--al-space-4); border-block-start: var(--al-border-hairline) solid var(--al-color-line); }
+/* Ribbon: one word pinned to the card's top end corner ("New",
+   "Recommended"), in the accent. One card in a set has one, at most. */
+.al-card:has(> .al-ribbon) { position: relative; padding-block-start: var(--al-space-8); }
+.al-ribbon { position: absolute; inset-block-start: var(--al-space-3); inset-inline-end: calc(-1 * var(--al-border-hairline)); padding: var(--al-space-0-5) var(--al-space-3); border-start-start-radius: var(--al-radius-sm); border-end-start-radius: var(--al-radius-sm); background: var(--al-color-accent); color: var(--al-color-on-accent); font-size: var(--al-text-xs); font-weight: var(--al-weight-semibold); }
 .al-card--interactive { transition: border-color var(--al-duration-fast) var(--al-ease-standard); }
 .al-card--interactive:hover { border-color: var(--al-color-control); }
 .al-card--selected { border-color: var(--al-color-accent); background: color-mix(in oklch, var(--al-color-accent-wash) 60%, var(--al-color-surface)); }
@@ -1476,6 +1580,14 @@ button, [role="button"] { cursor: pointer; }
 .al-affix > .al-affix__text:last-child { border-inline-start: 0; }
 .al-affix > .al-select { inline-size: auto; flex: none; border-radius: 0; }
 
+/* Range: a value along a scale, the value itself beside it in an <output>,
+   in the page's digits and with its unit. Arrow keys step, Page Up and
+   Down step further, Home and End jump. In right to left, it runs from the
+   right. For a value that needs to be exact, a number field. */
+.al-range { display: flex; align-items: center; gap: var(--al-space-3); }
+.al-range > input { flex: 1; min-inline-size: 0; block-size: var(--al-size-target-min); margin: 0; accent-color: var(--al-color-accent); cursor: pointer; }
+.al-range > output { min-inline-size: 4ch; font-variant-numeric: tabular-nums; font-weight: var(--al-weight-medium); text-align: end; }
+
 /* A group of fields under one question. */
 .al-fieldset { border: 0; margin: 0; padding: 0; min-inline-size: 0; display: flex; flex-direction: column; gap: var(--al-space-3); }
 .al-fieldset > legend { padding: 0; margin-block-end: var(--al-space-1); font-size: var(--al-text-sm); font-weight: var(--al-weight-medium); }
@@ -1515,10 +1627,16 @@ button, [role="button"] { cursor: pointer; }
   color: var(--al-color-text-muted);
   font-size: var(--al-text-sm);
 }
-.al-footer__links { display: flex; flex-wrap: wrap; gap: var(--al-space-2) var(--al-space-5); list-style: none; margin: 0; padding: 0; }
+/* At the end of the line, with or without the lockup before them. */
+.al-footer__links { display: flex; flex-wrap: wrap; gap: var(--al-space-2) var(--al-space-5); list-style: none; margin: 0; margin-inline-start: auto; padding: 0; }
 .al-footer__links a { color: inherit; text-decoration: none; }
 .al-footer__links a:hover { color: var(--al-color-accent); text-decoration: underline; }
-.al-footer__legal { flex-basis: 100%; font-size: var(--al-text-xs); }
+.al-footer__legal, .al-footer__attribution { flex-basis: 100%; }
+.al-footer__legal { font-size: var(--al-text-xs); }
+/* With no lockup, the legal line comes first, in its place: on the links'
+   row, centred with them. */
+.al-footer:has(> .al-footer__legal:first-child) { align-items: center; }
+.al-footer > .al-footer__legal:first-child { flex-basis: auto; }
 
 }
 
@@ -1607,6 +1725,38 @@ button, [role="button"] { cursor: pointer; }
 .al-link--arrow:hover .al-icon { translate: 3px 0; }
 .al-link--arrow:hover .al-icon:dir(rtl) { translate: -3px 0; }
 @media (prefers-reduced-motion: reduce) { .al-link--arrow:hover .al-icon, .al-link--arrow:hover .al-icon:dir(rtl) { translate: none; } }
+
+}
+
+@layer al.components {
+/* css/components/list.css */
+/* List: things of one kind, one to a row, hairlines between: notifications,
+   an inbox, results, a record's files. A row may start with an avatar, an
+   icon or a status, and end with a value or one action. A row that opens
+   something is a link from edge to edge; the one that's open says so
+   (aria-current), with a bar at its start. Flush, inside a card or a menu. */
+.al-list { list-style: none; margin: 0; padding: 0; border: var(--al-border-hairline) solid var(--al-color-line); border-radius: var(--al-radius-sm); background: var(--al-color-surface); overflow: hidden; }
+.al-list--flush { border: 0; border-radius: 0; background: transparent; }
+.al-list > li + li { border-block-start: var(--al-border-hairline) solid var(--al-color-line); }
+.al-list__item {
+  display: flex;
+  align-items: center;
+  gap: var(--al-space-3);
+  min-block-size: var(--al-size-control-md);
+  padding: var(--al-space-3) var(--al-space-4);
+  border-inline-start: 3px solid transparent;
+  color: inherit;
+  text-decoration: none;
+}
+a.al-list__item:hover { background: var(--al-color-surface-sunk); color: var(--al-color-text); }
+a.al-list__item:focus-visible { outline-offset: calc(-1 * var(--al-border-focus)); }
+.al-list__item[aria-current] { border-inline-start-color: var(--al-color-accent); background: var(--al-color-accent-wash); }
+.al-list__item[aria-disabled="true"] { opacity: 0.5; pointer-events: none; }
+.al-list__text { display: flex; flex-direction: column; gap: var(--al-space-0-5); flex: 1; min-inline-size: 0; }
+.al-list__title { font-weight: var(--al-weight-medium); }
+.al-list__description { overflow: hidden; font-size: var(--al-text-sm); color: var(--al-color-text-muted); text-overflow: ellipsis; white-space: nowrap; }
+.al-list__end { flex: none; font-size: var(--al-text-sm); color: var(--al-color-text-muted); }
+@media (forced-colors: active) { .al-list__item[aria-current] { border-inline-start-color: Highlight; } }
 
 }
 
@@ -1814,6 +1964,32 @@ button, [role="button"] { cursor: pointer; }
 }
 
 @layer al.components {
+/* css/components/pagination.css */
+/* Pagination: the pages of a long list, as links. Previous and Next in
+   words; the current page marked in the markup (aria-current) and by
+   inverting it; at most seven numbers, the gaps an ellipsis. On the first
+   page there's no Previous, on the last no Next. Chevrons mirror. */
+.al-pagination ul { display: flex; flex-wrap: wrap; align-items: center; gap: var(--al-space-1); margin: 0; padding: 0; list-style: none; font-size: var(--al-text-sm); font-variant-numeric: tabular-nums; }
+.al-pagination a, .al-pagination__gap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--al-space-1);
+  min-inline-size: var(--al-size-control-sm);
+  min-block-size: var(--al-size-control-sm);
+  padding-inline: var(--al-space-2);
+  border-radius: var(--al-radius-sm);
+  text-decoration: none;
+}
+.al-pagination a:hover { background: var(--al-color-surface-sunk); color: var(--al-color-text); }
+.al-pagination a[aria-current="page"] { background: var(--al-color-text); color: var(--al-color-bg); font-weight: var(--al-weight-semibold); }
+.al-pagination__gap { color: var(--al-color-text-muted); }
+.al-pagination__prev .al-icon { rotate: 180deg; }
+@media (forced-colors: active) { .al-pagination a[aria-current="page"] { forced-color-adjust: none; background: Highlight; color: HighlightText; } }
+
+}
+
+@layer al.components {
 /* css/components/pattern.css */
 /* Pattern: the tessellation of the mark's tile, as background texture only
    (js/pattern.js draws it as SVG). It fades out behind text: from the
@@ -1838,6 +2014,8 @@ button, [role="button"] { cursor: pointer; }
 /* Quiet: a low-contrast field for a small area with nothing on it (an empty
    state, a card). No mask, at any width. */
 .al-pattern--quiet .al-pattern__art, .al-pattern--quiet .al-pattern__art:dir(rtl) { color: var(--al-color-pattern-quiet); -webkit-mask-image: none; mask-image: none; }
+/* Behind a call to action's centred words, it fades toward the middle. */
+.al-cta.al-pattern--quiet .al-pattern__art { -webkit-mask-image: radial-gradient(ellipse 55% 65% at center, rgb(0 0 0 / 0.15) 35%, black 100%); mask-image: radial-gradient(ellipse 55% 65% at center, rgb(0 0 0 / 0.15) 35%, black 100%); }
 @media (max-width: 52rem) {
   .al-pattern__art, .al-pattern__art:dir(rtl) {
     -webkit-mask-image: linear-gradient(to bottom, black 0 30%, transparent 70%);
@@ -1937,6 +2115,32 @@ button, [role="button"] { cursor: pointer; }
 }
 
 @layer al.components {
+/* css/components/popover.css */
+/* Popover: more about something, when it's asked for. A button opens it
+   beside itself, in a native popover: a title, a few lines, perhaps a link.
+   Escape, the button again, or a click outside closes it (js/popover.js
+   places it and keeps aria-expanded true to it). Not for actions (a menu),
+   nor for a name (a tooltip). */
+.al-popover {
+  margin: 0;
+  inset: auto;
+  inline-size: max-content;
+  max-inline-size: min(20rem, calc(100vw - 1rem));
+  padding: var(--al-space-4);
+  border: var(--al-border-hairline) solid var(--al-color-line-strong);
+  border-radius: var(--al-radius-sm);
+  background: var(--al-color-surface);
+  color: var(--al-color-text);
+  font-size: var(--al-text-sm);
+  line-height: var(--al-leading-ui);
+}
+.al-popover > * + * { margin-block-start: var(--al-space-2); }
+.al-popover__title { font-size: var(--al-text-base); font-weight: var(--al-weight-semibold); }
+@media (forced-colors: active) { .al-popover { border-color: CanvasText; } }
+
+}
+
+@layer al.components {
 /* css/components/progress.css */
 /* Loading, where it happens: a spinner in the control or region that's
    busy, a skeleton where content will appear, a bar for progress that can
@@ -1985,6 +2189,40 @@ button, [role="button"] { cursor: pointer; }
   .al-spinner, .al-button[aria-busy="true"]::after, .al-save-state[data-state="saving"]::before { animation: none; background: currentColor; opacity: 0.6; }
 }
 @media (forced-colors: active) { .al-progress { border: 1px solid CanvasText; } }
+
+}
+
+@layer al.components {
+/* css/components/rating.css */
+/* Rating: one to five, as radios in a fieldset whose legend asks the
+   question, each drawn as the mark's star and named "3 of 5". Arrow keys
+   move and choose, as radios do. The chosen star and those before it are
+   filled in the accent; the rest are outlines. Shown, not asked, it's a
+   picture (role="img") named with its value in words. */
+.al-rating {
+  --_empty: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 72 72'><path d='M64 32L48 38.63L54.63 54.63L38.63 48L32 64L25.37 48L9.37 54.63L16 38.63L0 32L16 25.37L9.37 9.37L25.37 16L32 0L38.63 16L54.63 9.37L48 25.37Z' fill='none' stroke='black' stroke-width='5'/></svg>");
+  --_full: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 72 72'><path d='M64 32L48 38.63L54.63 54.63L38.63 48L32 64L25.37 48L9.37 54.63L16 38.63L0 32L16 25.37L9.37 9.37L25.37 16L32 0L38.63 16L54.63 9.37L48 25.37Z'/></svg>");
+  display: inline-flex;
+}
+.al-rating__star {
+  --_star: var(--_empty);
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
+  color: var(--al-color-control);
+  forced-color-adjust: none;
+}
+.al-rating__star::before { content: ""; inline-size: 1.25rem; block-size: 1.25rem; background: currentColor; -webkit-mask: var(--_star) center / contain no-repeat; mask: var(--_star) center / contain no-repeat; }
+.al-rating__star > input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; }
+.al-rating__star--on, .al-rating__star:has(input:checked), .al-rating__star:has(~ .al-rating__star input:checked) { --_star: var(--_full); color: var(--al-color-accent); }
+.al-rating__star:has(input:focus-visible) { outline: var(--al-border-focus) solid var(--al-color-focus); border-radius: var(--al-radius-sm); }
+/* Pointing at a star shows what choosing it would give. */
+@media (hover: hover) {
+  .al-rating:hover .al-rating__star:has(input) { --_star: var(--_empty); color: var(--al-color-control); }
+  .al-rating:hover .al-rating__star:is(:hover, :has(~ :hover)) { --_star: var(--_full); color: var(--al-color-accent); }
+}
 
 }
 
@@ -2048,10 +2286,13 @@ button, [role="button"] { cursor: pointer; }
 /* css/components/search.css */
 /* Search field: an input with its icon and a Clear button once there's
    text. role="search" on its form; results update as people type, with
-   the count announced politely. "/" focuses it (see kbd). */
-.al-search { position: relative; display: flex; align-items: center; min-inline-size: 0; }
-.al-search > .al-icon { position: absolute; inset-inline-start: var(--al-space-3); color: var(--al-color-text-muted); pointer-events: none; }
-.al-search > .al-input { padding-inline-start: calc(var(--al-space-3) * 2 + var(--al-size-icon)); padding-inline-end: var(--al-size-control-sm); }
+   the count announced politely. "/" focuses it (see kbd). Any field may
+   have an icon at its start the same way (.al-input-icon): it says what goes
+   in; the label still names it. */
+.al-search, .al-input-icon { position: relative; display: flex; align-items: center; min-inline-size: 0; }
+:is(.al-search, .al-input-icon) > .al-icon { position: absolute; inset-inline-start: var(--al-space-3); color: var(--al-color-text-muted); pointer-events: none; }
+:is(.al-search, .al-input-icon) > .al-input { padding-inline-start: calc(var(--al-space-3) * 2 + var(--al-size-icon)); }
+.al-search > .al-input { padding-inline-end: var(--al-size-control-sm); }
 .al-search > .al-input::-webkit-search-cancel-button { display: none; }
 .al-search__clear {
   all: unset;
@@ -2249,6 +2490,56 @@ button.al-sidebar__link { inline-size: 100%; border-block: 0; border-inline-end:
 }
 
 @layer al.components {
+/* css/components/status.css */
+/* Status: a state in a word, with a dot before it in the state's colour
+   ("Online", "Degraded", "Down"). The word is the meaning; the dot repeats
+   it. Without a visible word, the word is visually hidden inside. Live: the
+   dot pulses, for something happening now; still, with reduced motion. */
+.al-status { display: inline-flex; align-items: center; gap: var(--al-space-1-5); font-size: var(--al-text-sm); }
+.al-status::before { content: ""; inline-size: 0.5rem; block-size: 0.5rem; flex: none; border-radius: var(--al-radius-full); background: var(--_dot, var(--al-color-text-muted)); }
+.al-status--success { --_dot: var(--al-color-success); }
+.al-status--warning { --_dot: var(--al-color-warning); }
+.al-status--danger { --_dot: var(--al-color-danger); }
+.al-status--info { --_dot: var(--al-color-info); }
+.al-status--live::before { animation: al-pulse 2s var(--al-ease-standard) infinite; }
+@keyframes al-pulse { 50% { opacity: 0.35; } }
+@media (forced-colors: active) { .al-status::before { forced-color-adjust: none; } }
+
+}
+
+@layer al.components {
+/* css/components/stepper.css */
+/* Stepper: where a person is in a flow of three to six steps. Each step
+   named, under a bar: done ones in the accent and ticked, the current one
+   in the accent and bold (aria-current="step"), the rest muted. "Step 2 of
+   4" above, in words. Not for content: a sequence to read is Steps. On a
+   phone, only the current step's name shows. */
+.al-stepper { display: flex; flex-direction: column; gap: var(--al-space-2); }
+.al-stepper__count { margin: 0; font-size: var(--al-text-sm); color: var(--al-color-text-muted); }
+.al-stepper ol { display: flex; gap: var(--al-space-2); margin: 0; padding: 0; list-style: none; }
+.al-stepper li {
+  display: flex;
+  flex: 1;
+  align-items: flex-start;
+  gap: var(--al-space-1-5);
+  min-inline-size: 0;
+  padding-block-start: var(--al-space-2);
+  border-block-start: 3px solid var(--al-color-line-strong);
+  font-size: var(--al-text-sm);
+  color: var(--al-color-text-muted);
+}
+.al-stepper li[data-done], .al-stepper li[aria-current="step"] { border-block-start-color: var(--al-color-accent); color: var(--al-color-text); }
+.al-stepper li[aria-current="step"] { font-weight: var(--al-weight-semibold); }
+.al-stepper__num { font-variant-numeric: tabular-nums; }
+.al-stepper li[data-done] .al-icon { color: var(--al-color-accent); }
+@media (max-width: 40rem) {
+  .al-stepper li:not([aria-current="step"]) .al-stepper__name { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+}
+@media (forced-colors: active) { .al-stepper li[data-done], .al-stepper li[aria-current="step"] { border-block-start-color: Highlight; } }
+
+}
+
+@layer al.components {
 /* css/components/steps.css */
 /* Steps: a numbered sequence, such as the stages of how something is done
    ("Discover, Design, Build, Refine"). A rule above each, its number in the
@@ -2356,6 +2647,39 @@ button.al-sidebar__link { inline-size: 100%; border-block: 0; border-inline-end:
 }
 
 @layer al.components {
+/* css/components/timeline.css */
+/* Timeline: what happened, each event at its time, along a line down the
+   start edge: a marker (a dot, or an icon), the time, what happened and, if
+   it needs one, a line more. For a record's history or an activity feed;
+   newest first, unless the order of events is the point. */
+.al-timeline { list-style: none; margin: 0; padding: 0; }
+.al-timeline > li { position: relative; display: flex; gap: var(--al-space-3); padding-block-end: var(--al-space-6); }
+.al-timeline > li:last-child { padding-block-end: 0; }
+.al-timeline > li:not(:last-child)::before { content: ""; position: absolute; inset-block: 2rem 0; inset-inline-start: calc(1rem - var(--al-border-hairline) / 2); border-inline-start: var(--al-border-hairline) solid var(--al-color-line-strong); }
+.al-timeline__marker {
+  display: grid;
+  place-items: center;
+  inline-size: 2rem;
+  block-size: 2rem;
+  flex: none;
+  border: var(--al-border-hairline) solid var(--al-color-line-strong);
+  border-radius: var(--al-radius-full);
+  background: var(--al-color-surface);
+  color: var(--al-color-text-muted);
+}
+.al-timeline__marker:empty::after { content: ""; inline-size: 0.5rem; block-size: 0.5rem; border-radius: var(--al-radius-full); background: currentColor; }
+.al-timeline__marker[data-tone="accent"] { color: var(--al-color-accent); }
+.al-timeline__marker[data-tone="success"] { color: var(--al-color-success); }
+.al-timeline__marker[data-tone="warning"] { color: var(--al-color-warning); }
+.al-timeline__marker[data-tone="danger"] { color: var(--al-color-danger); }
+.al-timeline__event { display: flex; flex-direction: column; gap: var(--al-space-1); min-inline-size: 0; padding-block-start: var(--al-space-1); }
+.al-timeline__time { font-size: var(--al-text-sm); color: var(--al-color-text-muted); font-variant-numeric: tabular-nums; }
+.al-timeline__title { margin: 0; font-weight: var(--al-weight-medium); }
+.al-timeline__body { color: var(--al-color-text-muted); }
+
+}
+
+@layer al.components {
 /* css/components/tint.css */
 /* Tints: eight bright, pastel colours (teal, green, yellow, orange, pink,
    purple, blue, cyan), each a ground with an ink readable on it. They add
@@ -2401,6 +2725,17 @@ a.al-highlight { text-decoration-color: currentColor; text-underline-offset: 0.2
   line-height: 1;
 }
 .al-avatar--lg { inline-size: 3rem; block-size: 3rem; font-size: var(--al-text-lg); }
+
+.al-avatar--sm { inline-size: 1.5rem; block-size: 1.5rem; font-size: var(--al-text-xs); }
+.al-avatar--xl { inline-size: 4rem; block-size: 4rem; font-size: var(--al-text-xl); }
+/* Square: an organisation or a workspace, not a person. A picture fills it. */
+.al-avatar--square { border-radius: var(--al-radius-sm); }
+img.al-avatar { object-fit: cover; }
+/* Stacked: who's on something, overlapping, each ringed in the ground it
+   sits on (--al-avatars-ring), then how many more. Its words are hidden text. */
+.al-avatars { display: inline-flex; align-items: center; }
+.al-avatars > .al-avatar { box-sizing: content-box; border: 2px solid var(--al-avatars-ring, var(--al-color-surface)); }
+.al-avatars > .al-avatar + .al-avatar { margin-inline-start: -0.5rem; }
 
 @media (forced-colors: active) {
   .al-highlight { forced-color-adjust: none; background: Mark; color: MarkText; }
@@ -2551,6 +2886,12 @@ a.al-highlight { text-decoration-color: currentColor; text-underline-offset: 0.2
 .al-truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .al-prose { font-family: var(--al-font-serif); font-size: var(--al-text-md); line-height: var(--al-leading-prose); max-inline-size: var(--al-size-measure); }
 .al-prose > * + * { margin-block-start: 1em; }
+/* Inside it: lists, a quotation, and code in a sentence, which stays left
+   to right in Arabic too, each piece its own run. */
+.al-prose :is(ul, ol) { padding-inline-start: 1.25em; }
+.al-prose li + li { margin-block-start: var(--al-space-1); }
+.al-prose blockquote { padding-inline-start: var(--al-space-4); border-inline-start: 2px solid var(--al-color-line-strong); color: var(--al-color-text-muted); }
+.al-prose :not(pre) > code { padding: 0.1em 0.3em; border-radius: var(--al-radius-sm); background: var(--al-color-surface-sunk); font-size: 0.85em; direction: ltr; unicode-bidi: isolate; }
 .al-display { font-family: var(--al-font-display); font-size: var(--al-text-display); line-height: var(--al-leading-tight); letter-spacing: var(--al-tracking-tight); font-weight: var(--al-weight-regular); }
 .al-lede { font-family: var(--al-font-serif); font-size: var(--al-text-lg); line-height: var(--al-leading-prose); color: var(--al-color-text-muted); max-inline-size: var(--al-size-measure); }
 

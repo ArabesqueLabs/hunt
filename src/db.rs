@@ -21,7 +21,7 @@ const SCHEMA_POSTGRES: &str = include_str!("schema_postgres.sql");
 const SCHEMA_MYSQL: &str = include_str!("schema_mysql.sql");
 /// "hunt" in ASCII: marks a database as ours.
 const APP_ID: i64 = 0x6875_6e74;
-pub const SCHEMA_VERSION: i64 = 25;
+pub const SCHEMA_VERSION: i64 = 26;
 /// The version schema*.sql describe: a new database is made at it, then
 /// brought up to [`SCHEMA_VERSION`] by the migrations after it.
 const SCHEMA_BASE: i64 = 14;
@@ -53,6 +53,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("migrate_v23.sql"),
     include_str!("migrate_v24.sql"),
     include_str!("migrate_v25.sql"),
+    include_str!("migrate_v26.sql"),
 ];
 /// Upgrades PostgreSQL and MySQL databases can take: (version reached, its
 /// SQL for PostgreSQL, for MySQL). They start at version 8.
@@ -141,6 +142,11 @@ const SERVER_MIGRATIONS: &[(i64, &str, &str)] = &[
         25,
         include_str!("migrate_v25_postgres.sql"),
         include_str!("migrate_v25_mysql.sql"),
+    ),
+    (
+        26,
+        include_str!("migrate_v26_postgres.sql"),
+        include_str!("migrate_v26_mysql.sql"),
     ),
 ];
 

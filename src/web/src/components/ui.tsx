@@ -42,7 +42,28 @@ const ICONS: Record<string, string> = {
   tag: "M3 3h8l10 10-8 8L3 11zM7.5 7.5h.01",
   user: "M12 4a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM4 21a8 8 0 0 1 16 0",
   info: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 16v-5M12 8h.01",
+  // For stages, chosen in the board's settings (STAGE_ICONS).
+  search: "M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM21 21l-4.35-4.35",
+  send: "M22 2 11 13M22 2l-7 20-4-9-9-4z",
+  chat: "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z",
+  code: "M16 18l6-6-6-6M8 6l-6 6 6 6",
+  file: "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6",
+  target: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10zM12 11a1 1 0 1 0 0 2 1 1 0 0 0 0-2z",
+  star: "M12 2l3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z",
+  award: "M12 2a6 6 0 1 0 0 12 6 6 0 0 0 0-12zM8.2 13.1 7 22l5-3 5 3-1.2-8.9",
+  briefcase: "M4 7h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2zM16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2",
+  heart: "M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z",
+  pause: "M6 4h4v16H6zM14 4h4v16h-4z",
+  x: "M18 6 6 18M6 6l12 12",
 };
+
+/** The icons a stage can have, each with its name in words, in the order they're offered. */
+export const STAGE_ICONS: [string, string][] = [
+  ["search", "Looking"], ["send", "Sent"], ["mail", "Email"], ["phone", "Call"], ["chat", "Conversation"],
+  ["cal", "Scheduled"], ["clock", "Waiting"], ["code", "Technical"], ["file", "Take-home task"], ["users", "Panel"],
+  ["target", "Final"], ["star", "Shortlisted"], ["award", "Offer"], ["briefcase", "Job"], ["heart", "Accepted"],
+  ["check", "Done"], ["flag", "Flag"], ["pause", "On hold"], ["x", "Declined"],
+];
 
 /** A line icon, drawn in the text's colour. */
 export function Icon({ name, className }: { name: string; className?: string }) {
@@ -173,6 +194,19 @@ export function Field({ className, ...rest }: ComponentProps<"div">) {
 export function Input({ className, type = "text", ...rest }: ComponentProps<"input">) {
   const cls = cx(TEXT_FIELDS.has(type) && "al-input", rest.role === "switch" && "al-switch", className);
   return <input type={type} className={cls} {...rest} />;
+}
+
+/** A password, with an eye at its end that shows it, and hides it again. */
+export function PasswordInput({ className, ...rest }: Omit<ComponentProps<"input">, "type">) {
+  const [shown, setShown] = useState(false);
+  return (
+    <span className="password-field">
+      <Input {...rest} type={shown ? "text" : "password"} className={className} />
+      <button className="password-field__eye" type="button" aria-pressed={shown} aria-controls={rest.id}
+        aria-label={shown ? "Hide password" : "Show password"} title={shown ? "Hide password" : "Show password"}
+        onClick={() => setShown(!shown)}><Icon name={shown ? "eye-off" : "eye"} /></button>
+    </span>
+  );
 }
 
 export function Select({ className, ...rest }: ComponentProps<"select">) {

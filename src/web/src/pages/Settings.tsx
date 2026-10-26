@@ -20,7 +20,8 @@ import { ask, confirmDelete } from "../components/dialogs";
 import { useFilePicker } from "../components/files";
 import { profileBookmarklet } from "../components/importer";
 import { openTagColours } from "../components/tags";
-import { Facts, Field, Icon, Input, Label, LoadingBlock, Select } from "../components/ui";
+import { Facts, Field, Icon, Input, Label, LoadingBlock, STAGE_ICONS, Select } from "../components/ui";
+import { MenuButton, MenuItem } from "../components/Menu";
 import { GMAIL, GmailSettings } from "./Mail";
 import { takeHomeNumber } from "./TakeHome";
 
@@ -932,6 +933,9 @@ function RowSwitch({ id, title, label, checked, set, done, said, focus }: {
   );
 }
 
+/** A stage icon's name in words. */
+const iconLabel = (name: string) => STAGE_ICONS.find(([n]) => n === name)?.[1] || name;
+
 /**
  * The board, in Settings: its swimlanes, top to bottom, each a box with its
  * stages in it, and each stage with its sub stages. Removing a swimlane
@@ -981,6 +985,26 @@ function BoardSettings() {
       }}>{swimlanes.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}</Select>
     );
   };
+  // Its icon, on an application's timeline: one of the set, or none.
+  const iconPick = (st: Row, done: Done) => {
+    const set = (icon: string | null) => patch(`stages/${st.id}`, { icon });
+    const choose = async (icon: string | null) => {
+      const was = st.icon ?? null;
+      if (icon === was || !(await attempt(() => set(icon)))) return;
+      st.icon = icon;
+      done(icon ? `${st.name}'s icon is ${iconLabel(icon)}` : `${st.name} has no icon`, () => set(was), { focus: st.id });
+    };
+    return (
+      <MenuButton className="al-button al-button--sm stage-icon" label={`${st.name}'s icon`} title="Its icon, on an application's timeline"
+        items={(close) => <>
+          <MenuItem close={close} checked={!st.icon} onClick={() => choose(null)}>No icon</MenuItem>
+          <hr className="al-menu__separator" />
+          {STAGE_ICONS.map(([name, label]) => (
+            <MenuItem key={name} close={close} checked={st.icon === name} onClick={() => choose(name)}><Icon name={name} /><span>{label}</span></MenuItem>
+          ))}
+        </>}>{st.icon ? <Icon name={st.icon} /> : <span className="muted">Icon</span>}<Icon name="chevron" /></MenuButton>
+    );
+  };
   // A sub stage again, in its place among its stage's, with its cards back in it.
   const restoreLane = async (l: Row, stageId: number, ids: number[], cards: Row[]) => {
     const back = await post("lanes", { stage_id: stageId, name: l.name, folded: l.folded ?? null, is_default: l.is_default || 0 });
@@ -994,6 +1018,7 @@ function BoardSettings() {
       extra={(st, done) => (
         <span className="stage-switches">
           {swimlanePick(st, done)}
+          {iconPick(st, done)}
           {/* Terminal: a process in it is closed, its sub stage being why. */}
           <RowSwitch id={`stage-terminal-${st.id}`} title="A process in a terminal stage is closed; its sub stages are the reasons" label="Terminal stage"
             checked={st.active === 0} set={(on) => patch(`stages/${st.id}`, { active: on ? 0 : 1 })} done={done} focus={st.id}
@@ -1105,7 +1130,7 @@ async function deleteStage(stage: Row, stages: Row[], lanes: Row[]) {
     await del(`stages/${stage.id}`);
   }
   return async () => {
-    const back = await post("stages", { name: stage.name, active: stage.active, folded: stage.folded, swimlane_id: stage.swimlane_id });
+    const back = await post("stages", { name: stage.name, active: stage.active, folded: stage.folded, swimlane_id: stage.swimlane_id, icon: stage.icon ?? null });
     await post("stages/order", { ids: stages.map((s) => (s.id === stage.id ? back.id : s.id)) });
     const laneBack = new Map<number, number>();
     for (const l of its) laneBack.set(l.id, (await post("lanes", { stage_id: back.id, name: l.name, folded: l.folded ?? null, is_default: l.is_default || 0 })).id);

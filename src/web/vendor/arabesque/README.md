@@ -1,7 +1,8 @@
 # Arabesque, the Arabesque Labs design system, vendored
 
-From the design system at **0.6.0** (https://design.arabesquelabs.com/,
-`v/0.6.0/`), copied unchanged. (0.6.0 made the type scale larger, its base
+From the design system at **0.9.0** (https://design.arabesquelabs.com/,
+`v/0.9.0/`), copied unchanged. (0.9.0 added the timeline, which the
+application page's Timeline is, and more elements; 0.6.0 made the type scale larger, its base
 17px where it was 15, in `arabesque.css`'s tokens; 0.5.1 made the sidebar a
 bar with a menu button on a phone, in `arabesque.css` and `js/sidebar.js`,
 the menu button being `js/nav-menu.js`.) Don't edit these:
@@ -28,7 +29,7 @@ The lattice (`../../tokens.css`) is the system's pattern tile,
 `js/datepicker.js` is the system's with one fix that 0.6.0 doesn't have
 yet: the calendar's dialog is in the page only while it's open, which hunt
 needs as it redraws its forms. Replace it with the system's once a release
-has that fix.
+has that fix (0.9.0's is still 0.6.0's).
 
 hunt's own CSS is unlayered, so it wins over the system's layers wherever
 both style something; `../../style.css` keeps only what's hunt's own.
