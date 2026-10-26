@@ -877,6 +877,48 @@ async fn people_can_delete_their_own_account_and_everything_in_it() {
 }
 
 #[tokio::test]
+async fn admins_set_how_long_undo_stays() {
+    let app = shared_hunt();
+    // 5 seconds, unless changed: in meta, for everyone, and the overview.
+    assert_eq!(ok(&app, BOB, "GET", "/api/meta", None).await["undo_seconds"], 5);
+    assert_eq!(
+        ok(&app, ADMIN, "GET", "/api/admin/overview", None).await["undo_seconds"],
+        5
+    );
+    let saved = ok(
+        &app,
+        ADMIN,
+        "PATCH",
+        "/api/admin/settings",
+        Some(json!({ "undo_seconds": 12 })),
+    )
+    .await;
+    assert_eq!(saved["undo_seconds"], 12);
+    assert_eq!(ok(&app, BOB, "GET", "/api/meta", None).await["undo_seconds"], 12);
+    // 0 keeps it until dismissed; over a minute isn't taken.
+    let (status, v) = as_(
+        &app,
+        Some(ADMIN),
+        "PATCH",
+        "/api/admin/settings",
+        Some(json!({ "undo_seconds": 61 })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{v}");
+    // Only admins change it.
+    let (status, _) = as_(
+        &app,
+        Some(BOB),
+        "PATCH",
+        "/api/admin/settings",
+        Some(json!({ "undo_seconds": 0 })),
+    )
+    .await;
+    assert!(!status.is_success());
+    assert_eq!(ok(&app, BOB, "GET", "/api/meta", None).await["undo_seconds"], 12);
+}
+
+#[tokio::test]
 async fn admins_can_close_sign_ups() {
     // A new hunt starts closed to anyone new.
     let db = Arc::new(Mutex::new(test_db()));

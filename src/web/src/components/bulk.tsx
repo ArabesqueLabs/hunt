@@ -6,7 +6,7 @@
 // were, so a toast can undo it.
 
 import type { ReactNode } from "react";
-import { attempt, del, post } from "../lib/api";
+import { attempt, post } from "../lib/api";
 import { R } from "../lib/meta";
 import { S } from "../lib/state";
 import { toast } from "../lib/toast";
@@ -122,9 +122,7 @@ export function ProcessActions({ ids, stages, after }: { ids: () => number[]; st
           return out;
         });
         if (!made) return;
-        toast(`Reminders added: ${made.length}`, "info", { label: "Undo", onclick: async () => {
-          if (await attempt(async () => { for (const r of made) await del(`reminders/${r.id}`); return true; })) { toast("Undone"); after(); }
-        } });
+        toast(`Reminders added: ${made.length}`);
         after();
       }}>Remind…</button>
       <button className="al-button al-button--sm al-button--quiet al-button--danger" type="button" onClick={async () => {

@@ -364,6 +364,8 @@ export function ApplicationPage({ id, processId, editing = false }: { id: number
 
 function Application({ id, s, editing, readLink }: { id: number; s: Loaded; editing: boolean; readLink: string | null }) {
   const [, force] = useState(0);
+  // The timeline, open unless folded.
+  const [tlOpen, setTlOpen] = useState(true);
   const render = () => force((n) => n + 1);
   const st = useRef({
     edit: editing,
@@ -838,7 +840,7 @@ function Application({ id, s, editing, readLink }: { id: number; s: Loaded; edit
   /** People and files: a section of the form, being edited; a panel beside, being read. */
   const holder = (key: string, title: string, o: { count?: number; action?: ReactNode }, ...body: ReactNode[]) => (edit ? section(key, title, o, ...body) : panel(key, title, o, ...body));
 
-  // People on the process, and files sent with it: these act at once.
+  // People on the process, and files attached to it: these act at once.
   function people() {
     const p = s.process!;
     const list: Row[] = s.detail!.people || [];
@@ -876,7 +878,7 @@ function Application({ id, s, editing, readLink }: { id: number; s: Loaded; edit
     const p = s.process!;
     const list: Row[] = s.detail!.files || [];
     const after = (fresh: Row[] | undefined) => { if (fresh) { s.detail!.files = fresh; render(); } };
-    return holder("files", "Files sent", { count: list.length, action: formButton("files", "Send a file") },
+    return holder("files", "Attached files", { count: list.length, action: formButton("files", "Link file") },
       list.length ? (
         <ul key="list" className="files">
           {list.map((f) => (
@@ -1115,10 +1117,23 @@ function Application({ id, s, editing, readLink }: { id: number; s: Loaded; edit
     reload();
   }
 
+  /** Add: a note, an interview or a reminder to the timeline, each in a dialog; none once its cycle has ended. */
+  function adds() {
+    if (ended()) return null;
+    const item = (close: () => void, kind: "note" | "step" | "reminder", label: string) => (
+      <MenuItem close={close} onClick={() => openAdding(kind, s, saving, (fresh) => { if (fresh) refreshDetail(); else reload(); })}>{label}</MenuItem>
+    );
+    return (
+      <MenuButton title="Add to the timeline" items={(close) => <>{item(close, "note", "Note")}{item(close, "step", "Interview")}{item(close, "reminder", "Reminder")}</>}>
+        <Icon name="plus" /><span>Add</span><Icon name="chevron" />
+      </MenuButton>
+    );
+  }
+
   /**
-   * The moves: Stage (the board's stages to change to, by swimlane, with
-   * their sub stages), Edit, and Close. At its offer, Accept leads; closed,
-   * Reopen takes Stage's place.
+   * The moves: Add (to the timeline), Stage (the board's stages to change
+   * to, by swimlane, with their sub stages), Edit, and Close. At its offer,
+   * Accept leads; closed, Reopen takes Stage's place.
    */
   function moves() {
     const p = s.process;
@@ -1127,6 +1142,7 @@ function Application({ id, s, editing, readLink }: { id: number; s: Loaded; edit
     if (p.status === "archived") {
       const at = s.stages.findIndex((x) => x.id === p.reached_stage_id);
       return <>
+        {adds()}
         <button className="al-button al-button--primary" type="button" onClick={() => moveTo(s.stages[Math.max(at, 0)])}>Reopen</button>
         {edit}
       </>;
@@ -1150,6 +1166,7 @@ function Application({ id, s, editing, readLink }: { id: number; s: Loaded; edit
     ));
     return <>
       {offer ? <button className="al-button al-button--primary" type="button" onClick={() => acceptOffer(p, s.company.name, s.app.title)}>Accept the offer…</button> : null}
+      {adds()}
       <MenuButton title="Change stage" items={stageMenu}><span>Stage</span><Icon name="chevron" /></MenuButton>
       {edit}
       <button className="al-button" type="button" onClick={archiveIt}><Icon name="archive" /><span>Close</span></button>
@@ -1205,8 +1222,8 @@ function Application({ id, s, editing, readLink }: { id: number; s: Loaded; edit
    * coming up, the soonest first: interviews still to happen (each gets its
    * outcome here, and then joins the rest) and reminders not yet done. Last,
    * its swimlane's stages still to come, greyed. A stage with an icon (the
-   * board's settings) is marked with it. Each is added from its button, in a
-   * dialog.
+   * board's settings) is marked with it. Each is added from Add, beside
+   * Stage, in a dialog; the timeline folds from its head.
    */
   function timelinePanel() {
     if (!s.process) return null;
@@ -1335,16 +1352,17 @@ function Application({ id, s, editing, readLink }: { id: number; s: Loaded; edit
       .filter(({ x, i }) => i > at && swimlaneOf(x) === swimlaneOf(s.stages[at]))
       .map(({ x, i }, n) => stage(x, i, n === 0));
 
-    const add = (kind: "note" | "step" | "reminder", label: string) => (
-      <button className="al-button al-button--quiet al-button--sm" type="button"
-        onClick={() => openAdding(kind, s, saving, (fresh) => { if (fresh) refreshDetail(); else reload(); })}><Icon name="plus" /><span>{label}</span></button>
+    // Folded and unfolded from its head; what's added comes from Add, beside Stage.
+    const fold = (
+      <button className="al-button al-button--quiet al-button--sm app-tl-fold" type="button" aria-expanded={String(tlOpen) as "true" | "false"}
+        aria-controls="app-tl-list" onClick={() => setTlOpen(!tlOpen)}><Icon name="chevron" /><span>{tlOpen ? "Collapse" : "Expand"}</span></button>
     );
-    return panel("timeline", "Timeline", { action: ended() ? null : <>{add("note", "Note")}{add("step", "Interview")}{add("reminder", "Reminder")}</> },
-      <ol key="list" className="al-timeline app-tl">
+    return panel("timeline", "Timeline", { action: fold },
+      tlOpen ? <ol key="list" id="app-tl-list" className="al-timeline app-tl">
         {past.map((c) => c.node)}
         {coming.map((c) => c.node)}
         {future}
-      </ol>);
+      </ol> : null);
   }
 
   /** The facts of the role, at a glance. */

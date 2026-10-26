@@ -1,7 +1,7 @@
 // Adding an application, onto the board.
 
 import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
-import { attempt, del, enc, get, post } from "../lib/api";
+import { attempt, enc, get, post } from "../lib/api";
 import { boardQuery, boardStages } from "../lib/board";
 import { currentCycle, loadCycles, runningCycles } from "../lib/cycles";
 import { fmtMoney, parsePay } from "../lib/format";
@@ -130,9 +130,7 @@ function NewApplication({ stageId }: { stageId: number | null }) {
       await logoFromImport(card.company_id, body.company_logo);
       closeModal();
       const at = stages.find((s) => s.id === card.stage_id);
-      toast(`Added ${card.company} to ${at?.name || card.stage}`, "info", { label: "Undo", onclick: async () => {
-        if (await attempt(() => del(`applications/${card.application_id}`))) { toast("Undone"); route(); }
-      } });
+      toast(`Added ${card.company} to ${at?.name || card.stage}`);
       await loadCycles();
       const page = location.pathname.split("/")[1] || "";
       if (page === "" || page === "applications") route(); else go("/");

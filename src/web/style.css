@@ -219,8 +219,8 @@ input.al-input, select.al-select:not([multiple]) { block-size: var(--al-field-he
 .pile-face.deep::after { z-index: -2; inset: 16px 12px 0; }
 .pile-face.empty span { font-family: var(--al-font-sans); border-style: dashed; background: none; min-block-size: 2.25rem; font-size: var(--al-text-xs); }
 /* Folding: the disclosure's chevron, down to unfold, up to fold. */
-.pack-fold svg { transition: transform 0.15s; }
-.pack-fold[aria-expanded="true"] svg { transform: rotate(180deg); }
+.pack-fold svg, .app-tl-fold svg { transition: transform 0.15s; }
+.pack-fold[aria-expanded="true"] svg, .app-tl-fold[aria-expanded="true"] svg { transform: rotate(180deg); }
 .lane > header .pack-fold { margin-inline-start: auto; }
 .lane > header { align-items: center; }
 .card-closed { display: flex; flex-wrap: wrap; align-items: center; gap: var(--al-space-1-5); }
