@@ -1,12 +1,10 @@
-# The maintainer's: releasing hunt, publishing its docs (careerhunt.app),
-# its pictures, and keeping its dependencies up to date. Included by the
+# The maintainer's: releasing hunt, making its docs' pictures and pages, and
+# keeping its dependencies up to date. Included by the
 # Makefile; docs/maintaining.md says how they fit together.
 #
 # Nothing here commits, or pushes a branch: that's yours, with jj. `publish`
 # pushes a release's tag, once its commit is on main.
 
-# careerhunt.app, beside hunt: where its docs are built from hunt's.
-SITE    ?= ../careerhunt.app
 # The version being released: `make release VERSION=0.17.0`.
 VERSION ?=
 # DRY_RUN=1: say what publish would do, and do none of it.
@@ -16,7 +14,7 @@ RUN = $(if $(DRY_RUN),@echo "would run:",)
 CURRENT = $(shell grep -m1 '^version' Cargo.toml | cut -d '"' -f2)
 NOTES   = target/release-notes-v$(1).md
 
-.PHONY: release publish site-sync docs-preview site-deploy screenshots cli-docs logo audit deps dev-hosted
+.PHONY: release publish screenshots cli-docs logo audit deps dev-hosted
 
 ##@ Maintain hunt
 
@@ -43,9 +41,8 @@ release: ## Ready a release in the working copy: VERSION=x.y.z (then commit, pus
 	echo "  3. make publish   (once CI's green on main)"
 
 # The release on main, published: its tag (which builds :vX.Y.Z and
-# :release), its GitHub release (the sidebar's "hunt X.Y.Z" links there),
-# and careerhunt.app's docs, rebuilt.
-publish: ## Tag main's release, push the tag, make its GitHub release, and rebuild the docs (DRY_RUN=1 to see)
+# :release), and its GitHub release (the sidebar's "hunt X.Y.Z" links there).
+publish: ## Tag main's release, push the tag, and make its GitHub release (DRY_RUN=1 to see)
 	@v=$$(jj file show -r main@origin Cargo.toml | grep -m1 '^version' | cut -d '"' -f2); \
 	[ "$$v" = "$(CURRENT)" ] || { echo "main (on GitHub) is at $$v, here $(CURRENT): push the release first"; exit 1; }; \
 	[ -f $(call NOTES,$(CURRENT)) ] || { echo "no $(call NOTES,$(CURRENT)): make release VERSION=$(CURRENT) drafts it"; exit 1; }; \
@@ -53,18 +50,7 @@ publish: ## Tag main's release, push the tag, make its GitHub release, and rebui
 	$(RUN) jj tag set v$(CURRENT) -r main@origin
 	$(RUN) git push origin refs/tags/v$(CURRENT)
 	$(RUN) gh release create v$(CURRENT) --verify-tag --title "hunt $(CURRENT)" --notes-file $(call NOTES,$(CURRENT))
-	$(RUN) $(MAKE) --no-print-directory site-deploy
 	@echo "$(if $(DRY_RUN),would publish,published) hunt $(CURRENT): the image workflow builds :v$(CURRENT) and :release"
-
-site-sync: ## Write this hunt's docs into careerhunt.app (SITE), as its deploy does
-	HUNT_DIR=$(CURDIR) $(SITE)/scripts/sync.py
-
-docs-preview: site-sync ## The docs on http://localhost:3000/docs/, as careerhunt.app will show them
-	cd $(SITE)/docusaurus && { [ -d node_modules ] || $(NPM) ci; } && $(NPM) start
-
-site-deploy: ## Rebuild careerhunt.app from hunt's main (its deploy workflow, through GitHub)
-	gh api repos/ArabesqueLabs/careerhunt.app/dispatches -f event_type=hunt-updated
-	@echo "careerhunt.app is rebuilding: gh run list -R ArabesqueLabs/careerhunt.app"
 
 screenshots: build ## Photograph the demo's pages into docs/screenshots, for docs/screenshots.md and careerhunt.app (needs Chrome and Node)
 	node scripts/screenshots.mjs

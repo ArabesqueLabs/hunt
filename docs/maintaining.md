@@ -1,6 +1,6 @@
 # Maintaining hunt
 
-Releasing hunt, and publishing its docs. The targets are `make`'s
+Releasing hunt, and making its docs' pictures and pages. The targets are `make`'s
 "Maintain hunt" section (`mk/maintain.mk`). None of them commits or pushes
 a branch: that stays yours, with jj.
 
@@ -23,8 +23,7 @@ a branch: that stays yours, with jj.
    - tags main's commit `v0.17.0`, and pushes the tag: the image workflow
      builds `:v0.17.0`, `:v0.17` and `:release`, for amd64 and arm64;
    - makes the GitHub release, with the notes (the app's sidebar links to
-     it, as "hunt 0.17.0");
-   - rebuilds careerhunt.app (`make site-deploy`).
+     it, as "hunt 0.17.0").
 
 Self-hosters' compose files and Kustomize folders run `:release`, so a
 release reaches them when they update. Main's pushes reach only `:latest`
@@ -34,13 +33,9 @@ and `:demo`.
 
 hunt's docs are its README (a page per section), and `docs/start`,
 `docs/concepts`, `docs/web-ui` and `docs/cli`. careerhunt.app builds them
-with Docusaurus, fetching them from hunt's main (its `scripts/sync.py`).
-
-- `make docs-preview`: the docs from this clone, on
-  http://localhost:3000/docs/, as the site will show them (careerhunt.app
-  beside hunt, or `SITE=…`).
-- `make site-deploy`: rebuild the site from hunt's main, without a release
-  (a docs fix). It needs `gh`, signed in with access to careerhunt.app.
+with Docusaurus, fetching them from hunt's main, daily. The site, and how
+to preview or deploy it, are Arabesque Labs' websites repository's
+(`sites/careerhunt.app`), not hunt's.
 
 ## Pictures and pages made from hunt
 

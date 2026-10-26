@@ -7,8 +7,8 @@ for yourself or for others. It's a product of
 [Arabesque Labs](https://arabesquelabs.com), who also run it for people who'd
 rather not host it themselves. Its website, [careerhunt.app](https://careerhunt.app),
 has these docs, screenshots (also in [`docs/screenshots.md`](docs/screenshots.md))
-and the hosted hunt's legal pages; it's a repository of its own,
-[ArabesqueLabs/careerhunt.app](https://github.com/ArabesqueLabs/careerhunt.app).
+and the hosted hunt's legal pages; it's kept apart from hunt, with Arabesque
+Labs' other websites.
 
 To look around first, with made-up data on every page (nothing is kept
 once you stop it):

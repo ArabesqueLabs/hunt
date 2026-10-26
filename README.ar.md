@@ -6,8 +6,7 @@ hunt برمجيات حرة، بموجب رخصة [GNU AGPL v3](LICENSE): شغّ�
 منتجات [معامل آرابيسك](https://arabesquelabs.com/ar/)، التي تشغّله أيضًا لمن يفضّلون ألا
 يستضيفوه بأنفسهم. وموقعه، [careerhunt.app](https://careerhunt.app/ar/)، فيه هذا التوثيق ولقطات
 الشاشة (وهي أيضًا في [`docs/screenshots.md`](docs/screenshots.md)) والصفحات القانونية لـhunt
-المستضاف؛ وهو مستودع مستقل،
-[ArabesqueLabs/careerhunt.app](https://github.com/ArabesqueLabs/careerhunt.app).
+المستضاف؛ وهو منفصل عن hunt، مع مواقع معامل آرابيسك الأخرى.
 
 لتتجوّل فيه أولًا، ببيانات مُختلَقة في كل صفحة (ولا يُحفظ شيء حين توقفه):
 
