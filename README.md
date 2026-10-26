@@ -324,7 +324,7 @@ docker run -e HUNT_ADMIN_EMAIL=you@example.com -e HUNT_ADMIN_PASSWORD='a long pa
 ```
 
 - **The app and its data** ask for them, at `/login`, and remember you for
-  30 days. The sidebar has **Log out**; Settings → Account changes your
+  30 days. The sidebar has **Log out**; Settings → General changes your
   email address and password. Until there's an owner, nothing needs
   signing in: make them before hunt can be reached from elsewhere.
 - **Passwords** are kept as Argon2 hashes, with the accounts: never in a

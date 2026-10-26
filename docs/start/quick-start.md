@@ -63,7 +63,7 @@ skipped; the rest can be changed later, in Settings.
    too: you're its admin (Admin, in the sidebar), and it's yours alone,
    with sign-ups closed, until you open them or invite someone. The
    password's kept in the database as a hash (never in a backup), and both
-   are changed in Settings → Account. Until there's an owner, nothing needs
+   are changed in Settings → General. Until there's an owner, nothing needs
    signing in, so make it straight away. Started with `HUNT_ADMIN_EMAIL`
    and `HUNT_ADMIN_PASSWORD`, hunt makes the owner itself, and the launcher
    says who.

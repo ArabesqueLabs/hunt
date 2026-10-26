@@ -66,15 +66,14 @@ function useEditing() {
 
 /** Settings' tabs: each one's key, name, what's in it, and its icon. */
 const SETTINGS_TABS: [string, string, string, string][] = [
-  ["general", "General", "Appearance, language", "sliders"],
+  ["general", "General", "Appearance, language, account", "sliders"],
   ["board", "Board", "Swimlanes, stages, sub stages", "board"],
   ["calendar", "Calendar", "Hours, time zones, sharing", "cal"],
   ["data", "Data", "Backup, audit log", "database"],
   // Connections (LinkedIn, Gmail) is hidden for now; its parts are kept below.
   // ["connections", "Connections", GMAIL ? "LinkedIn, Gmail" : "LinkedIn", "link"],
-  ["pay", "Pay and tax", "Where you live, take-home", "calc"],
+  ["pay", "Pay calculator", "Where you live, take-home", "calc"],
   ["tags", "Tags", "", "tag"],
-  ["account", "Account", "Signing in, deleting", "user"],
 ];
 
 export function SettingsPage() {
@@ -84,7 +83,7 @@ export function SettingsPage() {
     const q = new URLSearchParams(location.search);
     if (q.get("gmail") === "connected") toast(`Signed in with Google as ${q.get("address")}`);
     if (q.get("gmail_error")) toast(`Signing in with Google didn't work: ${q.get("gmail_error")}`, "error");
-    const tabs = SETTINGS_TABS.filter(([k]) => k !== "account" || myAccount() || S.META.access);
+    const tabs = SETTINGS_TABS;
     const t = tabs.some(([k]) => k === q.get("tab")) ? q.get("tab")! : (tabs.some(([k]) => k === stored("settingsTab")) ? stored("settingsTab")! : "general");
     history.replaceState(null, "", `/settings${t === "general" ? "" : `?tab=${t}`}`);
     settle();
@@ -92,21 +91,24 @@ export function SettingsPage() {
     return t;
   });
   // Its sections are in the sidebar, in the app's place.
-  const tabs = SETTINGS_TABS.filter(([k]) => k !== "account" || myAccount() || S.META.access);
+  const tabs = SETTINGS_TABS;
   useEffect(() => {
     sectionNav.set({ label: "Settings sections", base: "settings",
       tabs: tabs.map(([k, label, hint, ic]) => [k, label, k === "tags" ? `${S.TAGS.length} ${S.TAGS.length === 1 ? "tag" : "tags"}` : hint, ic]), tab });
   });
   useEffect(() => () => sectionNav.set(null), []);
   const parts: Record<string, () => ReactNode> = {
-    general: () => <><ThemeSettings /><LocaleSettings /></>,
+    general: () => <>
+      <ThemeSettings /><LocaleSettings />
+      {myAccount()?.has_password ? <SignInDetails /> : !myAccount() && S.META.access ? <SignInSettings /> : null}
+      <DeleteAccountSettings />
+    </>,
     pay: () => <><LocationSettings />{takeHomeOn() ? <DesiredSettings /> : null}</>,
     board: () => <BoardSettings />,
     tags: () => <TagsSettings />,
     calendar: () => <><CalendarSettings /><CalendarFeedSettings /></>,
     connections: () => <><LinkedinSettings />{GMAIL ? <GmailSettings /> : null}</>,
     data: () => <><BackupSettings /><AuditSettings /></>,
-    account: () => (myAccount() ? <><AccountSettings />{myAccount().has_password ? <SignInDetails /> : null}</> : <SignInSettings />),
   };
   return (
     <div className="page settings">
@@ -174,10 +176,9 @@ export function ContactLine() {
 
 /** Signed in through Cloudflare Access, with no account here: who, and signing out. */
 const SignInSettings = () => (
-  <SettingsPanel title="Your account">
+  <SettingsPanel title="Signing in">
     <Facts rows={[["Signed in as", <span translate="no">{S.META.access?.email || "—"}</span>], ["Sign-in", "Cloudflare Access"]]} />
     <div className="actions"><a className="al-button" href="/cdn-cgi/access/logout">Sign out</a></div>
-    <ContactLine />
   </SettingsPanel>
 );
 
@@ -229,29 +230,60 @@ function SignInDetails() {
   );
 }
 
-// ---- your account (a shared hunt) ---------------------------------------------------------
+// ---- deleting (your data, or your account) ------------------------------------------------
 
-function AccountSettings() {
+/** Ask before something that can't be undone: what goes, and the word to type to mean it. */
+const confirmTyping = (title: string, word: string, ok: string, what: ReactNode) => ask({
+  title, ok, danger: true,
+  body: <div className="fields">
+    {what}
+    <p><b>This can't be undone.</b>{" "}<span>Download a backup first (Settings → Data) if you might want any of it.</span></p>
+    <Field><Label htmlFor="typed-confirm">{`Type ${word} to confirm`}</Label>
+      <Input id="typed-confirm" name="confirm" autoComplete="off" spellCheck={false} required pattern={word} title={`Type ${word}, in capitals`} /></Field>
+  </div>,
+});
+
+/**
+ * At the bottom of General: clearing your data (your account and settings
+ * stay), and, with an account, deleting it and everything in it. Not the
+ * only admin's, or the only account: the button says why, on hover.
+ */
+function DeleteAccountSettings() {
   const me = myAccount();
+  const why = me?.why_not_delete as string | null | undefined;
+  const clear = async () => {
+    const d = await confirmTyping("Clear your data", "CLEAR", "Clear my data",
+      <p>This deletes all your cycles, applications, companies, people, notes, documents, tags, emails and the activity log, for good. Your account, settings and board stay.</p>);
+    if (!d) return;
+    if (await attempt(() => api("DELETE", "data", { confirm: d.get("confirm") || "" }))) {
+      await reloadMeta();
+      await reloadTags();
+      changed();
+      toast("Your data is cleared");
+    }
+  };
+  const remove = async () => {
+    if (why) return;
+    const d = await confirmTyping("Delete your account", "DELETE", "Delete my account",
+      <p>This deletes your account and everything in it, for good: applications, companies, people, notes, files and settings.</p>);
+    if (!d) return;
+    if (await attempt(() => api("DELETE", "account", { confirm: d.get("confirm") || "" }))) {
+      // Gone: signed out of Access too, where there is one.
+      location.href = tenancy()?.trying_out ? "/" : me.has_password ? "/logout" : "/cdn-cgi/access/logout";
+    }
+  };
   return (
-    <SettingsPanel title="Your account">
-      <p><b translate="no">{me.email}</b></p>
-      <p className="muted">Deleting your account deletes everything in it, at once and for good: applications, companies, people, notes, files and settings. Download a backup first if you might want any of it.
+    <SettingsPanel title="Delete account">
+      {me ? <p><b translate="no">{me.email}</b></p> : null}
+      <p className="muted">{me
+        ? "Clearing your data deletes everything you've tracked, and keeps your account and settings. Deleting your account deletes it and everything in it. Both happen at once and for good."
+        : "Clearing your data deletes everything you've tracked, at once and for good, and keeps your settings."}
         {S.META.terms ? <>{" "}<a href={sitePage("/data-deletion/")} target="_blank" rel="noopener">More about deleting your data</a></> : null}</p>
-      <div className="actions"><button className="al-button al-button--quiet al-button--danger" type="button" onClick={async () => {
-        const d = await ask({ title: "Delete your account",
-          body: <div className="fields">
-            <p>This deletes your account and everything in it, for good. It can't be undone.</p>
-            <Field><Label htmlFor="delete-confirm">Type your email address to confirm</Label>
-              <Input id="delete-confirm" name="confirm" type="email" autoComplete="off" placeholder={me.email} /></Field>
-          </div>,
-          ok: "Delete for good", danger: true });
-        if (!d) return;
-        if (await attempt(() => api("DELETE", "account", { confirm: d.get("confirm") || "" }))) {
-          // Gone: signed out of Access too, where there is one.
-          location.href = tenancy()?.trying_out ? "/" : me.has_password ? "/logout" : "/cdn-cgi/access/logout";
-        }
-      }}>Delete my account…</button></div>
+      <div className="actions">
+        <button className="al-button al-button--danger" type="button" onClick={clear}>Clear my data…</button>
+        {me ? <button className="al-button al-button--danger al-button--primary" type="button" onClick={remove}
+          aria-disabled={why ? true : undefined} data-al-tip={why ? `|${why[0].toUpperCase()}${why.slice(1)}.` : undefined}>Delete my account…</button> : null}
+      </div>
       <ContactLine />
     </SettingsPanel>
   );
@@ -535,10 +567,10 @@ function LocationSettings() {
   return (
     <SettingsPanel title="Where you live" intro="For working out tax on your pay.">
       <SettingRow label="UK resident" hint={P.uk_resident
-        ? "Take-home pay is on, and on applications that give their pay."
-        : "Take-home pay works out UK tax, so it's for those who live in the UK: what you'd keep of a salary or a contractor's rate, and of applications' pay."}>
+        ? "Pay calculator is on, and take-home pay on applications that give their pay."
+        : "Pay calculator works out UK tax, so it's for those who live in the UK: what you'd keep of a salary or a contractor's rate, and of applications' pay."}>
         <SwitchSetting id="set-uk" checked={!!P.uk_resident} label="I live in the UK (a UK resident, for tax)"
-          save={(on) => saveSettings({ uk_resident: on }, on ? "Take-home pay is on" : "Take-home pay is off")} />
+          save={(on) => saveSettings({ uk_resident: on }, on ? "Pay calculator is on" : "Pay calculator is off")} />
       </SettingRow>
       {P.uk_resident ? (
         <SettingRow id="set-uk-region" label="Part of the UK" hint="Scotland has its own income tax bands.">
@@ -557,7 +589,7 @@ function DesiredSettings() {
   const want = P.desired_take_home;
   return (
     <SettingsPanel title="What you want to take home"
-      intro="Take-home pay, and every application's pay, compare with this. Take-home pay starts from it when you work back from what you want.">
+      intro="Pay calculator, and every application's pay, compare with this. Pay calculator starts from it when you work back from what you want.">
       <SettingRow id="set-desired" label="Desired net take-home pay" hint={<><span>After tax, in</span>{" "}{currencyName(HOME())}{". "}<span>Leave it empty for none.</span></>}>
         <TextSetting id="set-desired" inputMode="decimal" autoComplete="off" placeholder="e.g. 4,000" value={want == null ? "" : String(want)} save={(v) => {
           const n = takeHomeNumber(v);

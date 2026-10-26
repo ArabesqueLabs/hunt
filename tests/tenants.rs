@@ -827,7 +827,14 @@ async fn people_can_delete_their_own_account_and_everything_in_it() {
     make_things(&app, ADMIN).await;
     make_things(&app, BOB).await;
     let admins_before = ok(&app, ADMIN, "GET", "/api/applications", None).await;
-    // Not without typing their address.
+    // Bob may; the only admin may not, and meta says why.
+    assert_eq!(
+        ok(&app, BOB, "GET", "/api/meta", None).await["tenancy"]["account"]["why_not_delete"],
+        Value::Null
+    );
+    let why = ok(&app, ADMIN, "GET", "/api/meta", None).await["tenancy"]["account"]["why_not_delete"].clone();
+    assert!(why.as_str().unwrap().contains("only admin"), "{why}");
+    // Not without typing DELETE.
     let (status, v) = as_(
         &app,
         Some(BOB),
@@ -843,7 +850,7 @@ async fn people_can_delete_their_own_account_and_everything_in_it() {
         BOB,
         "DELETE",
         "/api/account",
-        Some(json!({ "confirm": BOB.to_uppercase() })),
+        Some(json!({ "confirm": "DELETE" })),
     )
     .await;
     assert!(gone["rows_removed"].as_i64().unwrap() > 0, "{gone}");
@@ -869,11 +876,60 @@ async fn people_can_delete_their_own_account_and_everything_in_it() {
         Some(ADMIN),
         "DELETE",
         "/api/account",
-        Some(json!({ "confirm": ADMIN })),
+        Some(json!({ "confirm": "DELETE" })),
     )
     .await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{v}");
     assert!(v["error"].as_str().unwrap().contains("only admin"), "{v}");
+}
+
+#[tokio::test]
+async fn people_can_clear_their_data_and_keep_their_account() {
+    let app = shared_hunt();
+    ok(
+        &app,
+        BOB,
+        "POST",
+        "/api/account/request",
+        Some(json!({ "agrees": true, "name": "Bob" })),
+    )
+    .await;
+    let bob_id = ok(&app, ADMIN, "GET", "/api/admin/overview", None).await["accounts"][0]["id"]
+        .as_i64()
+        .unwrap();
+    ok(
+        &app,
+        ADMIN,
+        "POST",
+        &format!("/api/admin/accounts/{bob_id}/decide"),
+        Some(json!({ "status": "active" })),
+    )
+    .await;
+    make_things(&app, ADMIN).await;
+    make_things(&app, BOB).await;
+    let admins_before = ok(&app, ADMIN, "GET", "/api/applications", None).await;
+    let stages = ok(&app, BOB, "GET", "/api/stages", None).await;
+    // Not without typing CLEAR.
+    let (status, v) = as_(
+        &app,
+        Some(BOB),
+        "DELETE",
+        "/api/data",
+        Some(json!({ "confirm": "clear" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{v}");
+    let cleared = ok(&app, BOB, "DELETE", "/api/data", Some(json!({ "confirm": "CLEAR" }))).await;
+    assert!(cleared["rows_removed"].as_i64().unwrap() > 0, "{cleared}");
+    // Theirs gone, the board's stages kept; the admin's untouched.
+    for what in ["applications", "processes", "companies", "people", "cycles"] {
+        assert_eq!(ok(&app, BOB, "GET", &format!("/api/{what}"), None).await, json!([]), "{what}");
+    }
+    assert_eq!(ok(&app, BOB, "GET", "/api/stages", None).await, stages);
+    assert_eq!(
+        ok(&app, ADMIN, "GET", "/api/applications", None).await,
+        admins_before
+    );
 }
 
 #[tokio::test]

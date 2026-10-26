@@ -17,9 +17,9 @@ Your currency (Settings → General) is the one pay is shown in. Pay is
 still kept in GBP; it's shown in yours at today's rate. The application's
 own figures, in their own currency, are on its page.
 
-## Take-home pay
+## Pay calculator
 
-If you live in the UK (Settings → Pay and tax), hunt works out what you'd
+If you live in the UK (Settings → Pay calculator), hunt works out what you'd
 take home after income tax and National Insurance: from a salary (with a
 bonus, shares and benefits), or a contractor's day or hourly rate, inside
 and outside IR35. Set the take-home pay you want, and the take-home

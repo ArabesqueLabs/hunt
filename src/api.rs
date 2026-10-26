@@ -33,7 +33,8 @@
 //! | `POST /api/stages/{id}/lanes/order` | `{ids}`: a stage's lanes, top to bottom |
 //! | `POST /api/swimlanes/order` | `{ids}`: the board's swimlanes, top to bottom |
 //! | `GET /docs`, `/screenshots`, `/privacy`, `/terms`, `/data-deletion`, `/ar/…` | the website's pages, which hunt once served: redirected there (`HUNT_SITE_URL`); without a website, the docs on GitHub |
-//! | `DELETE /api/account` | delete your own account and everything in it (`{confirm: your email}`) |
+//! | `DELETE /api/account` | delete your own account and everything in it (`{confirm: "DELETE"}`); not the only admin's, or the only account |
+//! | `DELETE /api/data` | clear your data: cycles, applications, companies, people, notes, documents, tags (`{confirm: "CLEAR"}`); settings and the board stay |
 //! | `GET /api/account`, `POST /api/account/request` | with several people (`--tenants`): who's asking and their account; ask for one (`{name, reason, provider, agrees}`: agreeing to the terms of use) |
 //! | `PATCH /api/admin/settings` | admins: `{site}`, this hunt's `name`, an `announcement` on every page and a `contact` address for help; `{signups_open}`, whether new people may ask for an account; `{defaults}`, the language, region, time zone and currency new accounts start with; `{undo_seconds}`, how long a toast with Undo stays (5; 0 until dismissed, 60 at most). One person's hunt: its owner, `{site}`'s `name` and `announcement` |
 //! | `POST /api/admin/invites` | admins: `{email, name?}`, an account for someone, open for sign-ups or not |
@@ -419,6 +420,7 @@ fn routes(state: AppState) -> Router {
         .route("/api/system", get(system))
         .route("/dev/as", get(dev_as))
         .route("/api/account", get(account).delete(delete_account))
+        .route("/api/data", axum::routing::delete(clear_data))
         .route("/api/account/request", post(request_account))
         .route("/api/admin/overview", get(admin_overview))
         .route("/api/admin/settings", axum::routing::patch(admin_settings))
@@ -1296,6 +1298,8 @@ async fn meta(v: Viewer, headers: HeaderMap) -> ApiResult {
         "account": v.account.as_ref().map(|a| json!({
             "id": a.id, "email": a.email, "name": a.name, "status": a.status, "role": a.role,
             "has_password": a.has_password,
+            // Why they can't delete it (the only admin, or the only account), if not.
+            "why_not_delete": t.why_not_delete(a).ok().flatten(),
         })),
     });
     // What the admins say of this hunt, to everyone (signed in or not).
@@ -2541,7 +2545,7 @@ struct AskFor {
 
 #[derive(Deserialize)]
 struct DeleteOwn {
-    /// Their email address, typed again, to be sure.
+    /// "DELETE" (or, for "clear my data", "CLEAR"), typed, to be sure.
     confirm: Option<String>,
 }
 
@@ -2553,15 +2557,30 @@ async fn delete_account(v: Viewer, Json(b): Json<DeleteOwn>) -> ApiResult {
             "sign in first, to delete your account".into(),
         )));
     };
-    let typed = b.confirm.as_deref().unwrap_or("").trim();
-    if !typed.eq_ignore_ascii_case(&me.email) {
+    if b.confirm.as_deref().map(str::trim) != Some("DELETE") {
         return Err(ApiError(Error::Invalid(
-            "type your email address to confirm deleting your account".into(),
+            "type DELETE to confirm deleting your account".into(),
         )));
     }
     ok(tokio::task::spawn_blocking(move || t.delete_own(&me))
         .await
         .map_err(|e| ApiError(Error::Db(e.to_string())))??)
+}
+
+/// Clear your data, for good: cycles, applications, companies, people,
+/// notes, documents, tags, emails and the activity log. Settings, the board's
+/// stages and swimlanes, and the account itself stay.
+async fn clear_data(s: Scoped, Json(b): Json<DeleteOwn>) -> ApiResult {
+    if b.confirm.as_deref().map(str::trim) != Some("CLEAR") {
+        return Err(ApiError(Error::Invalid(
+            "type CLEAR to confirm clearing your data".into(),
+        )));
+    }
+    let shared = s.clone();
+    let cleared = tokio::task::spawn_blocking(move || with_db(&shared, |db| db.clear_data()))
+        .await
+        .map_err(|e| ApiError(Error::Db(e.to_string())))??;
+    ok(cleared)
 }
 
 /// Ask for an account: pending until an admin approves it.

@@ -5,7 +5,7 @@ How hunt looks and works, the tags on everything, and the lists' columns.
 ## Settings
 
 Settings are yours: kept with your account, so they're the same on every
-device you sign in on. General, Calendar, and Pay and tax are changed
+device you sign in on. General, Calendar, and Pay calculator are changed
 where they are: each setting is saved as it's changed (a field, once it's
 left or on Enter; Escape puts it back), and says so, with Undo.
 
@@ -30,15 +30,21 @@ long as Admin → General says); adding something is said, without Undo.
 - **Calendar:** your time zone, the day weeks start on, working hours
   (from, to, and which days), up to three other time zones, and Calendar
   sharing (a private link for calendar apps).
-- **Pay and tax:** whether you live in the UK, and which part (for
-  take-home pay), and the take-home pay you want, a week, month or year.
+- **Pay calculator:** whether you live in the UK, and which part (for
+  the Pay calculator), and the take-home pay you want, a week, month or year.
 - **Backup and import.**
 - **LinkedIn bookmarklet** (folded at first): the bookmark, the address it
   opens, and what to do about a name already here.
-- **Account:** your account: change your email address or password (with
-  the one now; a new password ends your other sessions), Log out, and
-  delete it, with everything in it. Behind Cloudflare Access or a sign-in
-  proxy, you sign in there instead.
+- **Signing in** (at the bottom of General): change your email address
+  or password (with the one now; a new password ends your other
+  sessions), and Log out. Behind Cloudflare Access or a sign-in proxy, you
+  sign in there instead.
+- **Delete account** (at the bottom of General): **Clear my data** deletes
+  your cycles, applications, companies, people, notes, documents, tags,
+  emails and activity log, and keeps your account, settings and board;
+  **Delete my account** deletes the account and everything in it. Each asks
+  you to type CLEAR or DELETE first. The only admin, or the only account,
+  can't be deleted: the button says why.
 
 A new hunt asks for the first of these in its launcher, before the board
 (unless it's restored from a backup, which brings them): its owner, the

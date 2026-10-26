@@ -76,7 +76,7 @@ export function Sidebar({ page, section, account }: { page: string; section: str
   };
   const own = (page === "admin" || page === "settings") && sections ? sections : null;
   const here = SECTIONS.find(([, nav]) => nav === section)?.[3]
-    ?? ({ "take-home": "Take-home pay", celebrate: "Your offer", settings: "Settings", admin: "Admin" } as Record<string, string>)[section] ?? "";
+    ?? ({ "take-home": "Pay calculator", celebrate: "Your offer", settings: "Settings", admin: "Admin" } as Record<string, string>)[section] ?? "";
   const M = S.META;
   // Drawn into the page's own <aside> (the shell's child, as the design system lays it out).
   return (
@@ -99,7 +99,7 @@ export function Sidebar({ page, section, account }: { page: string; section: str
         {account || !S.META ? null : <div className="due-box"><DueMenu mini={mini} /></div>}
         <nav className="al-sidebar__nav app-nav" aria-label="Sections">
           {SECTIONS.map(([href, nav, d, label]) => <NavLink key={nav} href={href} nav={nav} d={d} label={label} current={nav === section} mini={mini} />)}
-          <NavLink href="/take-home" nav="take-home" d={TAKE_HOME} label="Take-home pay " current={section === "take-home"} mini={mini}>
+          <NavLink href="/take-home" nav="take-home" d={TAKE_HOME} label="Pay calculator " current={section === "take-home"} mini={mini}>
             <svg className="uk-flag" viewBox="0 0 60 30" role="img" aria-label="UK only, for now"><title>UK only, for now</title><clipPath id="uk-flag-t"><path d="M30 15h30v15zv15H0zH0V0zV0h30z" /></clipPath><path d="M0 0v30h60V0z" fill="#012169" /><path d="M0 0l60 30m0-30L0 30" stroke="#fff" strokeWidth="6" /><path d="M0 0l60 30m0-30L0 30" clipPath="url(#uk-flag-t)" stroke="#c8102e" strokeWidth="4" /><path d="M30 0v30M0 15h60" stroke="#fff" strokeWidth="10" /><path d="M30 0v30M0 15h60" stroke="#c8102e" strokeWidth="6" /></svg>
           </NavLink>
           <NavLink href="/celebrate" nav="celebrate" d={STAR} label="Your offer" current={section === "celebrate"} hidden={!offer} mini={mini} />
