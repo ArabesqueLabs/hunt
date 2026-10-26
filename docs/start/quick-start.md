@@ -133,9 +133,11 @@ It's a card on the board now, in your job search.
 ## 6. Use the command line (optional)
 
 Everything the board does, from your terminal. With Docker, the image has
-it: `docker exec hunt hunt board`. Installed with `cargo install`, it talks
-to the hunt at `HUNT_URL` (`http://127.0.0.1:4848` unless you say), and
-signs in as the owner with `HUNT_EMAIL` and `HUNT_PASSWORD`:
+it, run from the folder with `compose.yaml`:
+`docker compose exec -e HUNT_EMAIL=you@example.com -e HUNT_PASSWORD=… hunt hunt board`.
+Installed with `cargo install`, it talks to the hunt at `HUNT_URL`
+(`http://127.0.0.1:4848` unless you say), and signs in as the owner with
+`HUNT_EMAIL` and `HUNT_PASSWORD`:
 
 ```sh
 hunt add --link https://jobs.ashbyhq.com/acme/1234 -s applied
