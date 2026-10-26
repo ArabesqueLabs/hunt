@@ -303,7 +303,8 @@ function GettingStarted({ b }: { b: Board }) {
           "From a posting's link, which hunt reads, or by hand.", apps ? done : <span className="al-badge al-badge--accent">Next</span>)}
         {task(<a href="/settings?tab=board">Make the board yours</a>, "Its stages, and the swimlanes that group them.", optional)}
         {task(<a href="/settings?tab=calendar">Put interviews in your calendar</a>, "Your working hours, and a link your calendar app can follow.", S.PREFS.calendar_feed ? done : optional)}
-        {task(<a href="/settings?tab=connections">Add people from LinkedIn in one click</a>, "A bookmark that sends a profile to hunt.", optional)}
+        {/* Settings → Connections is hidden for now.
+        {task(<a href="/settings?tab=connections">Add people from LinkedIn in one click</a>, "A bookmark that sends a profile to hunt.", optional)} */}
       </ol>
     </section>
   );
