@@ -51,14 +51,21 @@ admins.
 - **General:** this hunt's name (in the sidebar and the browser's tab), a
   notice above every page, an address people can write to for help, and
   what new accounts start with.
-- **Info:** its version, how people sign in, and its accounts.
 - **Access and accounts:** whether new people may sign up (closed, on a new
   hunt), inviting someone, those waiting to be let in, and every account:
   its status and role, disabling or removing it.
-- **User stats** and **System resources:** how each account uses hunt (by
-  number, not name), and what hunt uses of its machine.
-- **Debugging info:** the health check, the calendar feed, a backup, the
-  API, and the source and image builds.
+- **User stats:** how each account uses hunt (by number, not name).
+- **System resources:** what hunt uses of its machine, refreshed every 5
+  seconds while the page is open (`GET /api/system`): memory (against the
+  container's limit, on Linux), CPU now and on average, and load; the
+  database's size and stored files, and the free space on its disk
+  (SQLite); the records it keeps, table by table; and what each account
+  takes of it. "Up for" counts across restarts and rollouts: hunt keeps a
+  heartbeat each minute in its database, and a start less than 15 minutes
+  after the last one carries the uptime on.
+- **Debugging info:** this hunt's version, how people sign in, and its
+  accounts; then the health check, the calendar feed, a backup, the API,
+  and the source and image builds.
 
 More in [Several people](../../README.md#several-people-multi-user).
 

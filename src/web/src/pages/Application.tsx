@@ -50,6 +50,23 @@ function linkify(text: string): ReactNode[] {
 const BULLET = /^\s*(?:[-*•·▪‣–]|\d{1,2}[.)])\s+/;
 
 /**
+ * A posting's first few sentences, for reading at a glance, and whether
+ * there's more: the headings it opens with are left out, it stops at its
+ * first list, and its lines run together.
+ */
+function postingLead(text: string, sentences = 3): { lead: string; more: boolean } {
+  const lines = String(text).split(/\n+/).map((l) => l.trim()).filter(Boolean);
+  while (lines.length > 1 && lines[0].length <= 60 && !/[.!?]$/.test(lines[0])) lines.shift();
+  // Up to its first list: a list's items aren't sentences.
+  const list = lines.findIndex((l, i) => i && (BULLET.test(l) || (l.endsWith(":") && l.length <= 60)));
+  const flat = (list > 0 ? lines.slice(0, list) : lines).map((l) => l.replace(BULLET, "")).join(" ").replace(/\s+/g, " ");
+  let lead = (flat.match(/[^.!?]+(?:[.!?]+(?=\s|$)|$)/g) || [flat]).slice(0, sentences).join("").trim();
+  if (lead.length > 480) lead = `${lead.slice(0, 440).replace(/\s+\S*$/, "")}…`;
+  const all = String(text).replace(/\s+/g, " ").trim();
+  return { lead, more: lead.replace(/…$/, "").length < all.length - 1 };
+}
+
+/**
  * A job posting's text, as paragraphs, lists and headings: blank lines end
  * paragraphs; lines starting with a bullet or number are list items; a
  * short line ending in a colon, or in capitals, before more text is a
@@ -750,7 +767,7 @@ function Application({ id, s, editing, readLink }: { id: number; s: Loaded; edit
             {l.url && (main || where !== hostOf(l.url)) ? <span className="muted small">{` from ${hostOf(l.url)}`}</span> : null}
             {main && links.length > 1 ? <span className="al-badge al-badge--outline" title="The application's own link">main</span> : null}
             {when ? <span className="muted small posting-when">{when}</span> : null}</header>
-          {l.text ? <div className="email-text posting-text">{formatPosting(l.text)}</div>
+          {l.text ? postingText(String(l.key), l.text)
             : <p className="muted small">{l.url ? "No text yet: Refresh from the posting, in the menu at the top, reads it." : "No text."}</p>}
           {!main && !edit ? <div className="app-email-tools">
             <button className="al-button al-button--sm al-button--quiet al-button--danger" type="button" onClick={async () => {
@@ -759,6 +776,17 @@ function Application({ id, s, editing, readLink }: { id: number; s: Loaded; edit
             }}>Remove</button>
           </div> : null}
         </article>
+      );
+    };
+    // Read, its first few sentences, and Read more for the rest, in place.
+    const postingText = (key: string, text: string) => {
+      const { lead, more } = postingLead(text);
+      const open = edit || !more || opened.has(`posting-more-${key}`);
+      return (
+        <div className="email-text posting-text">
+          {open ? formatPosting(text) : <p>{linkify(lead)}</p>}
+          {more && !edit ? <button className="al-link app-more" type="button" aria-expanded={String(open) as "true" | "false"} onClick={() => toggle(`posting-more-${key}`)}>{open ? "Show less" : "Read more"}</button> : null}
+        </div>
       );
     };
     const adding = !edit && opened.has("posting-add")
@@ -1088,13 +1116,13 @@ function Application({ id, s, editing, readLink }: { id: number; s: Loaded; edit
   }
 
   /**
-   * The moves, beside Edit details: Change stage (the board's stages, by
-   * swimlane, with their sub stages), Edit details, and Close. At its
-   * offer, Accept leads; closed, Reopen takes Change stage's place.
+   * The moves: Stage (the board's stages to change to, by swimlane, with
+   * their sub stages), Edit, and Close. At its offer, Accept leads; closed,
+   * Reopen takes Stage's place.
    */
   function moves() {
     const p = s.process;
-    const edit = <button key="edit" className="al-button" type="button" onClick={() => setEdit(true)}><Icon name="edit" /><span>Edit details</span></button>;
+    const edit = <button key="edit" className="al-button" type="button" title="Edit details" onClick={() => setEdit(true)}><Icon name="edit" /><span>Edit</span></button>;
     if (!p) return edit;
     if (p.status === "archived") {
       const at = s.stages.findIndex((x) => x.id === p.reached_stage_id);
@@ -1122,51 +1150,45 @@ function Application({ id, s, editing, readLink }: { id: number; s: Loaded; edit
     ));
     return <>
       {offer ? <button className="al-button al-button--primary" type="button" onClick={() => acceptOffer(p, s.company.name, s.app.title)}>Accept the offer…</button> : null}
-      <MenuButton items={stageMenu}><span>Change stage</span><Icon name="chevron" /></MenuButton>
+      <MenuButton title="Change stage" items={stageMenu}><span>Stage</span><Icon name="chevron" /></MenuButton>
       {edit}
       <button className="al-button" type="button" onClick={archiveIt}><Icon name="archive" /><span>Close</span></button>
     </>;
   }
 
   /**
-   * Where it stands: its stage, swimlane and sub stage in words, and the
-   * board's stages as a progress bar to read, not to click (moves are made
-   * from the header). Closed, it says why.
+   * Closed, or its cycle ended: a notice saying so. Its stage is on the
+   * timeline, among the board's others.
    */
   function statusCard() {
     const p = s.process;
     if (!p) return standing();
     const archived = p.status === "archived";
-    const locked = ended();
-    // Closed, it's in an inactive stage: the bar shows the one it reached.
-    const at = s.stages.findIndex((x) => x.id === (archived ? p.reached_stage_id : p.stage_id));
-    const lane = archived ? null : s.lanes.find((l) => l.id === p.lane_id);
-    const swimlane = at >= 0 ? s.swimlanes.find((w) => w.id === s.stages[at].swimlane_id) : null;
+    if (!archived && !ended()) return null;
     return (
-      <section className="al-panel app-status" aria-labelledby="app-stage">
+      <section className="app-status" aria-label="Where it stands">
         {archived ? (
           <Notice kind="info">
             <div className="al-notice__title">Closed: {closedWhy(p, stageName(p.stage_id))}</div>
             {p.archive_note ? <div className="small" translate="no">{p.archive_note}</div> : null}
           </Notice>
         ) : null}
-        {locked ? <Notice kind="info"><div className="al-notice__title">{`${cycleById(p.cycle_id)!.name} has ended`}</div><div className="small">This application is kept as it was then.</div></Notice> : null}
-        <div className="app-status-head">
-          <div className="app-status-now">
-            <span className="eyebrow">{archived ? "Got to" : "Stage"}{swimlane ? <span translate="no">{` · ${swimlane.name}`}</span> : null}</span>
-            <span id="app-stage" className="app-status-stage">{at >= 0 ? s.stages[at].name : stageName(p.stage_id)}
-              {lane ? <span className="app-status-lane">{lane.name}</span> : null}</span>
-          </div>
-        </div>
-        <ol className={`app-progress${archived ? " archived" : ""}`} aria-label="Stages" style={{ "--stages": s.stages.length } as React.CSSProperties}>
-          {s.stages.map((x, i) => (
-            <li key={x.id} className={i < at ? "past" : i === at ? "current" : undefined} aria-current={i === at ? "step" : undefined}>
-              <span className="app-progress-name">{x.name}</span>
-            </li>
-          ))}
-        </ol>
+        {ended() ? <Notice kind="info"><div className="al-notice__title">{`${cycleById(p.cycle_id)!.name} has ended`}</div><div className="small">This application is kept as it was then.</div></Notice> : null}
       </section>
     );
+  }
+
+  /** When it came into each stage: from its moves, the latest; the one it started in, when it was added. */
+  function enteredAt() {
+    const p = s.process!;
+    const moves = (s.detail?.activity || [])
+      .filter((a: Row) => a.action === "moved" && Array.isArray(a.changes?.stage_id) && a.changes.stage_id[0] !== a.changes.stage_id[1])
+      .sort((a: Row, b: Row) => a.at.localeCompare(b.at));
+    const at = new Map<number, string>();
+    const first = moves.length ? moves[0].changes.stage_id[0] : p.stage_id;
+    if (first != null && p.created_at) at.set(first, p.created_at);
+    for (const m of moves) at.set(m.changes.stage_id[1], m.at);
+    return at;
   }
 
   const steps = (): Row[] => s.detail?.steps || [];
@@ -1177,111 +1199,152 @@ function Application({ id, s, editing, readLink }: { id: number; s: Loaded; edit
     ? <span><span>with</span>{" "}<span translate="no">{x.people?.length ? x.people.map((pe: Row) => pe.name).join(", ") : x.attendees}</span></span> : null);
 
   /**
-   * The timeline: one list of what's to come and what happened. Coming up,
-   * soonest first: interviews still to happen (each gets its outcome here,
-   * and then joins the rest) and reminders not yet done. Then what
-   * happened, newest first: your notes, and the interviews that took place.
-   * Each is added from its button, in a dialog.
+   * The timeline, the system's: one line, in the order things happen, top
+   * to bottom. What happened: the stages it came through (the one it's in
+   * marked), your notes, and the interviews that took place. Then what's
+   * coming up, the soonest first: interviews still to happen (each gets its
+   * outcome here, and then joins the rest) and reminders not yet done. Last,
+   * its swimlane's stages still to come, greyed. A stage with an icon (the
+   * board's settings) is marked with it. Each is added from its button, in a
+   * dialog.
    */
   function timelinePanel() {
     if (!s.process) return null;
+    const p = s.process;
+    const archived = p.status === "archived";
     const statuses = optionsOf("steps", "status");
-    const sched = steps().filter((x) => x.status === "scheduled").sort((a, b) => (a.at || "9").localeCompare(b.at || "9"));
-    const rems = s.reminders.filter((r) => !r.done_at).sort((a, b) => (a.due_at || "9").localeCompare(b.due_at || "9"));
-    const past: Row[] = [
-      ...steps().filter((x) => x.status !== "scheduled").map((x) => ({ kind: "step", at: x.at || x.created_at, x })),
-      ...(s.detail?.notes || []).map((n: Row) => ({ kind: "note", at: n.happened_on ? `${n.happened_on}T${n.created_at.slice(11)}` : n.created_at, n })),
-    ].sort((a, b) => (b.at || "").localeCompare(a.at || ""));
+    // Closed, it's in an inactive stage: the line shows the one it reached, and none to come.
+    const at = s.stages.findIndex((x) => x.id === (archived ? p.reached_stage_id : p.stage_id));
+    const entered = enteredAt();
+
+    /** One entry: its marker, its time, what it is with its buttons beside, and a line or two more. */
+    const entry = (key: string, o: { cls?: string; tone?: string; marker?: ReactNode; time?: string | null; datetime?: string | null; late?: boolean; title: ReactNode; tools?: ReactNode; body?: ReactNode; current?: boolean }) => (
+      <li key={key} className={o.cls} aria-current={o.current ? "step" : undefined}>
+        <span className="al-timeline__marker" data-tone={o.tone} aria-hidden="true">{o.marker}</span>
+        <div className="al-timeline__event">
+          <div className="app-tl-head">
+            <p className="al-timeline__title">{o.title}</p>
+            {o.tools ? <span className="app-tl-tools">{o.tools}</span> : null}
+            {o.time ? <span className={`al-timeline__time${o.late ? " is-late" : ""}`}>{o.datetime ? <time dateTime={o.datetime}>{o.time}</time> : o.time}</span> : null}
+          </div>
+          {o.body ? <div className="al-timeline__body">{o.body}</div> : null}
+        </div>
+      </li>
+    );
+
+    const stage = (x: Row, i: number, next = false) => {
+      const when = entered.get(x.id)?.slice(0, 10) || null;
+      const icon = (plain: string | null) => (x.icon ? <Icon name={x.icon} /> : plain ? <Icon name={plain} /> : null);
+      if (i > at) return entry(`g${x.id}`, { cls: "app-tl-stage is-future", marker: icon(null), title: x.name, time: next ? "Next stage" : null });
+      if (i < at) return entry(`g${x.id}`, { cls: "app-tl-stage", marker: icon("check"), title: x.name, time: when ? fmtDay(when) : null, datetime: when });
+      const lane = archived ? null : s.lanes.find((l) => l.id === p.lane_id);
+      const swimlane = s.swimlanes.find((w) => w.id === x.swimlane_id);
+      return entry(`g${x.id}`, {
+        cls: "app-tl-stage is-current", current: true, tone: "accent", marker: icon("flag"),
+        // Where it is now, in so many words; closed, where it stopped.
+        title: <>{x.name}{lane ? <span className="app-tl-lane">{lane.name}</span> : null}
+          {archived ? <span className="al-badge app-tl-here">Closed here</span> : <span className="al-badge al-badge--accent app-tl-here">You are here</span>}</>,
+        time: when ? (archived ? fmtDay(when) : `Since ${fmtDay(when)}`) : null, datetime: when,
+        body: swimlane ? <span translate="no">{swimlane.name}</span> : null,
+      });
+    };
 
     const scheduled = (x: Row) => {
       const gone = isOverdue(x.at);
-      return (
-        <li key={`s${x.id}`} className="tl-item tl-step tl-coming">
-          <span className="tl-dot" aria-hidden="true" />
-          <div className="tl-what"><span className="tl-title" translate="no">{x.title}</span>
-            <span className="tl-sub">{dotted([x.format, minutesText(x.minutes), withWhom(x)])}</span>
-            {x.place ? (isUrl(x.place) ? <a className="al-link tl-where" href={hrefOf(x.place)} target="_blank" rel="noreferrer">{x.place}</a> : <span className="tl-sub">{x.place}</span>) : null}
-            {x.prep_note ? <span className="tl-prep">Prepare: <span translate="no">{x.prep_note}</span></span> : null}
-            {ended() ? null : (
-              <div className="tl-tools">
-                {isUrl(x.place) && !gone ? <a className="al-button al-button--sm" href={hrefOf(x.place)} target="_blank" rel="noreferrer" title={x.place}>Join</a> : null}
-                <MenuButton className={`al-button al-button--sm${gone ? "" : " al-button--quiet"}`} items={(close) => <>
-                  <div className="al-menu__label">How did it go?</div>
-                  {statuses.filter(([v]) => v !== "scheduled").map(([v, l]) => (
-                    <MenuItem key={v} close={close} onClick={async () => {
-                      if (await saving(() => patch(`steps/${x.id}`, { status: v }))) {
-                        toast(`${x.title}: ${l}`, "info", { label: "Undo", onclick: async () => { if (await attempt(() => patch(`steps/${x.id}`, { status: "scheduled" }))) refreshDetail(); } });
-                        refreshDetail();
-                      }
-                    }}>{l}</MenuItem>
-                  ))}
-                </>}><span>Log outcome</span></MenuButton>
-              </div>
-            )}</div>
-          <span className={`tl-when${gone ? " is-late" : ""}`}>{x.at ? fmtStamp(x.at) : "Date not set"}</span>
-        </li>
-      );
+      const sub = dotted([x.format, minutesText(x.minutes), withWhom(x)]);
+      return entry(`s${x.id}`, {
+        cls: "app-tl-step", tone: "accent", marker: <Icon name="cal" />, title: <span translate="no">{x.title}</span>,
+        time: x.at ? fmtStamp(x.at) : "Date not set", datetime: x.at, late: gone,
+        tools: ended() ? null : <>
+          {isUrl(x.place) && !gone ? <a className="al-button al-button--sm" href={hrefOf(x.place)} target="_blank" rel="noreferrer" title={x.place}>Join</a> : null}
+          <MenuButton className={`al-button al-button--sm${gone ? "" : " al-button--quiet"}`} items={(close) => <>
+            <div className="al-menu__label">How did it go?</div>
+            {statuses.filter(([v]) => v !== "scheduled").map(([v, l]) => (
+              <MenuItem key={v} close={close} onClick={async () => {
+                if (await saving(() => patch(`steps/${x.id}`, { status: v }))) {
+                  toast(`${x.title}: ${l}`, "info", { label: "Undo", onclick: async () => { if (await attempt(() => patch(`steps/${x.id}`, { status: "scheduled" }))) refreshDetail(); } });
+                  refreshDetail();
+                }
+              }}>{l}</MenuItem>
+            ))}
+          </>}><span>Log outcome</span></MenuButton>
+        </>,
+        body: sub.length || x.place || x.prep_note ? <>
+          {sub.length ? <span className="tl-sub">{sub}</span> : null}
+          {x.place ? (isUrl(x.place) ? <a className="al-link tl-sub" href={hrefOf(x.place)} target="_blank" rel="noreferrer">{x.place}</a> : <span className="tl-sub">{x.place}</span>) : null}
+          {x.prep_note ? <span className="tl-prep">Prepare: <span translate="no">{x.prep_note}</span></span> : null}
+        </> : null,
+      });
     };
     const reminder = (r: Row) => {
       const late = isOverdue(r.due_at);
-      return (
-        <li key={`r${r.id}`} className="tl-item tl-reminder tl-coming">
-          <span className={`tl-icon${late ? " is-late" : ""}`} aria-hidden="true"><Icon name="bell" /></span>
-          <div className="tl-what"><span className="tl-title" translate="no">{r.title}</span>
-            {ended() ? null : (
-              <div className="tl-tools">
-                <button className="al-button al-button--sm" type="button" onClick={async () => {
-                  if (await saving(() => patch(`reminders/${r.id}`, { done_at: localNow() }))) {
-                    toast(`Marked done: ${r.title}`, "info", { label: "Undo", onclick: async () => { if (await attempt(() => patch(`reminders/${r.id}`, { done_at: null }))) reload(); } });
-                    reload();
-                  }
-                }}><Icon name="check" /><span>Done</span></button>
-                <button className="al-button al-button--quiet al-button--sm" type="button" onClick={async () => {
-                  const before = r.due_at;
-                  if (await saving(() => patch(`reminders/${r.id}`, { due_at: dayAfter(r.due_at) }))) {
-                    toast("Snoozed until tomorrow", "info", { label: "Undo", onclick: async () => { if (await attempt(() => patch(`reminders/${r.id}`, { due_at: before }))) reload(); } });
-                    reload();
-                  }
-                }}>Snooze a day</button>
-              </div>
-            )}</div>
-          <span className={`tl-when${late ? " is-late" : ""}`}>{r.due_at ? (late ? `Was due ${fmtDay(r.due_at)}` : fmtDay(r.due_at)) : "No date"}</span>
-        </li>
-      );
+      return entry(`r${r.id}`, {
+        cls: "app-tl-reminder", tone: late ? "warning" : undefined, marker: <Icon name="bell" />, title: <span translate="no">{r.title}</span>,
+        time: r.due_at ? (late ? `Was due ${fmtDay(r.due_at)}` : fmtDay(r.due_at)) : "No date", datetime: r.due_at, late,
+        tools: ended() ? null : <>
+          <button className="al-button al-button--sm" type="button" onClick={async () => {
+            if (await saving(() => patch(`reminders/${r.id}`, { done_at: localNow() }))) {
+              toast(`Marked done: ${r.title}`, "info", { label: "Undo", onclick: async () => { if (await attempt(() => patch(`reminders/${r.id}`, { done_at: null }))) reload(); } });
+              reload();
+            }
+          }}><Icon name="check" /><span>Done</span></button>
+          <button className="al-button al-button--quiet al-button--sm" type="button" onClick={async () => {
+            const before = r.due_at;
+            if (await saving(() => patch(`reminders/${r.id}`, { due_at: dayAfter(r.due_at) }))) {
+              toast("Snoozed until tomorrow", "info", { label: "Undo", onclick: async () => { if (await attempt(() => patch(`reminders/${r.id}`, { due_at: before }))) reload(); } });
+              reload();
+            }
+          }}>Snooze a day</button>
+        </>,
+      });
     };
-    const happened = (it: Row) => {
-      if (it.kind === "step") {
-        const x = it.x;
-        return (
-          <li key={`s${x.id}`} className={`tl-item tl-step is-${x.status}`}>
-            <span className="tl-dot" aria-hidden="true" />
-            <div className="tl-what"><span className="tl-title" translate="no">{x.title}</span>
-              <span className="tl-sub">{dotted([<span className="tl-status">{optionLabel(statuses, x.status)}</span>, x.format, minutesText(x.minutes), withWhom(x)])}</span>
-              {x.note ? <span className="tl-note" translate="no">{x.note}</span> : null}</div>
-            <span className="tl-when">{x.at ? fmtStamp(x.at) : "No date"}</span>
-          </li>
-        );
-      }
-      return (
-        <li key={`n${it.n.id}`} className="tl-item tl-note-item"><span className="tl-dot" aria-hidden="true" />
-          <div className="tl-what"><span className="tl-title tl-serif" translate="no">{it.n.body}</span></div>
-          <span className="tl-when">{fmtDay(it.n.happened_on || it.n.created_at.slice(0, 10))}</span></li>
-      );
+    const happened = (x: Row) => {
+      const sub = dotted([<span className="tl-status">{optionLabel(statuses, x.status)}</span>, x.format, minutesText(x.minutes), withWhom(x)]);
+      const tone = x.status === "failed" ? "danger" : ["passed", "completed", "done"].includes(x.status) ? "success" : undefined;
+      return entry(`s${x.id}`, {
+        cls: `app-tl-step is-${x.status}`, tone, title: <span translate="no">{x.title}</span>,
+        time: x.at ? fmtStamp(x.at) : "No date", datetime: x.at,
+        body: <><span className="tl-sub">{sub}</span>{x.note ? <span className="tl-note" translate="no">{x.note}</span> : null}</>,
+      });
     };
-    const coming = [...sched.map(scheduled), ...rems.map(reminder)];
+    const note = (n: Row) => {
+      const day = n.happened_on || n.created_at.slice(0, 10);
+      return entry(`n${n.id}`, { cls: "app-tl-note", title: <span className="tl-serif" translate="no">{n.body}</span>, time: fmtDay(day), datetime: day });
+    };
+
+    // What happened, oldest first, the stage it's in among it (at the end, if when it came in isn't known).
+    // A stage it skipped goes just before the one after it.
+    let carry = (at >= 0 && entered.get(s.stages[at].id)) || "~";
+    const passed = s.stages.slice(0, Math.max(at + 1, 0)).map((x, i) => ({ x, i })).reverse().map(({ x, i }) => {
+      carry = entered.get(x.id) || carry;
+      return { at: carry, ord: i, node: stage(x, i) };
+    });
+    const past = [
+      ...passed,
+      ...steps().filter((x) => x.status !== "scheduled").map((x) => ({ at: x.at || x.created_at, ord: 1e9, node: happened(x) })),
+      ...(s.detail?.notes || []).map((n: Row) => ({ at: n.happened_on ? `${n.happened_on}T${n.created_at.slice(11)}` : n.created_at, ord: 1e9, node: note(n) })),
+    ].sort((a, b) => (a.at || "").localeCompare(b.at || "") || a.ord - b.ord);
+    // Coming up, the soonest first; one without a date, last.
+    const coming = [
+      ...steps().filter((x) => x.status === "scheduled").map((x) => ({ at: x.at || "9", node: scheduled(x) })),
+      ...s.reminders.filter((r) => !r.done_at).map((r) => ({ at: r.due_at || "9", node: reminder(r) })),
+    ].sort((a, b) => a.at.localeCompare(b.at));
+    // The stages still to come in its swimlane (a stage in none being in the first).
+    const swimlaneOf = (x: Row) => (s.swimlanes.some((w) => w.id === x.swimlane_id) ? x.swimlane_id : s.swimlanes[0]?.id ?? null);
+    const future = archived || at < 0 ? [] : s.stages.map((x, i) => ({ x, i }))
+      .filter(({ x, i }) => i > at && swimlaneOf(x) === swimlaneOf(s.stages[at]))
+      .map(({ x, i }, n) => stage(x, i, n === 0));
+
     const add = (kind: "note" | "step" | "reminder", label: string) => (
       <button className="al-button al-button--quiet al-button--sm" type="button"
         onClick={() => openAdding(kind, s, saving, (fresh) => { if (fresh) refreshDetail(); else reload(); })}><Icon name="plus" /><span>{label}</span></button>
     );
-    const group = (key: string, label: string) => <li key={key} className="tl-group" role="presentation">{label}</li>;
     return panel("timeline", "Timeline", { action: ended() ? null : <>{add("note", "Note")}{add("step", "Interview")}{add("reminder", "Reminder")}</> },
-      coming.length || past.length ? (
-        <ol key="list" className="tl">
-          {coming.length ? [group("coming", "Coming up"), ...coming] : null}
-          {coming.length && past.length ? group("past", "So far") : null}
-          {past.map(happened)}
-        </ol>
-      ) : <p key="none" className="muted small">Nothing yet. Add a note, an interview, or a reminder to follow up.</p>);
+      <ol key="list" className="al-timeline app-tl">
+        {past.map((c) => c.node)}
+        {coming.map((c) => c.node)}
+        {future}
+      </ol>);
   }
 
   /** The facts of the role, at a glance. */

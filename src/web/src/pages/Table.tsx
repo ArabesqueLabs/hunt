@@ -16,7 +16,7 @@ import { useColumns } from "../components/columns";
 import { FilterBar } from "../components/FilterBar";
 import { TagChip } from "../components/tags";
 import { LoadingPage, Logo, Table } from "../components/ui";
-import { BoardContext, BoardHead, NextLabel, NoCycle } from "./Board";
+import { BoardContext, BoardHead, CyclePicker, NextLabel, NoCycle } from "./Board";
 
 const TABLE_DEFAULTS = { sort: "stage", desc: false };
 
@@ -97,7 +97,7 @@ function ApplicationsTable({ board, reload }: { board: Board; reload: () => void
     <div className={`board table-mode${ro ? " read-only" : ""}`}>
       <BoardHead b={board} current="table" />
       <BoardContext />
-      <FilterBar rows={rows} initial={f} onChange={setF} shown={shown.length} total={rows.length} />
+      <FilterBar rows={rows} initial={f} onChange={setF} shown={shown.length} total={rows.length} lead={<CyclePicker />} />
       {cols.style}
       {cols.bar}
       <div className="al-table-wrap" tabIndex={0} aria-label="Applications">

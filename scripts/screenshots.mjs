@@ -82,8 +82,7 @@ const SHOTS = [
   { name: "file", title: "A file", about: "Its versions, with a preview.", path: (ids) => `/files/${ids.document}` },
   { name: "notes", title: "Notes", path: "/notes" },
   // Without "System resources": that's the machine taking the pictures.
-  { name: "stats", title: "Interview stats", about: "How the search is going.", path: "/stats", full: true,
-    act: `document.querySelector(".viz-system")?.remove()` },
+  { name: "stats", title: "Interview stats", about: "How the search is going.", path: "/stats", full: true },
   // Northwind's offer, then a contract's day rate all three ways.
   { name: "take-home", title: "Take-home pay", about: "What a salary leaves after income tax and National Insurance, and what it costs the employer.",
     path: "/take-home?type=paye&amount=105000&per=year&currency=GBP", full: true },

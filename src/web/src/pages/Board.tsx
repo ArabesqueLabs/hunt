@@ -87,7 +87,7 @@ export function BoardHead({ b, current }: { b: Board; current: string }) {
   );
 }
 
-/** Above the board: an ended cycle's notice, or none running; and which running cycle to show. */
+/** Above the board: an ended cycle's notice (which running cycle to show is CyclePicker, in the filters' row). */
 export function BoardContext() {
   const viewing = viewedCycle();
   const run = runningCycles();
@@ -105,23 +105,26 @@ export function BoardContext() {
       </Notice>
     );
   }
-  if (run.length > 1) {
-    const chosen = boardCycle();
-    return (
-      <div className="board-cycles">
-        <span className="al-label">Cycle</span>
-        <div className="al-segmented" role="group" aria-label="Cycle">
-          {[{ id: "", name: "All active" }, ...run].map((c) => (
-            <button key={c.id} type="button" aria-pressed={String(String(c.id) === chosen) as "true" | "false"} onClick={() => pickCycle(c.id)}>
-              <span translate={c.id ? "no" : undefined}>{c.name}</span>
-              {c.id ? <span className="al-badge al-badge--accent">Active</span> : null}
-            </button>
-          ))}
-        </div>
-      </div>
-    );
-  }
   return null;
+}
+
+/** Which running cycle the board shows, or all of them: at the start of the filters' row. None with only one. */
+export function CyclePicker() {
+  const run = runningCycles();
+  if (viewedCycle() || run.length < 2) return null;
+  const chosen = boardCycle();
+  return (
+    <div className="board-cycles">
+      <span className="al-label">Cycle</span>
+      <div className="al-segmented" role="group" aria-label="Cycle">
+        {[{ id: "", name: "All active" }, ...run].map((c) => (
+          <button key={c.id} type="button" aria-pressed={String(String(c.id) === chosen) as "true" | "false"} onClick={() => pickCycle(c.id)}>
+            <span translate={c.id ? "no" : undefined}>{c.name}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -262,7 +265,7 @@ export function BoardPage() {
       <BoardHead b={b} current="board" />
       <BoardContext />
       <GettingStarted b={b} />
-      <FilterBar rows={[...rows.values()]} initial={f} onChange={setF} shown={visible} total={boardStages(b).flatMap((st) => st.cards).length} extra={detailed} />
+      <FilterBar rows={[...rows.values()]} initial={f} onChange={setF} shown={visible} total={boardStages(b).flatMap((st) => st.cards).length} lead={<CyclePicker />} extra={detailed} />
       <HiddenStagesBar b={b} />
       {lanes.map((g) => <Swimlane key={String(g.lane.id ?? 0)} g={g} ctx={ctx} />)}
       {b.read_only ? null : (
