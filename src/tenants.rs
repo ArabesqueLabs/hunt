@@ -1102,13 +1102,28 @@ impl Tenants {
     pub fn why_not_delete(&self, me: &Account) -> Result<Option<&'static str>> {
         let accounts = self.list()?;
         let active = |a: &&Account| a.status == "active";
-        if me.is_admin() && accounts.iter().filter(active).filter(|a| a.is_admin()).count() <= 1 {
+        if me.is_admin()
+            && accounts
+                .iter()
+                .filter(active)
+                .filter(|a| a.is_admin())
+                .count()
+                <= 1
+        {
             return Ok(Some(
                 "you're the only admin: make someone else an admin first, so hunt still has one",
             ));
         }
-        if accounts.iter().filter(|a| a.id != me.id).filter(active).count() == 0 {
-            return Ok(Some("yours is the only account: hunt would have nobody to run it"));
+        if accounts
+            .iter()
+            .filter(|a| a.id != me.id)
+            .filter(active)
+            .count()
+            == 0
+        {
+            return Ok(Some(
+                "yours is the only account: hunt would have nobody to run it",
+            ));
         }
         Ok(None)
     }
