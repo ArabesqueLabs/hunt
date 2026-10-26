@@ -70,7 +70,8 @@ const SETTINGS_TABS: [string, string, string, string][] = [
   ["board", "Board", "Swimlanes, stages, sub stages", "board"],
   ["calendar", "Calendar", "Hours, time zones, sharing", "cal"],
   ["data", "Data", "Backup, audit log", "database"],
-  ["connections", "Connections", GMAIL ? "LinkedIn, Gmail" : "LinkedIn", "link"],
+  // Connections (LinkedIn, Gmail) is hidden for now; its parts are kept below.
+  // ["connections", "Connections", GMAIL ? "LinkedIn, Gmail" : "LinkedIn", "link"],
   ["pay", "Pay and tax", "Where you live, take-home", "calc"],
   ["tags", "Tags", "", "tag"],
   ["account", "Account", "Signing in, deleting", "user"],
