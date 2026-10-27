@@ -1392,8 +1392,8 @@ const ar: Catalog = {
     "Scotland has its own income tax bands.": "لاسكتلندا شرائح ضريبة دخل خاصة بها.",
     // ---- cycles, prep, reminders, links; the board, an application and Settings as redrawn ----
     "Prep": "التحضير",
-    "Manage cycles": "إدارة الدورات",
-    "Cycles": "الدورات",
+    "Manage cycles": "إدارة الدورات البحث",
+    "Cycles": "دورات البحث",
     "Contacts": "جهات الاتصال",
     "All active cycles": "كل الدورات النشطة",
     "All active": "كل النشطة",
