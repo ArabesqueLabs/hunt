@@ -12,6 +12,8 @@ export interface ComboProps {
   source: (q: string) => Promise<ComboItem[]>;
   /** Typing a new name offers to add it ({create: true, value: text}). */
   allowCreate?: boolean;
+  /** Suggest nothing until something's typed (not on focus, with the input empty). */
+  typeFirst?: boolean;
   onPick?: (it: ComboItem) => void;
   onInput?: (v: string) => void;
   /** The input's own change (as it loses focus, changed). */
@@ -28,10 +30,11 @@ export interface ComboProps {
 /**
  * A text input with suggestions. `source(q)` resolves to items
  * {value, label, hint?}. With `allowCreate`, typing a new name offers to
- * add it. The input is the page's: what's typed stays in it (`inputRef`
+ * add it; with `typeFirst`, nothing's suggested until something's typed.
+ * The input is the page's: what's typed stays in it (`inputRef`
  * reads or sets it).
  */
-export function Combo({ value = "", placeholder, source, allowCreate = false, onPick, onInput, onChange, onKeyDown, onBlur, id, label, required, className, inputRef }: ComboProps) {
+export function Combo({ value = "", placeholder, source, allowCreate = false, typeFirst = false, onPick, onInput, onChange, onKeyDown, onBlur, id, label, required, className, inputRef }: ComboProps) {
   const listId = useId();
   const input = useRef<HTMLInputElement | null>(null);
   const [items, setItems] = useState<ComboItem[]>([]);
@@ -45,6 +48,7 @@ export function Combo({ value = "", placeholder, source, allowCreate = false, on
   async function refresh() {
     const q = (input.current?.value || "").trim();
     const mine = ++seq.current;
+    if (typeFirst && !q) { setItems([]); return; }
     let found: ComboItem[] = [];
     try { found = await latest.current.source(q); } catch { found = []; }
     if (mine !== seq.current) return;

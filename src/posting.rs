@@ -43,6 +43,8 @@ pub struct Posting {
     pub pay_period: Option<String>,
     pub posted_on: Option<String>,
     pub closes_on: Option<String>,
+    /// The employer's ID for the role (a requisition or job number).
+    pub reference: Option<String>,
     /// Plain text, with paragraphs and bullets kept.
     pub description: Option<String>,
     /// Where it came from: "Greenhouse", "LinkedIn", "the page"...
@@ -321,6 +323,7 @@ fn greenhouse(board: &str, id: &str) -> Result<Posting> {
         employment: meta("employment").and_then(|e| employment(&e)),
         posted_on: s(&j["first_published"]).and_then(|d| date(&d)),
         closes_on: s(&j["application_deadline"]).and_then(|d| date(&d)),
+        reference: s(&j["requisition_id"]),
         description: html.map(|h| html_to_text(&h)),
         ..Posting::default()
     };
@@ -783,6 +786,7 @@ fn from_page(html: &str, url: &str) -> Posting {
         },
         posted_on: s(&job["datePosted"]).and_then(|d| date(&d)),
         closes_on: s(&job["validThrough"]).and_then(|d| date(&d)),
+        reference: identifier(&job["identifier"]),
         description: s(&job["description"]).map(|d| html_to_text(&d)),
         ..Posting::default()
     };
@@ -808,6 +812,25 @@ fn from_page(html: &str, url: &str) -> Posting {
             .and_then(|u| pay_period(&u));
     }
     p
+}
+
+/// A JobPosting's `identifier`: text, or a `PropertyValue` (`{name, value}`).
+fn identifier(v: &Value) -> Option<String> {
+    let v = match v {
+        Value::Array(a) => a.first()?,
+        v => v,
+    };
+    match v {
+        Value::String(t) => Some(clean(t)),
+        Value::Number(n) => Some(n.to_string()),
+        Value::Object(o) => o.get("value").and_then(|v| match v {
+            Value::String(t) => Some(clean(t)),
+            Value::Number(n) => Some(n.to_string()),
+            _ => None,
+        }),
+        _ => None,
+    }
+    .filter(|t| !t.is_empty())
 }
 
 /// The first `JobPosting` on a page, including inside `@graph`.
@@ -1290,6 +1313,23 @@ mod tests {
             p.description.as_deref(),
             Some("Hi!\n\n• Lead a team\n• Ship")
         );
+    }
+
+    #[test]
+    fn a_role_id_from_job_posting_data() {
+        let page = |id: &str| {
+            format!(
+                r#"<script type="application/ld+json">{{"@type":"JobPosting","title":"SRE","identifier":{id}}}</script>"#
+            )
+        };
+        let id = |json: &str| from_page(&page(json), "https://careers.acme.com/jobs/1").reference;
+        assert_eq!(
+            id(r#"{"@type":"PropertyValue","name":"Acme","value":"R-1234"}"#).as_deref(),
+            Some("R-1234")
+        );
+        assert_eq!(id(r#""JR0042""#).as_deref(), Some("JR0042"));
+        assert_eq!(id("98765").as_deref(), Some("98765"));
+        assert_eq!(id(r#"{"name":"Acme"}"#), None);
     }
 
     #[test]

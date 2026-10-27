@@ -8,12 +8,13 @@ import { attempt, del, get, patch, post } from "../lib/api";
 import { runningCycles } from "../lib/cycles";
 import { daysFromToday, fmtDay, isoToday, parseLocal } from "../lib/format";
 import { fieldOf, optionLabel } from "../lib/meta";
-import { go } from "../lib/router";
 import { store, stored } from "../lib/storage";
+import { toPlain } from "../lib/rich";
 import { toast } from "../lib/toast";
 import type { Row } from "../lib/types";
+import { mayDiscard } from "../lib/unsaved";
 import { DatePicker } from "../components/DatePicker";
-import { confirmDelete } from "../components/dialogs";
+import { ask, closeModal, confirmDelete, openModal } from "../components/dialogs";
 import { RichText, RichView } from "../components/RichText";
 import { Field, Icon, Input, Label, Optional, Select } from "../components/ui";
 
@@ -33,19 +34,20 @@ export const prepState = (): PrepState => {
   try { return { tab: "tasks", for: "all", step: "", kind: "all", columns: false, ...JSON.parse(stored("prep") || "{}") }; } catch { return { tab: "tasks", for: "all", step: "", kind: "all", columns: false }; }
 };
 
-// Prep opened to add something, for a process (from its application's page).
-let opening: { for: string } | null = null;
-
-/** Open Prep, adding prep for a process. */
-export function openPrepAdding(forProcess: string) {
-  opening = { for: forProcess };
-  go("/prep");
+/** Add prep for a process, in a dialog over its application's page; `added` once it's made. */
+export async function openPrepAdding(forProcess: number, added: () => void) {
+  const running = new Set(runningCycles().map((c) => c.id));
+  const loaded = await attempt(() => Promise.all([get("processes?status=active"), get("steps")]));
+  if (!loaded) return;
+  const [procs, sts] = loaded;
+  openModal(<AddPrep dialog st={{ ...prepState(), for: String(forProcess), step: "" }}
+    processes={procs.filter((p: Row) => running.has(p.cycle_id) || p.id === forProcess)} steps={new Map(sts.map((s: Row) => [s.id, s]))}
+    close={closeModal} added={() => { closeModal(); toast("Added to prep"); added(); }} />);
 }
 
 export function PrepPage() {
-  const [opts] = useState(() => { const o = opening; opening = null; return o; });
-  const [st, setSt] = useState<PrepState>(() => ({ ...prepState(), ...(opts ? { tab: "tasks", for: opts.for } : {}) }));
-  const [adding, setAdding] = useState(!!opts);
+  const [st, setSt] = useState<PrepState>(prepState);
+  const [adding, setAdding] = useState(false);
   const [data, setData] = useState<{ items: Row[]; stories: Row[]; processes: Row[]; steps: Map<number, Row> } | null>(null);
   const [storyEditing, setStoryEditing] = useState<number | "new" | null>(null);
   const page = useRef<HTMLDivElement>(null);
@@ -116,6 +118,7 @@ export function PrepPage() {
           <div className="prep-line">{title}
             {x.priority === "high" && !done ? <span className="al-badge al-badge--accent">High priority</span> : null}
             {x.status === "doing" && !done ? <span className="al-badge al-badge--info">In progress</span> : null}</div>
+          {x.description ? <RichView className="prose small prep-description" value={x.description} /> : null}
           <div className="prep-meta">
             <span>{optionLabel(prepKinds(), x.kind)}</span>
             {x.minutes ? <span>{minutesLabel(x.minutes)}</span> : null}
@@ -138,6 +141,16 @@ export function PrepPage() {
         </div>
         <div className="prep-tools">
           {x.status === "todo" && !done ? <button className="al-button al-button--sm" type="button" onClick={() => setItem(x, { status: "doing" })}>Start</button> : null}
+          <button className="al-button al-button--quiet al-button--sm al-button--icon" type="button" aria-label={`Describe ${x.title}`} title={x.description ? "Edit its description" : "Describe it"}
+            onClick={async () => {
+              let html: string | null = x.description;
+              const answer = await ask({ title: x.title, ok: "Save", body: (
+                <Field><Label htmlFor="pd-desc">Description</Label>
+                  <RichText id="pd-desc" rows={4} label="Description" placeholder="What to cover, how, and why" value={x.description} autoFocus
+                    onChange={(v) => { html = toPlain(v).trim() ? v : null; }} /></Field>
+              ) });
+              if (answer && html !== x.description) setItem(x, { description: html });
+            }}><Icon name="edit" /></button>
           <button className="al-button al-button--quiet al-button--sm al-button--icon" type="button" aria-label={`Delete ${x.title}`} title="Delete" onClick={async () => {
             if (!(await attempt(() => del(`prep/${x.id}`)))) return;
             // What puts it back: it, without what the service gives it.
@@ -234,6 +247,8 @@ export function PrepPage() {
   const tabs: [string, string, number][] = [["tasks", "To do", items.filter((x) => !isDone(x)).length], ["stories", "Stories", stories.length]];
   return (
     <div className="page prep-page" ref={page}>
+      {/* Prep for one application: a way back to it. */}
+      {processes.some((p) => String(p.id) === st.for) ? <a className="al-back-link" href={`/p/${st.for}`}>Back to application</a> : null}
       <header className="al-page-head">
         <h1>Prep</h1>
         <p className="al-page-head__lede">What to read, practise and rehearse, for a particular interview or in general.</p>
@@ -253,57 +268,71 @@ export function PrepPage() {
   );
 }
 
-function AddPrep({ st, processes, steps, close, added }: { st: PrepState; processes: Row[]; steps: Map<number, Row>; close: () => void; added: (made: Row) => void }) {
-  const [vals, setVals] = useState({ title: "", url: "", kind: "read", process_id: st.for !== "all" && st.for !== "general" ? st.for : "", step_id: st.step || "",
+/** Adding prep: in the page, or (`dialog`) in the modal. */
+function AddPrep({ st, processes, steps, close, added, dialog = false }: { st: PrepState; processes: Row[]; steps: Map<number, Row>; close: () => void; added: (made: Row) => void; dialog?: boolean }) {
+  const [vals, setVals] = useState({ title: "", url: "", description: "", kind: "read", process_id: st.for !== "all" && st.for !== "general" ? st.for : "", step_id: st.step || "",
     minutes: 30, due_on: null as string | null, priority: "normal", repeats: false });
   const [busy, setBusy] = useState(false);
   const set = (o: Partial<typeof vals>) => setVals({ ...vals, ...o });
   const mine = [...steps.values()].filter((s) => String(s.process_id) === String(vals.process_id) && s.status === "scheduled");
   const step = vals.step_id && steps.get(Number(vals.step_id));
-  return (
-    <form className="al-panel prep-add" aria-label="Add prep" onSubmit={async (e) => {
-      e.preventDefault();
-      if (!vals.title.trim() || busy) return;
-      setBusy(true);
-      const made = await attempt(() => post("prep", {
-        title: vals.title.trim(), url: vals.url.trim() || null, kind: vals.kind, priority: vals.priority, minutes: vals.minutes,
-        process_id: vals.process_id ? Number(vals.process_id) : null, step_id: vals.step_id ? Number(vals.step_id) : null,
-        due_on: vals.due_on, repeats: vals.repeats ? "daily" : null,
-      }));
-      setBusy(false);
-      if (made) added(made);
-    }}>
-      <Field className="prep-wide"><Label htmlFor="pa-title">What to do</Label>
-        <Input id="pa-title" placeholder="e.g. Practise designing a rate limiter" value={vals.title} onChange={(e) => set({ title: e.target.value })} /></Field>
-      <Field className="prep-wide"><Label htmlFor="pa-url">Link <Optional /></Label>
-        <Input id="pa-url" type="url" placeholder="Article, video, exercise or doc" value={vals.url} onChange={(e) => set({ url: e.target.value })} /></Field>
-      <Field><Label htmlFor="pa-kind">Kind</Label>
-        <Select id="pa-kind" value={vals.kind} onChange={(e) => set({ kind: e.target.value })}>{prepKinds().map(([v, l]) => <option key={v} value={v}>{l}</option>)}</Select></Field>
-      <Field><Label htmlFor="pa-for">For</Label>
-        <Select id="pa-for" value={vals.process_id} onChange={(e) => set({ process_id: e.target.value, step_id: "" })}>
-          <option value="">General prep</option>{processes.map((p) => <option key={p.id} value={String(p.id)}>{p.label}</option>)}
-        </Select></Field>
-      <Field hidden={!mine.length}><Label htmlFor="pa-step">Step <Optional /></Label>
-        <Select id="pa-step" value={vals.step_id} onChange={(e) => set({ step_id: e.target.value })}>
-          <option value="">The whole process</option>{mine.map((s) => <option key={s.id} value={String(s.id)}>{s.title}</option>)}
-        </Select></Field>
-      <Field><Label htmlFor="pa-est">Takes about</Label>
-        <Select id="pa-est" value={vals.minutes} onChange={(e) => set({ minutes: Number(e.target.value) })}>{PREP_MINUTES.map(([m, l]) => <option key={m} value={m}>{l}</option>)}</Select></Field>
-      <Field><Label htmlFor="pa-due">Do by <Optional /></Label>
-        <DatePicker id="pa-due" value={null} onChange={(v) => setVals((x) => ({ ...x, due_on: v }))} />
-        <span className="al-hint">{step && step.at ? `Leave empty to finish before ${fmtDay(step.at)}` : ""}</span></Field>
-      <Field><span className="al-label">Priority</span>
-        <div className="al-segmented" role="group" aria-label="Priority">
-          {([["high", "High"], ["normal", "Normal"], ["low", "Low"]] as [string, string][]).map(([v, l]) => (
-            <button key={v} type="button" aria-pressed={String(vals.priority === v) as "true" | "false"} onClick={() => set({ priority: v })}>{l}</button>
-          ))}
-        </div></Field>
-      <label className="prep-daily al-choice"><input type="checkbox" checked={vals.repeats} onChange={(e) => set({ repeats: e.target.checked })} />
-        <span className="al-choice__text"><span>Repeat daily</span><span className="al-choice__hint">For drills, with a streak</span></span></label>
-      <div className="prep-add-actions">
-        <button className="al-button" type="button" onClick={close}>Cancel</button>
-        <button className="al-button al-button--primary" type="submit" disabled={!vals.title.trim()} aria-busy={busy ? "true" : undefined}>Add prep</button>
-      </div>
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!vals.title.trim() || busy) return;
+    setBusy(true);
+    const made = await attempt(() => post("prep", {
+      title: vals.title.trim(), url: vals.url.trim() || null, description: toPlain(vals.description).trim() ? vals.description : null, kind: vals.kind, priority: vals.priority, minutes: vals.minutes,
+      process_id: vals.process_id ? Number(vals.process_id) : null, step_id: vals.step_id ? Number(vals.step_id) : null,
+      due_on: vals.due_on, repeats: vals.repeats ? "daily" : null,
+    }));
+    setBusy(false);
+    if (made) added(made);
+  };
+  const fields = <>
+    <Field className="prep-wide"><Label htmlFor="pa-title">What to do</Label>
+      <Input id="pa-title" placeholder="e.g. Practise designing a rate limiter" value={vals.title} onChange={(e) => set({ title: e.target.value })} /></Field>
+    <Field className="prep-wide"><Label htmlFor="pa-desc">Description <Optional /></Label>
+      <RichText id="pa-desc" rows={2} label="Description" placeholder="What to cover, how, and why" value="" onChange={(html) => setVals((x) => ({ ...x, description: html }))} /></Field>
+    <Field className="prep-wide"><Label htmlFor="pa-url">Link <Optional /></Label>
+      <Input id="pa-url" type="url" placeholder="Article, video, exercise or doc" value={vals.url} onChange={(e) => set({ url: e.target.value })} /></Field>
+    <Field><Label htmlFor="pa-kind">Kind</Label>
+      <Select id="pa-kind" value={vals.kind} onChange={(e) => set({ kind: e.target.value })}>{prepKinds().map(([v, l]) => <option key={v} value={v}>{l}</option>)}</Select></Field>
+    <Field><Label htmlFor="pa-for">For</Label>
+      <Select id="pa-for" value={vals.process_id} onChange={(e) => set({ process_id: e.target.value, step_id: "" })}>
+        <option value="">General prep</option>{processes.map((p) => <option key={p.id} value={String(p.id)}>{p.label}</option>)}
+      </Select></Field>
+    <Field hidden={!mine.length}><Label htmlFor="pa-step">Step <Optional /></Label>
+      <Select id="pa-step" value={vals.step_id} onChange={(e) => set({ step_id: e.target.value })}>
+        <option value="">The whole process</option>{mine.map((s) => <option key={s.id} value={String(s.id)}>{s.title}</option>)}
+      </Select></Field>
+    <Field><Label htmlFor="pa-est">Takes about</Label>
+      <Select id="pa-est" value={vals.minutes} onChange={(e) => set({ minutes: Number(e.target.value) })}>{PREP_MINUTES.map(([m, l]) => <option key={m} value={m}>{l}</option>)}</Select></Field>
+    <Field><Label htmlFor="pa-due">Do by <Optional /></Label>
+      <DatePicker id="pa-due" value={null} onChange={(v) => setVals((x) => ({ ...x, due_on: v }))} />
+      <span className="al-hint">{step && step.at ? `Leave empty to finish before ${fmtDay(step.at)}` : ""}</span></Field>
+    <Field><span className="al-label">Priority</span>
+      <div className="al-segmented" role="group" aria-label="Priority">
+        {([["high", "High"], ["normal", "Normal"], ["low", "Low"]] as [string, string][]).map(([v, l]) => (
+          <button key={v} type="button" aria-pressed={String(vals.priority === v) as "true" | "false"} onClick={() => set({ priority: v })}>{l}</button>
+        ))}
+      </div></Field>
+    <label className="prep-daily al-choice"><input type="checkbox" checked={vals.repeats} onChange={(e) => set({ repeats: e.target.checked })} />
+      <span className="al-choice__text"><span>Repeat daily</span><span className="al-choice__hint">For drills, with a streak</span></span></label>
+  </>;
+  const actions = <>
+    <button className="al-button" type="button" onClick={(e) => { if (mayDiscard(e.currentTarget)) close(); }}>Cancel</button>
+    <button className="al-button al-button--primary" type="submit" disabled={!vals.title.trim()} aria-busy={busy ? "true" : undefined}>Add prep</button>
+  </>;
+  return dialog ? (
+    <form onSubmit={submit}>
+      <h2 className="al-dialog__title" id="modal-title">Add prep</h2>
+      <div className="al-dialog__body prep-fields">{fields}</div>
+      <div className="al-dialog__actions">{actions}</div>
+    </form>
+  ) : (
+    <form className="al-panel prep-add" aria-label="Add prep" data-unsaved="" onSubmit={submit}>
+      {fields}
+      <div className="prep-add-actions">{actions}</div>
     </form>
   );
 }
@@ -324,7 +353,7 @@ function StoryForm({ s, onDone }: { s: Row | null; onDone: (changed?: boolean) =
     );
   };
   return (
-    <form className="al-panel story-form" onSubmit={async (e) => {
+    <form className="al-panel story-form" data-unsaved="" onSubmit={async (e) => {
       e.preventDefault();
       if (!vals.title.trim()) return;
       const body = Object.fromEntries(Object.entries(vals).map(([k, v]) => [k, v.trim() || null]));
@@ -344,7 +373,7 @@ function StoryForm({ s, onDone }: { s: Row | null; onDone: (changed?: boolean) =
           if (await attempt(() => del(`stories/${s.id}`))) { toast("Deleted"); onDone(); }
         }}>Delete</button> : null}
         <span className="spacer" />
-        <button className="al-button" type="button" onClick={() => onDone(false)}>Cancel</button>
+        <button className="al-button" type="button" onClick={(e) => { if (mayDiscard(e.currentTarget)) onDone(false); }}>Cancel</button>
         <button className="al-button al-button--primary" type="submit">{s ? "Save" : "Add story"}</button>
       </div>
     </form>

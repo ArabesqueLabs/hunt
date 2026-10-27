@@ -237,10 +237,10 @@ pub const DOCUMENT_KINDS: &[(&str, &str)] = &[
     ("other", "Other"),
 ];
 
-const APPLICATION_LABEL: &str =
-    "c.name || CASE WHEN coalesce(t.title, '') <> '' THEN ' — ' || t.title ELSE '' END";
-const PROCESS_LABEL: &str =
-    "c.name || CASE WHEN coalesce(a.title, '') <> '' THEN ' — ' || a.title ELSE '' END";
+const APPLICATION_LABEL: &str = "c.name || CASE WHEN coalesce(t.title, '') <> '' THEN ' — ' || t.title ELSE '' END \
+     || CASE WHEN coalesce(t.reference, '') <> '' THEN ' · ' || t.reference ELSE '' END";
+const PROCESS_LABEL: &str = "c.name || CASE WHEN coalesce(a.title, '') <> '' THEN ' — ' || a.title ELSE '' END \
+     || CASE WHEN coalesce(a.reference, '') <> '' THEN ' · ' || a.reference ELSE '' END";
 
 pub static RESOURCES: &[Resource] = &[
     Resource {
@@ -428,6 +428,9 @@ pub static RESOURCES: &[Resource] = &[
                 "referral, LinkedIn, recruiter…",
             ),
             hint(field("url", "Posting URL", Url), "https://…"),
+            field("url_label", "Posting link name", Text),
+            // The employer's own name for the role: tells same-titled ones apart.
+            hint(field("reference", "Role ID", Text), "Req-1234, JR0042…"),
             hint(
                 suggest(field("location", "Location", Text)),
                 "City, or Remote",
@@ -499,7 +502,7 @@ pub static RESOURCES: &[Resource] = &[
         ],
         label_sql: APPLICATION_LABEL,
         joins: "JOIN company c ON c.id = t.company_id",
-        search_sql: "c.name || ' ' || coalesce(t.title, '')",
+        search_sql: "c.name || ' ' || coalesce(t.title, '') || ' ' || coalesce(t.reference, '')",
         order_sql: "t.created_at DESC, t.id DESC",
         process_sql: None,
         taggable: true,
@@ -548,7 +551,7 @@ pub static RESOURCES: &[Resource] = &[
         ],
         label_sql: PROCESS_LABEL,
         joins: "JOIN application a ON a.id = t.application_id JOIN company c ON c.id = a.company_id",
-        search_sql: "c.name || ' ' || coalesce(a.title, '')",
+        search_sql: "c.name || ' ' || coalesce(a.title, '') || ' ' || coalesce(a.reference, '')",
         order_sql: "t.position, t.id",
         process_sql: Some("t.id"),
         taggable: false,
@@ -570,13 +573,15 @@ pub static RESOURCES: &[Resource] = &[
                 field("url", "Link", Url),
                 "https://www.linkedin.com/jobs/view/…",
             )),
+            field("label", "Name", Text),
             field("platform", "Where", Text),
+            hint(field("reference", "Role ID", Text), "Its ID on that site"),
             field("description", "Posting text", LongText),
             field("read_at", "Last read", DateTime),
         ],
         label_sql: "t.url",
         joins: "",
-        search_sql: "t.url || ' ' || coalesce(t.description, '')",
+        search_sql: "t.url || ' ' || coalesce(t.reference, '') || ' ' || coalesce(t.description, '')",
         order_sql: "t.created_at, t.id",
         process_sql: None,
         taggable: false,
@@ -652,7 +657,8 @@ pub static RESOURCES: &[Resource] = &[
             required(field("body", "Note", LongText)),
             field("happened_on", "On", Date),
         ],
-        label_sql: "substr(t.body, 1, 60)",
+        // Made plain, and cut to 60 characters, by Db::list.
+        label_sql: "substr(t.body, 1, 400)",
         joins: "",
         search_sql: "t.body",
         order_sql: "t.created_at DESC, t.id DESC",
@@ -719,7 +725,7 @@ pub static RESOURCES: &[Resource] = &[
             ),
             required(hint(field("body", "Note", LongText), "Write anything…")),
         ],
-        label_sql: "coalesce(t.title, substr(t.body, 1, 60))",
+        label_sql: "coalesce(t.title, substr(t.body, 1, 400))",
         joins: "",
         search_sql: "coalesce(t.title, '') || ' ' || t.body",
         order_sql: "t.updated_at DESC, t.id DESC",
@@ -851,6 +857,10 @@ pub static RESOURCES: &[Resource] = &[
                 field("title", "What to do", Text),
                 "e.g. Practise designing a rate limiter",
             )),
+            hint(
+                field("description", "Description", LongText),
+                "What to cover, how, and why",
+            ),
             hint(field("url", "Link", Url), "Article, video, exercise or doc"),
             defaulted(field(
                 "kind",
@@ -900,7 +910,7 @@ pub static RESOURCES: &[Resource] = &[
         ],
         label_sql: "t.title",
         joins: "",
-        search_sql: "t.title",
+        search_sql: "t.title || ' ' || coalesce(t.description, '')",
         order_sql: "coalesce(t.due_on, '9'), t.id",
         process_sql: Some("t.process_id"),
         taggable: false,

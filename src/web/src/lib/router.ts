@@ -6,6 +6,7 @@
 // keys the page by the visit, so it loads what it shows again.
 
 import { useSyncExternalStore } from "react";
+import { anyUnsaved } from "./unsaved";
 
 // The app's pages are real paths (/stats, /applications/2), drawn here as
 // they're visited. A few of hunt's addresses aren't its pages, and load as
@@ -33,7 +34,7 @@ const listeners = new Set<() => void>();
 
 /** Draw the page at the address now, afresh. */
 export function route() {
-  if (leaveGuard && leaveGuard() && here() !== lastUrl) {
+  if (((leaveGuard && leaveGuard()) || anyUnsaved()) && here() !== lastUrl) {
     if (!confirm("Leave without saving your changes?")) {
       history.pushState(null, "", lastUrl || "/");
       return;

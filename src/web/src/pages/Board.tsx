@@ -19,12 +19,12 @@ import { tagNames } from "../lib/tags";
 import { toast } from "../lib/toast";
 import type { Board, Card, Stage } from "../lib/types";
 import { BulkBar, ProcessActions, bulkProcesses } from "../components/bulk";
-import { endCycle, resumeCycle, startCycle } from "../components/cycleDialogs";
+import { resumeCycle, startCycle } from "../components/cycleDialogs";
 import { useFilePicker } from "../components/files";
 import { FilterBar } from "../components/FilterBar";
 import { newApplication } from "../components/NewApplication";
 import { TagChip } from "../components/tags";
-import { Icon, Input, LoadingPage, Logo, Notice, Table, dotted } from "../components/ui";
+import { Icon, LoadingPage, Logo, Notice, Table, dotted } from "../components/ui";
 import { celebrating, Celebration } from "./Celebrate";
 import { importBackup } from "./Settings";
 
@@ -47,7 +47,7 @@ export function Home() {
   return <BoardPage />;
 }
 
-/** Board or Table: the switch at the top of both views. */
+/** Board or Table: the switch at the end of both views' filters. */
 export function ViewSwitch({ current }: { current: string }) {
   const choice = (value: string, label: string, path: string) => (
     <button type="button" aria-pressed={String(current === value) as "true" | "false"}
@@ -62,7 +62,7 @@ export function ViewSwitch({ current }: { current: string }) {
 }
 
 /** The board's head: its name, what it shows, and what to do. */
-export function BoardHead({ b, current }: { b: Board; current: string }) {
+export function BoardHead({ b }: { b: Board }) {
   const cur = currentCycle();
   const run = runningCycles();
   const total = b.stages.reduce((n, s) => n + s.cards.length, 0);
@@ -75,8 +75,6 @@ export function BoardHead({ b, current }: { b: Board; current: string }) {
       <h1>Applications</h1>
       {sub ? <p className="board-count">{sub}</p> : null}
       <div className="al-page-head__end">
-        {cur && !b.read_only ? <button className="al-button al-button--quiet" type="button" onClick={() => endCycle(cur)}><Icon name="flag" /><span>End this cycle…</span></button> : null}
-        {run.length || b.read_only ? <ViewSwitch current={current} /> : null}
         {run.length && !b.read_only ? (
           <button className="al-button al-button--primary" type="button" onClick={() => newApplication()} aria-keyshortcuts="n">
             <Icon name="plus" /><span>Add application</span><kbd className="al-kbd board-kbd" aria-hidden="true">N</kbd>
@@ -253,19 +251,24 @@ export function BoardPage() {
   const lanes = boardSwimlanes(b);
   const most = Math.max(0, ...lanes.map((g) => g.stages.length));
   const across = most < 3 ? 3 : most > 5 ? 5 : 4;
-  const detailed = (
-    <label className="switch al-choice" title="Show everything on each card">
-      <Input type="checkbox" role="switch" checked={detail === "detailed"}
-        onChange={(e) => { store("cardView", e.target.checked ? "detailed" : "compact"); showBoard(); }} />
-      Detailed
-    </label>
+  // Compact or Detailed cards, beside Board or Table.
+  const views = (
+    <>
+      <div className="al-segmented" role="group" aria-label="Cards">
+        {([["compact", "Compact"], ["detailed", "Detailed"]] as const).map(([v, l]) => (
+          <button key={v} type="button" aria-pressed={String(detail === v) as "true" | "false"} title={v === "detailed" ? "Show everything on each card" : "Just company, role and what's next"}
+            onClick={() => { if (detail !== v) { store("cardView", v); showBoard(); } }}>{l}</button>
+        ))}
+      </div>
+      <ViewSwitch current="board" />
+    </>
   );
   return (
     <div className={`board ${detail}${b.read_only ? " read-only" : ""}`} style={{ "--board-columns": across } as React.CSSProperties}>
-      <BoardHead b={b} current="board" />
+      <BoardHead b={b} />
       <BoardContext />
       <GettingStarted b={b} />
-      <FilterBar rows={[...rows.values()]} initial={f} onChange={setF} shown={visible} total={boardStages(b).flatMap((st) => st.cards).length} lead={<CyclePicker />} extra={detailed} />
+      <FilterBar rows={[...rows.values()]} initial={f} onChange={setF} shown={visible} total={boardStages(b).flatMap((st) => st.cards).length} lead={<CyclePicker />} extra={views} />
       <HiddenStagesBar b={b} />
       {lanes.map((g) => <Swimlane key={String(g.lane.id ?? 0)} g={g} ctx={ctx} />)}
       {b.read_only ? null : (
@@ -580,7 +583,7 @@ function CardView({ c, ctx }: { c: Card; ctx: Ctx }) {
       }}
       onDragEnd={ro ? undefined : () => { ctx.setDrag(null); ctx.setOver(null); }}>
       <div className="card-company"><Logo id={c.company_id} logo={c.company_logo} name={c.company} size={22} /><span className="card-company-name" translate="no">{c.company}</span></div>
-      {c.title ? <div className="card-role" translate="no">{c.title}</div> : null}
+      {c.title ? <div className="card-role" translate="no">{c.title}{c.reference ? <span className="muted"> · {c.reference}</span> : null}</div> : null}
       {next ? <div className={`card-next${next.overdue ? " overdue" : ""}`}><Icon name="clock" /><span><NextLabel n={next} /></span></div> : null}
       {/* A closed one: how far it got, why it closed, and when. */}
       {c.status === "archived" ? (

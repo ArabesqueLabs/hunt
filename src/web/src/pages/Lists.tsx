@@ -9,13 +9,15 @@ import { R, optionLabel } from "../lib/meta";
 import { go } from "../lib/router";
 import { S, useShared } from "../lib/state";
 import { store } from "../lib/storage";
+import { toPlain } from "../lib/rich";
 import { tagNames } from "../lib/tags";
 import { toast } from "../lib/toast";
 import type { Row } from "../lib/types";
 import { BulkBar, RecordActions, SelectAllCell, SelectCell } from "../components/bulk";
+import { Combo } from "../components/Combo";
 import { useColumns } from "../components/columns";
 import { confirmDelete } from "../components/dialogs";
-import { CreateForm, FieldControl, GbpLine, setField } from "../components/fields";
+import { CreateForm, FieldControl, GbpLine, refSource, setField } from "../components/fields";
 import { FileDrop, acceptFiles, guessKind, stem, uploadVersion, useFileDrop } from "../components/files";
 import { IMPORTED, logoFromImport, openImport, personFromProfile, refreshFromLinkedIn } from "../components/importer";
 import { newApplication } from "../components/NewApplication";
@@ -79,6 +81,20 @@ export function ListPage({ page }: { page: string }) {
   // Files: of one kind, or all.
   const kindField = resource === "documents" ? r.fields.find((f: Row) => f.name === "kind") : null;
   const [kind, setKind] = useState("");
+  // Files: those sent with one application (?application=ID), or all.
+  const [app, setApp] = useState<{ id: number; label: string | null } | null>(() => {
+    const id = resource === "documents" ? Number(new URLSearchParams(location.search).get("application")) : 0;
+    return id ? { id, label: null } : null;
+  });
+  useEffect(() => {
+    if (app && app.label == null) attempt(() => get(`applications/${app.id}`)).then((a) => setApp(a ? { id: a.id, label: a.label } : null));
+  }, [app]);
+  const pickApp = (next: { id: number; label: string } | null) => {
+    setApp(next);
+    const query = new URLSearchParams(location.search);
+    if (next) query.set("application", String(next.id)); else query.delete("application");
+    history.replaceState(null, "", location.pathname + (query.toString() ? `?${query}` : ""));
+  };
   const [rows, setRows] = useState<Row[] | null>(null);
   const [companies, setCompanies] = useState<Map<number, Row> | null>(null);
   const [version, setVersion] = useState(0);
@@ -94,7 +110,7 @@ export function ListPage({ page }: { page: string }) {
   useEffect(() => {
     let alive = true;
     (async () => {
-      const list: Row[] = await get(`${resource}?q=${enc(settled)}${tag ? `&tag=${enc(tag)}` : ""}${kind ? `&kind=${enc(kind)}` : ""}`);
+      const list: Row[] = await get(`${resource}?q=${enc(settled)}${tag ? `&tag=${enc(tag)}` : ""}${kind ? `&kind=${enc(kind)}` : ""}${app ? `&application_id=${app.id}` : ""}`);
       // Applications and people belong to companies: show whose logo.
       const cos = ["applications", "people"].includes(resource) ? new Map<number, Row>((await get("companies")).map((c: Row) => [c.id, c])) : null;
       if (resource === "documents") {
@@ -114,12 +130,12 @@ export function ListPage({ page }: { page: string }) {
       setRows(list);
     })().catch((e) => toast(e.message, "error"));
     return () => { alive = false; };
-  }, [resource, settled, tag, kind, version, sel]);
+  }, [resource, settled, tag, kind, app?.id, version, sel]);
   const shownIds = (rows || []).map((rec) => rec.id);
   const cell = (rec: Row, key: string): ReactNode => {
     if (key === "salary") {
       const pay = fmtMoney(rec.salary_min, rec.salary_max, rec.currency, rec.pay_period);
-      return pay ? <>{pay}{" "}<GbpLine a={rec} /></> : rec.comp || "";
+      return pay ? <>{pay}{" "}<GbpLine a={rec} /></> : toPlain(rec.comp);
     }
     if (key === "created_at") return fmtDay(rec.created_at.slice(0, 10));
     if (key === "latest") return rec.latest ? <><a href={`/files/${rec.id}?version=${rec.latest.id}`}>{`v${rec.latest.number}`}</a>{` ${rec.latest.filename} · ${fmtDay(rec.latest.created_at.slice(0, 10))}`}</> : <span className="muted">none yet</span>;
@@ -159,6 +175,7 @@ export function ListPage({ page }: { page: string }) {
   };
   return (
     <div className="page list-page" data-list={page}>
+      {app ? <a className="al-back-link" href={`/applications/${app.id}`}>Back to application</a> : null}
       <header className="al-page-head">
         <h1>{contacts ? "Contacts" : r.title}</h1>
         {LIST_LEDES[contacts ? "contacts" : page] ? <p className="al-page-head__lede">{LIST_LEDES[contacts ? "contacts" : page]}</p> : null}
@@ -176,7 +193,15 @@ export function ListPage({ page }: { page: string }) {
             {kindField.options.map(([v, l]: [string, string]) => <option key={v} value={v}>{l}</option>)}
           </Select>
         ) : null}
+        {resource === "documents" && (!app || app.label != null) ? (
+          <Combo key={app?.id ?? 0} className="list-app" label="Application" placeholder="Any application" value={app?.label ?? ""} source={refSource("applications")}
+            onPick={(it) => pickApp({ id: it.value, label: it.label })} onInput={(v) => { if (!v.trim()) pickApp(null); }} />
+        ) : null}
         {S.TAGS.length ? <TagFilter current={tag} onPick={setTag} /> : null}
+        {/* Files: searched or filtered, back to them all. */}
+        {resource === "documents" && (q || kind || tag || app) ? (
+          <button className="al-button al-button--sm al-button--quiet" type="button" onClick={() => { setQ(""); setKind(""); setTag(""); pickApp(null); }}>Reset filters</button>
+        ) : null}
       </div>
       {columns.style}
       {columns.bar}
@@ -193,7 +218,7 @@ export function ListPage({ page }: { page: string }) {
           </thead>
           <tbody>
             {rows == null ? <LoadingRows cols={cols.length + 4} /> : rows.length ? rows.map(row)
-              : <tr><td className="muted" colSpan={cols.length + 4}>{q || tag || kind ? "No matches." : `No ${r.title.toLowerCase()} yet.`}</td></tr>}
+              : <tr><td className="muted" colSpan={cols.length + 4}>{q || tag || kind ? "No matches." : app ? "No files sent with this application yet." : `No ${r.title.toLowerCase()} yet.`}</td></tr>}
           </tbody>
         </Table>
       </div>

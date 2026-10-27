@@ -6,11 +6,13 @@ import { endedCycles, loadCycles, pickCycle, runningCycles, seasonName } from ".
 import { isoToday, zonedNow } from "../lib/format";
 import { go } from "../lib/router";
 import { store } from "../lib/storage";
+import { toPlain } from "../lib/rich";
 import { toast } from "../lib/toast";
 import type { Board, Card, Cycle } from "../lib/types";
 import { DatePicker } from "./DatePicker";
-import { closeModal, openModal } from "./dialogs";
-import { Choice, Field, Input, Label, Optional, Select, TextArea } from "./ui";
+import { closeModal, dismissModal, openModal } from "./dialogs";
+import { RichText } from "./RichText";
+import { Choice, Field, Input, Label, Optional, Select } from "./ui";
 
 /**
  * Start a cycle: its name, when, what it's for; and, from the cycle that
@@ -60,7 +62,8 @@ function StartCycle({ last, carry }: { last?: Cycle; carry: { c: Card; state: st
         </div>
         <Field>
           <Label htmlFor="start-desc">Description <Optional /></Label>
-          <TextArea id="start-desc" rows={2} placeholder="What this cycle is for: a place, an industry, a kind of role" value={description} onChange={(e) => setDescription(e.target.value)} />
+          <RichText id="start-desc" rows={2} label="Description" placeholder="What this cycle is for: a place, an industry, a kind of role" value=""
+            onChange={(html) => setDescription(toPlain(html).trim() ? html : "")} />
         </Field>
         <p className="muted small">It starts with an empty board, and any running cycles carry on. Target pay, tags, stages, stories and contacts are shared.</p>
         {carry.length && last ? (
@@ -83,7 +86,7 @@ function StartCycle({ last, carry }: { last?: Cycle; carry: { c: Card; state: st
         ) : null}
       </div>
       <div className="al-dialog__actions">
-        <button className="al-button" type="button" onClick={closeModal}>Cancel</button>
+        <button className="al-button" type="button" onClick={dismissModal}>Cancel</button>
         <button className="al-button al-button--primary" type="submit" disabled={!name.trim()} aria-busy={busy ? "true" : undefined}>
           {chosen.size ? `Start, with ${chosen.size} brought back` : "Start with an empty board"}
         </button>
@@ -121,7 +124,7 @@ function ResumeCycle({ c }: { c: Cycle }) {
         <p className="muted small">Reminders and prep put away when it ended stay that way. It can be ended again any time.</p>
       </div>
       <div className="al-dialog__actions">
-        <button className="al-button" type="button" onClick={closeModal}>Cancel</button>
+        <button className="al-button" type="button" onClick={dismissModal}>Cancel</button>
         <button className="al-button al-button--primary" type="submit" aria-busy={busy ? "true" : undefined}>Resume cycle</button>
       </div>
     </form>
@@ -208,7 +211,7 @@ function EndCycle({ c, b, own }: { c: Cycle; b: Board; own: string[] }) {
         </div>
       </div>
       <div className="al-dialog__actions">
-        <button className="al-button" type="button" onClick={closeModal}>Cancel</button>
+        <button className="al-button" type="button" onClick={dismissModal}>Cancel</button>
         <button className="al-button al-button--primary" type="submit" disabled={!name.trim()} aria-busy={busy ? "true" : undefined}>End the cycle</button>
       </div>
     </form>

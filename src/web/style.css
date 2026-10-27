@@ -190,7 +190,10 @@ input.al-input, select.al-select:not([multiple]) { block-size: var(--al-field-he
 .zone.over { outline: 2px dashed var(--al-color-accent); outline-offset: 4px; background: var(--al-color-accent-wash); }
 .zone-tools { display: flex; align-items: center; gap: 0.5rem; }
 .zone-tools select { width: auto; font-size: 0.875rem; padding: 0.2rem 0.4rem; }
-/* A swimlane: a row of the board, its stages' columns, folded or not. */
+/* A swimlane: a row of the board, its stages' columns, folded or not; no
+   rule above it, and close under the filters. */
+.zone.swimlane { border-block-start: 0; margin-top: calc(-1 * var(--al-space-2)); }
+.swimlane > summary { padding-block-start: 0; }
 .swimlane > summary h2 { font-size: var(--al-text-lg); font-weight: 500; }
 .swimlane > .al-disclosure__body { display: flex; flex-direction: column; gap: var(--al-space-3); }
 /* A terminal stage's column: quieter, and its cards needn't say why (its sub stages do). */
@@ -227,9 +230,47 @@ input.al-input, select.al-select:not([multiple]) { block-size: var(--al-field-he
 
 /* dialogs */
 /* Dialogs are the design system's (.al-dialog: --md for forms); hunt adds a
-   wide one, for a whole record, and pads the record a dialog shows. */
+   wide one, for a whole record, and pads the record a dialog shows. Its
+   content gets room to breathe: wider margins, the title set off from what
+   it asks, and the actions a foot of their own, kept in view as a long
+   form scrolls. */
+.al-dialog { --dialog-pad: var(--al-space-8); }
 .al-dialog.wide { inline-size: min(76rem, calc(100vw - 2rem)); }
-.al-dialog > article { padding: var(--al-space-6); }
+.al-dialog > article { padding: var(--dialog-pad); }
+.al-dialog > form, .al-dialog__inner { gap: var(--al-space-5); padding: var(--al-space-6) var(--dialog-pad); }
+.al-dialog__title { margin: 0; padding-block-end: var(--al-space-4); border-block-end: var(--al-border-hairline) solid var(--al-color-line); }
+.al-dialog__actions {
+  position: sticky; inset-block-end: 0; z-index: 1;
+  margin: var(--al-space-2) calc(-1 * var(--dialog-pad)) calc(-1 * var(--al-space-6));
+  padding: var(--al-space-4) var(--dialog-pad);
+  border-block-start: var(--al-border-hairline) solid var(--al-color-line);
+  background: var(--al-color-surface-sunk);
+}
+@media (max-width: 40rem) { .al-dialog { --dialog-pad: var(--al-space-5); } }
+
+/* Forms opened in the page (adding prep or a story, editing a cycle or a
+   note) look like a dialog's: framed and padded, their actions a foot of
+   their own. One already in a card keeps the card's frame. */
+.prep-add, .story-form, .cycle-running > .cycle-edit, .note-card.editing { --form-pad: var(--al-space-6); --form-pad-block: var(--al-space-5); }
+.prep-add, .story-form, .cycle-running > .cycle-edit {
+  padding: var(--form-pad-block) var(--form-pad);
+  border: var(--al-border-hairline) solid var(--al-color-line);
+  border-radius: var(--al-radius-sm);
+  background: var(--al-color-surface);
+  overflow: hidden;
+}
+.note-card.editing { padding: var(--form-pad-block) var(--form-pad); gap: var(--al-space-3); overflow: hidden; }
+.prep-add > .prep-add-actions, .story-form > .prep-add-actions, .cycle-running > .cycle-edit > .cycle-actions, .note-card.editing > .actions {
+  margin: var(--al-space-2) calc(-1 * var(--form-pad)) calc(-1 * var(--form-pad-block));
+  padding: var(--al-space-4) var(--form-pad);
+  border-block-start: var(--al-border-hairline) solid var(--al-color-line);
+  background: var(--al-color-surface-sunk);
+}
+.cycle-edit > .cycle-actions { justify-content: flex-end; }
+.cycle-past-card > .cycle-edit > .cycle-actions { padding-block-start: var(--al-space-3); border-block-start: var(--al-border-hairline) solid var(--al-color-line); }
+@media (max-width: 40rem) {
+  .prep-add, .story-form, .cycle-running > .cycle-edit, .note-card.editing { --form-pad: var(--al-space-4); --form-pad-block: var(--al-space-4); }
+}
 
 .process-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 0.75rem; }
 .process-head h1 { font-size: 1.85rem; }
@@ -266,7 +307,6 @@ input.al-input, select.al-select:not([multiple]) { block-size: var(--al-field-he
 .note-add .actions { margin-top: 0.5rem; }
 .people li { display: grid; grid-template-columns: 1fr minmax(8rem, 10rem) auto; gap: 0.5rem; align-items: center; padding: 0.35rem 0; border-bottom: 1px solid var(--al-color-line); }
 .people li .muted { display: none; }
-.person-add { display: grid; grid-template-columns: 1fr minmax(8rem, 10rem) auto; gap: 0.5rem; margin-top: 0.75rem; }
 .plain li { padding: 0.25rem 0; }
 .activity { border-block-start: 1px solid var(--al-color-line-strong); padding-top: 0.35rem; }
 .activity > summary { font-size: 1.05rem; }
@@ -275,10 +315,6 @@ input.al-input, select.al-select:not([multiple]) { block-size: var(--al-field-he
 .activity[open] > summary { margin-bottom: 0.5rem; }
 .record .activity { margin-top: 1.25rem; }
 
-.files li { display: grid; grid-template-columns: auto 1fr auto; gap: 0.5rem; align-items: center; padding: 0.35rem 0; border-bottom: 1px solid var(--al-color-line); }
-.files .muted { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.file-add { display: grid; grid-template-columns: 1fr auto; gap: 0.5rem; margin-top: 0.75rem; }
-.file-add + p { margin: 0.5rem 0 0; }
 
 
 /* files: taking them in */
@@ -413,7 +449,7 @@ fieldset.group > legend { padding: 0; padding-inline-end: 0.5rem; font-size: 0.8
 .cal-nav { display: flex; align-items: center; flex-wrap: wrap; gap: 0.4rem; }
 /* No margin above or below, so it centres on the buttons' line. */
 .cal-month { font-size: 1.35rem; font-weight: 400; margin-block: 0; margin-inline: 0.5rem 0.75rem; min-width: 12rem; }
-/* At the bar's end: weekends, and the view. */
+/* At the bar's end: the kinds, weekends, and the view. */
 .cal-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1.25rem; margin-inline-start: auto; }
 .cal-filters > .al-segmented { align-self: center; }
 /* The key, under the calendar. */
@@ -422,12 +458,17 @@ fieldset.group > legend { padding: 0; padding-inline-end: 0.5rem; font-size: 0.8
 .cal-key { inline-size: 1.1rem; block-size: 0.8rem; border-inline-start: 2px solid var(--kind); background: color-mix(in oklab, var(--kind) 14%, var(--al-color-surface)); }
 .cal-key.step-done { --kind: var(--al-color-line-strong); }
 .cal-key-off { --kind: transparent; border: 1px solid var(--al-color-line); background: repeating-linear-gradient(135deg, color-mix(in oklab, var(--al-color-text) 18%, transparent) 0 1px, transparent 1px 4px); }
+.cal-key.late { --kind: var(--al-color-danger); }
 .cal-key-now { block-size: 0; border: 0; border-top: 2px solid var(--al-color-danger); background: none; }
 .cal-kind { align-items: center; font-size: 0.8125rem; }
+/* Which kinds show: each box in its kind's colour, so they're the key too. */
+.cal-kinds { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 1rem; }
+.cal-kinds input { accent-color: var(--kind); }
 .calendar select { width: auto; }
+/* Each kind its own colour, from the chart palette; red is kept for what's overdue. */
 .kind-step { --kind: var(--al-color-accent); }
-.kind-next { --kind: var(--al-color-text); }
-.kind-closes { --kind: var(--al-color-danger); }
+.kind-next { --kind: var(--al-color-chart-3); }
+.kind-closes { --kind: var(--al-color-chart-2); }
 .kind-applied { --kind: var(--al-color-text-muted); }
 .kind-posted { --kind: var(--al-color-line-strong); }
 .cal-grid { display: grid; grid-template-columns: repeat(var(--cols, 7), minmax(0, 1fr)); border-top: 1px solid var(--al-color-line-strong); border-inline-start: 1px solid var(--al-color-line); }
@@ -814,7 +855,6 @@ fieldset.group > legend { padding: 0; padding-inline-end: 0.5rem; font-size: 0.8
 .app-contact { display: inline-flex; flex-wrap: wrap; gap: 0.35rem 0.85rem; margin-inline-start: auto; font-size: 0.85rem; }
 .app-contact a { display: inline-flex; align-items: center; gap: 0.3rem; }
 .app-contact svg { width: 14px; height: 14px; color: var(--al-color-text-muted); flex: none; }
-.app-section .person-add, .app-section .file-add { margin-top: 0.75rem; }
 
 .app-footer { display: flex; flex-direction: column; gap: 0.85rem; }
 .app-footer .app-tags { margin-top: 0; }
@@ -919,7 +959,8 @@ fieldset.group > legend { padding: 0; padding-inline-end: 0.5rem; font-size: 0.8
 .app-role { border-top: 0; padding-top: 0; }
 .app-timeline li.is-event .dot { width: 0.45rem; height: 0.45rem; inset-inline-start: -1.53rem; top: 0.55rem; background: var(--al-color-text-muted); box-shadow: none; }
 .app-event { display: flex; justify-content: space-between; gap: 0.75rem; align-items: baseline; font-size: 0.95rem; }
-.app-event-edit { display: grid; grid-template-columns: 10rem minmax(0, 1fr) auto; gap: 0.5rem; align-items: center; }
+.app-event-edit { display: grid; gap: 0.5rem; }
+.app-event-edit .app-row > :first-child { flex: 0 1 13rem; min-inline-size: 0; }
 
 .email-add { display: flex; flex-direction: column; gap: 0.6rem; padding: 0.85rem; margin-bottom: 0.85rem; border: 1px dashed var(--al-color-line-strong); border-radius: var(--al-radius-sm); background: var(--al-color-bg); }
 .email-add.file-over { border-color: var(--al-color-accent); background: var(--al-color-accent-wash); }
@@ -941,7 +982,6 @@ fieldset.group > legend { padding: 0; padding-inline-end: 0.5rem; font-size: 0.8
 
 /* A posting reads like an email: its text in the same box, laid out. */
 .app-posting header .al-badge { margin-inline-start: 0.25rem; }
-.posting-add { margin-bottom: 0.85rem; }
 .posting-choices label.choice { white-space: nowrap; }
 .posting-choices tr.differ th { color: var(--al-color-text); }
 .posting-choices thead a { text-transform: none; letter-spacing: 0; }
@@ -994,8 +1034,8 @@ fieldset.group > legend { padding: 0; padding-inline-end: 0.5rem; font-size: 0.8
 .filter-chips ul { display: flex; flex-wrap: wrap; gap: var(--al-space-2); list-style: none; margin: 0; padding: 0; }
 .filter-chips .filter-count { font-size: var(--al-text-sm); font-variant-numeric: tabular-nums; }
 .filter-row .set { border-color: var(--al-color-accent); box-shadow: 0 0 0 1px var(--al-color-accent); }
-/* The page's own control at the end of the filters' row: a switch. */
-.filter-extra { margin-inline-start: auto; }
+/* The page's own controls at the end of the filters' row: Compact or Detailed, Board or Table. */
+.filter-extra { margin-inline-start: auto; display: flex; flex-wrap: wrap; align-items: center; gap: var(--al-space-3); }
 .switch { align-items: center; font-size: 0.85rem; user-select: none; }
 
 
@@ -1060,6 +1100,7 @@ th:hover .col-hide, .column > header:hover .col-hide, .col-hide:focus-visible { 
 .column > header .col-hide { flex: none; }
 .col-hide:hover { color: var(--al-color-text); background: var(--al-color-surface-sunk); }
 @media (hover: none) { .col-hide { opacity: 0.75; } }
+.hidden-columns[hidden] { display: none; }
 .hidden-columns { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin-bottom: 0.6rem; }
 .chip-button { display: inline-flex; align-items: center; gap: 0.3rem; min-height: 0; padding: 0.1rem 0.5rem; font-size: 0.8rem;
   border: 1px dashed var(--al-color-line-strong); border-radius: var(--al-radius-sm); background: none; color: var(--al-color-text); cursor: pointer; }
@@ -1416,7 +1457,7 @@ body:is(.admin-mode, .settings-mode) :is(.app-nav, #cycle-box) { display: none; 
 .prep-filters .field:first-child { flex: 0 1 16rem; }
 .prep-filters .field { flex: 0 1 12rem; }
 .prep-summary { margin-inline-start: auto; }
-.prep-add, .story-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: var(--al-space-3); }
+.prep-add, .prep-fields, .story-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: var(--al-space-4) var(--al-space-3); }
 .prep-wide { grid-column: 1 / -1; }
 .prep-daily { align-self: end; }
 .prep-add-actions { grid-column: 1 / -1; display: flex; gap: var(--al-space-2); justify-content: flex-end; align-items: center; }
@@ -1525,6 +1566,43 @@ body:is(.admin-mode, .settings-mode) :is(.app-nav, #cycle-box) { display: none; 
 .app-tl-here { margin-inline-start: var(--al-space-2); vertical-align: middle; font-family: var(--al-font-sans, inherit); font-size: var(--al-text-xs); font-weight: var(--al-weight-medium); }
 .app-tl-note .al-timeline__title { font-weight: 400; }
 .app-tl-step.is-cancelled .al-timeline__title { color: var(--al-color-text-muted); text-decoration: line-through; }
+/* Beside the interviews, the timeline is a line an entry: closer, the
+   current stage no larger than the rest, a note's first two lines. The
+   whole of it opens in a dialog. */
+.app-tl-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(17rem, 100%), 1fr)); gap: var(--al-space-6); align-items: start; }
+.app-tl.is-compact > li { padding-block-end: var(--al-space-2); }
+.app-tl.is-compact .al-timeline__marker { inline-size: 1.25rem; block-size: 1.25rem; }
+.app-tl.is-compact > li:not(:last-child)::before { inset-block-start: 1.25rem; inset-inline-start: calc(0.625rem - var(--al-border-hairline) / 2); }
+.app-tl.is-compact .al-timeline__title { font-size: var(--al-text-sm); }
+.app-tl.is-compact .app-tl-stage.is-current .al-timeline__title { font-size: var(--al-text-base); }
+.app-tl.is-compact .al-timeline__time { font-size: var(--al-text-xs); }
+.app-tl.is-compact .app-tl-note .tl-serif { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; white-space: normal; }
+.app-page-dialog .al-dialog__body { max-block-size: 70vh; overflow-y: auto; }
+.app-tl-col { display: flex; flex-direction: column; align-items: flex-start; gap: var(--al-space-2); min-inline-size: 0; }
+.app-tl-col > .app-tl { align-self: stretch; }
+/* The heading tops the timeline's column, so the interviews beside it start level with it. */
+.app-tl-col > .app-panel-head { align-self: stretch; margin-block-end: var(--al-space-1); }
+.app-step-cards > .app-step-cards-sub:first-child { margin-block-start: 0; }
+/* The role: its details narrow, about the job wide beside them; one column on a phone. */
+.app-role-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: var(--al-space-6); align-items: start; }
+.app-role-cols > * { min-inline-size: 0; }
+.app-role-details, .app-role-about { display: flex; flex-direction: column; gap: var(--al-space-4); }
+.app-role-cols .app-grid { grid-template-columns: 1fr; }
+@media (max-width: 52rem) { .app-role-cols { grid-template-columns: 1fr; } }
+/* The interviews, each a card: those to come, then those that happened. */
+.app-step-cards { display: flex; flex-direction: column; gap: var(--al-space-3); min-inline-size: 0; }
+.app-step-cards > .app-panel-tools { justify-content: flex-end; }
+.app-step-cards-sub { margin: var(--al-space-1) 0 0; font-size: var(--al-text-xs); font-weight: var(--al-weight-medium); color: var(--al-color-text-muted); }
+.app-step-card { gap: var(--al-space-1-5); padding: var(--al-space-3) var(--al-space-4); }
+.app-step-card-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--al-space-1) var(--al-space-2); }
+.app-step-card-head h4 { margin: 0; font-size: var(--al-text-base); font-weight: var(--al-weight-medium); min-inline-size: 0; }
+.app-step-card-head .app-tl-tools { margin-inline-start: auto; }
+.app-step-card .app-tl-tools .al-button--sm { min-block-size: 1.5rem; padding-block: 0; padding-inline: var(--al-space-2); font-size: var(--al-text-xs); }
+.app-step-card-when { display: flex; align-items: center; gap: var(--al-space-2); font-size: var(--al-text-sm); }
+.app-step-card-when .is-late { color: var(--al-color-warning); }
+.app-step-card.is-scheduled { border-color: var(--al-color-accent); }
+.app-step-card.is-cancelled h4 { color: var(--al-color-text-muted); text-decoration: line-through; }
+.app-company-name { gap: var(--al-space-2); font-weight: var(--al-weight-medium); }
 /* A posting, read: its first sentences, and Read more opens the rest in place, not in a box that scrolls. */
 .app-posting .posting-text { max-height: none; overflow: visible; }
 .app-more { padding: 0; border: 0; background: none; font: inherit; font-size: var(--al-text-sm); text-decoration: underline; text-decoration-color: var(--al-color-accent); cursor: pointer; }
@@ -1537,11 +1615,11 @@ body:is(.admin-mode, .settings-mode) :is(.app-nav, #cycle-box) { display: none; 
 .app-links { gap: var(--al-space-3); font-size: inherit; }
 .app-links li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--al-space-2); align-items: start; }
 .app-link { display: flex; flex-direction: column; min-inline-size: 0; overflow-wrap: anywhere; }
-.app-link-form { display: flex; flex-direction: column; gap: var(--al-space-3); padding-block-start: var(--al-space-3); border-block-start: 1px solid var(--al-color-line); }
-.app-link-form > .al-button { align-self: flex-start; }
 .app-aside .app-people li { flex-direction: column; align-items: flex-start; gap: 0; }
+/* Someone on the process, with their menu beside, as a link has. */
+.app-people li.app-person { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--al-space-2); align-items: start; }
+.app-person-about { display: flex; flex-direction: column; align-items: flex-start; min-inline-size: 0; overflow-wrap: anywhere; }
 .app-aside .app-contact { margin-inline-start: 0; }
-.app-aside .person-add, .app-aside .file-add { grid-template-columns: 1fr; }
 .app-aside .tag-editor { margin: 0; }
 .app-aside .tag-editor-label { display: none; }
 .app-delete { border-block-start: 1px solid var(--al-color-line); padding-block-start: var(--al-space-4); }
@@ -1623,6 +1701,8 @@ body:is(.admin-mode, .settings-mode) :is(.app-nav, #cycle-box) { display: none; 
 .list-tools { display: flex; flex-wrap: wrap; align-items: center; gap: var(--al-space-3); }
 .list-tools > .al-search { flex: 1 1 16rem; max-inline-size: 22rem; }
 .list-tools > select { inline-size: auto; }
+/* Files: those sent with one application, chosen by name. */
+.list-tools > .list-app { inline-size: min(18rem, 100%); }
 .page.record-page.reading { gap: var(--al-space-5); }
 .profile-prose { font-size: 1rem; }
 .profile-picture { display: flex; align-items: center; gap: var(--al-space-3); flex-wrap: wrap; }
@@ -1671,14 +1751,26 @@ body:is(.admin-mode, .settings-mode) :is(.app-nav, #cycle-box) { display: none; 
 .rich :is(p, ul, ol, blockquote, h2, h3, h4) { margin-block: 0 0.6em; }
 .rich :is(ul, ol) { padding-inline-start: 1.4em; }
 .rich blockquote { padding-inline-start: var(--al-space-3); border-inline-start: 2px solid var(--al-color-line-strong); color: var(--al-color-text-muted); }
-/* The editor (TinyMCE): in the system's hairline and radius. */
-.rich-editor .tox-tinymce { border: var(--al-border-hairline) solid var(--al-color-line-strong); border-radius: var(--al-radius-sm); }
-.rich-editor .tox-tinymce:focus-within { border-color: var(--al-color-focus); }
+/* Each paragraph reads the way its text runs (English in an Arabic page, left
+   to right), as it did in the editor; unless it says which way. */
+.rich :is(p, li, h2, h3, h4, blockquote):not([dir]) { unicode-bidi: plaintext; }
+/* The editor (Lexical): its toolbar over the text, in the system's hairline
+   and radius, and the text in the page's serif, as it shows once saved. */
+.rich-editor[data-ready] { border: var(--al-border-hairline) solid var(--al-color-line-strong); border-radius: var(--al-radius-sm); background: var(--al-color-surface); }
+.rich-editor[data-ready]:focus-within { border-color: var(--al-color-focus); }
+.rich-editor-tools { display: flex; flex-wrap: wrap; gap: 2px; padding: 2px; border-block-end: var(--al-border-hairline) solid var(--al-color-line); }
+.rich-editor-tools [aria-pressed="true"] { background: var(--al-color-line); color: var(--al-color-text); }
+.rich-editor-text { position: relative; }
+.rich-editor-text > .rich { padding: 0.75rem; font-family: var(--al-font-serif, inherit); line-height: 1.6; outline: none; overflow-wrap: anywhere; }
+.rich-editor-placeholder { position: absolute; inset-block-start: 0.75rem; inset-inline: 0.75rem; color: var(--al-color-text-muted); font-family: var(--al-font-serif, inherit); line-height: 1.6; pointer-events: none; }
+.rich .rich-u { text-decoration: underline; }
+.rich .rich-s { text-decoration: line-through; }
+.rich .rich-us { text-decoration: underline line-through; }
 .app-head-more { inline-size: var(--al-button-height); padding: 0; justify-content: center; }
 .app-page-head + .app-status { border-block-start: 0; padding-block-start: 0; }
 /* The application, as it reads: one line over each section, and no more.
    Lists inside a section are spaced apart, not ruled. */
-.page.application.reading :is(.app-page-head, .app-emails, .app-emails li, .al-summary-list__row, .files li, .al-disclosure, .email-msg + .email-msg) { border: 0; }
+.page.application.reading :is(.app-page-head, .app-emails, .app-emails li, .al-summary-list__row, .al-disclosure, .email-msg + .email-msg) { border: 0; }
 .page.application.reading .app-page-head { padding-block-end: 0; }
 .page.application.reading .al-summary-list__row { padding-block: var(--al-space-1-5); }
 .page.application.reading .email-msg + .email-msg { padding-top: var(--al-space-4); }
@@ -1754,3 +1846,49 @@ body[data-sidebar="collapsed"] .due-count { position: absolute; inset-block-star
 
 /* ---- a card's tags beyond the first few: how many ----------------------------------------- */
 .tag-more { display: inline-flex; align-items: center; padding-inline: 0.35rem; border: 1px solid var(--al-color-line); border-radius: var(--al-radius-sm); font-size: var(--al-text-xs); color: var(--al-color-text-muted); font-variant-numeric: tabular-nums; }
+
+/* An application's sections, each edited on its own: Details in parts
+   (the role and company, the posting links, about the job), each with its
+   own heading and Edit; one being edited is marked, with Cancel and Save
+   at its foot. */
+.app-part { display: flex; flex-direction: column; gap: var(--al-space-3); }
+.app-part + .app-part { border-block-start: 1px solid var(--al-color-line); padding-block-start: var(--al-space-4); }
+.app-part-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--al-space-2); }
+.app-part-head h3 { margin: 0; font-size: var(--al-text-sm); font-weight: var(--al-weight-medium); color: var(--al-color-text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.app-panel.is-editing, .app-part.is-editing { box-shadow: inset 2px 0 0 var(--al-color-accent); }
+:dir(rtl) :is(.app-panel.is-editing, .app-part.is-editing) { box-shadow: inset -2px 0 0 var(--al-color-accent); }
+/* Room between the mark and the fields it marks. */
+.app-panel.is-editing, .app-part.is-editing { padding-inline-start: var(--al-space-5); }
+.app-edit { display: flex; flex-direction: column; gap: var(--al-space-3); }
+.app-edit-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--al-space-2); padding-block-start: var(--al-space-2); }
+.app-edit-sub { margin: var(--al-space-2) 0 0; font-size: var(--al-text-base); font-weight: var(--al-weight-medium); }
+.app-field-label { font-size: 0.85rem; color: var(--al-color-text-muted); }
+.app-edit .app-row > .al-input, .app-edit .app-row > input { flex: 1; min-inline-size: 0; }
+.app-row .spacer { flex: 1; }
+.app-step-fields { grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); }
+.app-company-about { max-inline-size: none; }
+.app-read-more { display: flex; flex-direction: column; gap: var(--al-space-1); }
+.app-read-more > .app-more { align-self: flex-start; }
+.app-read-more > p { margin: 0; }
+.app-pay-more { display: flex; flex-direction: column; gap: var(--al-space-2); }
+.app-pay-notes { white-space: normal; }
+.app-link-tools { display: inline-flex; flex-wrap: wrap; gap: var(--al-space-1); }
+/* Files sent with it: a thumbnail each, its name, and Edit and Detach beside. */
+.app-files { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--al-space-2); }
+.app-files li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--al-space-2); align-items: center; }
+.app-file { display: flex; align-items: center; gap: var(--al-space-2); min-inline-size: 0; text-decoration: none; color: inherit; }
+.app-file:hover .app-file-name > :first-child { color: var(--al-color-accent); text-decoration: underline; }
+.app-file-name { display: flex; flex-direction: column; min-inline-size: 0; }
+.app-file-name > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-thumb { flex: none; inline-size: 2.5rem; block-size: 3rem; border: 1px solid var(--al-color-line); border-radius: var(--al-radius-sm); background: var(--al-color-surface-sunk); object-fit: cover; display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.1rem; color: var(--al-color-text-muted); font-size: 0.6rem; font-weight: 600; letter-spacing: 0.02em; }
+.file-thumb svg { inline-size: 1rem; block-size: 1rem; }
+.app-files-all { align-self: flex-start; }
+.app-upload-chosen { margin: 0; }
+/* Rich text on the timeline: a note, and what to prepare for an interview. */
+.app-tl .al-timeline__title .rich.tl-serif { white-space: normal; }
+.tl-prep { white-space: normal; }
+.tl-prep .tl-rich { display: inline; }
+.tl-prep .tl-rich:not(.rich) { white-space: pre-line; }
+.tl-prep .tl-rich.rich { display: block; }
+.prep-description { margin-block: var(--al-space-1); max-inline-size: 60ch; }
+.version-note { display: flex; flex-direction: column; gap: var(--al-space-1); }

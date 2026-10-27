@@ -52,9 +52,32 @@ export const isAdmin = () => myAccount()?.role === "admin" && myAccount()?.statu
 /** This hunt's name: as its admins name it, or hunt's own. */
 export const siteName = () => S.META?.about?.name || "hunt";
 
+/**
+ * A list admins can change (Admin → Lists), as `[value, label]`s: work
+ * modes, employment, a step's statuses, formats and lengths, people's
+ * roles, kinds of file.
+ */
+export const listOf = (key: string): [string, string][] => (S.META.choices?.[key]?.choices || []).map((c: Choice) => [c.value, c.label]);
+
+/** The fields whose options are a list admins change, as the lists now are. */
+export function applyChoices() {
+  for (const [key, list] of Object.entries<Row>(S.META.choices || {})) {
+    const [resource, field] = CHOICE_FIELDS[key] || [];
+    const f = resource ? R(resource)?.fields.find((x) => x.name === field) : null;
+    if (f && f.type === "enum") f.options = list.choices.map((c: Choice) => [c.value, c.label]);
+  }
+}
+
+/** Where each list is a field's options. */
+const CHOICE_FIELDS: Record<string, [string, string]> = {
+  work_mode: ["applications", "work_mode"], employment: ["applications", "employment"],
+  step_status: ["steps", "status"], document_kind: ["documents", "kind"],
+};
+
 /** Reload what the forms offer: archive reasons, tags. */
 export async function reloadMeta() {
   S.META = await get("meta");
+  applyChoices();
   // Shared, without an account that may use it: nothing else to load.
   if (S.META.tenancy && S.META.tenancy.account?.status !== "active") { changed(); return; }
   [S.TAGS, S.PREFS] = await Promise.all([get("tags"), get("settings")]);

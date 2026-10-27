@@ -30,8 +30,8 @@ Both views share their filters, which carry over between them.
 ## The board
 
 - One column per stage; columns grow with their cards.
-- Cards are compact (role and company) or detailed, by the Detailed switch
-  at the end of the filters' row. A detailed card shows its first three
+- Cards are compact (role and company) or detailed, by Compact / Detailed
+  at the end of the filters' row, beside Board / Table. A detailed card shows its first three
   tags, and how many more (named when you point at it).
 - Drag cards between columns or within one.
 - "+ Add a process" at the foot of a column adds one straight into it:

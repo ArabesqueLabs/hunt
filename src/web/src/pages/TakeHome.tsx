@@ -1135,7 +1135,8 @@ export function TakeHomeLine({ a }: { a: Row }) {
  * what you want to take home (Settings), and how it's worked out.
  * `onAdd()` goes to where a salary can be added, when there's none.
  */
-export function PayPanel({ a, p, stages, onAdd }: { a: Row; p: Row | null; stages: Row[]; onAdd: () => void }) {
+/** An application's pay panel; `tools` (its Edit) in its head, `children` (bonus, equity, notes) after. */
+export function PayPanel({ a, p, stages, onAdd, tools, children }: { a: Row; p: Row | null; stages: Row[]; onAdd: () => void; tools?: ReactNode; children?: ReactNode }) {
   const ends = [...new Set([a.salary_min, a.salary_max].filter((v) => v != null && v > 0))] as number[];
   const offer = p && stages.length && p.stage_id === stages[stages.length - 1].id;
   const period = a.pay_period || "year";
@@ -1150,8 +1151,9 @@ export function PayPanel({ a, p, stages, onAdd }: { a: Row; p: Row | null; stage
   }, [a.salary_min, a.salary_max, a.pay_period, a.employment, currency]);
   const box = (...body: ReactNode[]) => (
     <section className="al-panel app-panel app-pay-panel" data-section="pay" aria-labelledby="panel-pay">
-      <div className="app-panel-head"><h2 id="panel-pay">Pay</h2><div className="app-panel-tools"><span className="al-badge al-badge--outline">{offer ? "Offer" : a.url ? "From the posting" : "As noted"}</span></div></div>
+      <div className="app-panel-head"><h2 id="panel-pay">Pay</h2><div className="app-panel-tools">{ends.length ? <span className="al-badge al-badge--outline">{offer ? "Offer" : a.url ? "From the posting" : "As noted"}</span> : null}{tools}</div></div>
       {body}
+      {children}
     </section>
   );
   if (!ends.length) {

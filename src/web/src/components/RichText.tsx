@@ -1,121 +1,87 @@
-// Rich text: TinyMCE on a textarea, writing the direction the page reads
-// (right to left in Arabic) unless the text says otherwise; and rich text
-// shown, cleaned. lib/rich.ts says how it's kept.
+// Rich text: Lexical on an element of its own, under a toolbar drawn here,
+// writing the direction the page reads (right to left in Arabic) unless the
+// text says otherwise; and rich text shown, cleaned. lib/rich.ts says how
+// it's kept.
 
-import { useEffect, useRef } from "react";
-import { CATALOGS, LANG, t } from "../lib/i18n";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import type { Action, Formats, RichEditor } from "../editor";
 import { clean, isRich, toHtml } from "../lib/rich";
+import { ask } from "./dialogs";
+import { Input, PathIcon } from "./ui";
 
-interface Editor {
-  getContent(): string;
-  setContent(html: string): void;
-  focus(): void;
-  remove(): void;
-  on(events: string, f: (e: KeyboardEvent) => void): void;
-}
-interface TinyMCE { init(options: Record<string, unknown>): Promise<Editor[]>; addI18n(code: string, words: Record<string, string>): void }
-
-/** The editor's own words that show (its toolbar, the link dialog), in the page's language. */
-const EDITOR_WORDS = ["Bold", "Italic", "Bullet list", "Numbered list", "Blockquote", "Insert/edit link", "Insert/Edit Link", "Clear formatting",
-  "URL", "Text to display", "Title", "Open link in...", "Current window", "New window", "Save", "Cancel", "Remove link", "Open link", "Undo", "Redo"];
-
-/** The page's typefaces (its @font-face rules), for the editor's frame, which has none of its own. */
-const fontFaces = () => [...document.styleSheets].flatMap((sheet) => { try { return [...sheet.cssRules]; } catch { return []; } })
-  .filter((r) => r instanceof CSSFontFaceRule).map((r) => r.cssText).join("\n");
+type EditorModule = { createEditor: typeof import("../editor").createEditor };
 
 // The editor's script, loaded once, the first time one opens: at the
 // address app.js has, fingerprinted the same.
-let loading: Promise<TinyMCE> | null = null;
+let loading: Promise<EditorModule> | null = null;
 const loadEditor = () => {
-  loading ??= import(/* @vite-ignore */ `/editor.js${new URL(import.meta.url).search}`).then((m) => m.default as TinyMCE);
+  loading ??= import(/* @vite-ignore */ `/editor.js${new URL(import.meta.url).search}`) as Promise<EditorModule>;
   return loading;
 };
 
-/** Whether the page is drawn dark: chosen, or as the system is. */
-const isDark = () => {
-  const chosen = document.documentElement.dataset.theme;
-  return chosen ? chosen === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
-};
+/** The toolbar: what each button does, its name, and its icon. */
+const TOOLS: [Action, string, string][] = [
+  ["bold", "Bold", "M7 5h6a3.5 3.5 0 0 1 0 7H7zM7 12h7a3.5 3.5 0 0 1 0 7H7z"],
+  ["italic", "Italic", "M19 4h-9M14 20H5M15 4 9 20"],
+  ["bullet", "Bullet list", "M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"],
+  ["number", "Numbered list", "M10 6h10M10 12h10M10 18h10M4 4.5h1.5V9M4 9h3M4 14.5a1.5 1.5 0 0 1 3 0c0 1.5-3 2-3 4h3"],
+  ["quote", "Blockquote", "M17 6H3M21 12H8M21 18H8M3 12v6"],
+];
+const LINK = "M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7";
+const CLEAR = "M4 7V4h16v3M9 20h6M12 4l-4 16M3 3l18 18";
+
+const pressed = (f: Formats, a: Action) => (a === "bullet" || a === "number" ? f.list === a : a === "quote" ? f.quote : a === "clear" ? false : f[a]);
 
 /**
- * A rich text editor in place of a textarea. `value` is where it starts
- * (plain text opens as paragraphs). `onChange(html)` as it's written;
- * `onCommit(html)` as it's left, changed (as a field's change does).
- * `onSave` and `onEscape`: ⌘S or Ctrl+S, and Escape, inside it. Until
- * the editor has loaded, the textarea itself takes the typing.
+ * A rich text editor. `value` is where it starts (plain text opens as
+ * paragraphs). `onChange(html)` as it's written; `onCommit(html)` as it's
+ * left, changed (as a field's change does). ⌘K or Ctrl+K links. Until the
+ * editor has loaded, a textarea takes the typing; one set from outside (an
+ * import filling the form in) sets the editor too.
  */
-export function RichText({ id, value, label, placeholder, rows = 6, onChange, onCommit, onSave, onEscape, autoFocus = false }: {
+export function RichText({ id, value, label, placeholder, rows = 6, onChange, onCommit, autoFocus = false }: {
   id?: string; value: string | null | undefined; label: string; placeholder?: string; rows?: number;
-  onChange?: (html: string) => void; onCommit?: (html: string) => void; onSave?: () => void; onEscape?: () => void; autoFocus?: boolean;
+  onChange?: (html: string) => void; onCommit?: (html: string) => void; autoFocus?: boolean;
 }) {
+  const wrap = useRef<HTMLDivElement>(null);
   const area = useRef<HTMLTextAreaElement>(null);
-  const editor = useRef<Editor | null>(null);
-  const handlers = useRef({ onChange, onCommit, onSave, onEscape });
-  handlers.current = { onChange, onCommit, onSave, onEscape };
+  const root = useRef<HTMLDivElement>(null);
+  const editor = useRef<RichEditor | null>(null);
+  const committed = useRef("");
+  // Whether the cursor goes into the editor once it shows.
+  const focusOnReady = useRef(false);
+  const [formats, setFormats] = useState<Formats | null>(null);
+  const handlers = useRef({ onChange, onCommit });
+  handlers.current = { onChange, onCommit };
+  const now = () => (editor.current ? editor.current.getContent() : area.current!.value);
+  // What's written, where lib/unsaved.ts looks for it.
+  const mark = (html: string) => wrap.current?.setAttribute("data-rich", html);
+  const commit = () => {
+    const html = now();
+    if (html !== committed.current) { committed.current = html; handlers.current.onCommit?.(html); }
+  };
   useEffect(() => {
     const el = area.current!;
     let alive = true;
-    let committed = el.value;
-    const emit = () => handlers.current.onChange?.(editor.current ? editor.current.getContent() : el.value);
-    const commit = () => {
-      const now = editor.current ? editor.current.getContent() : el.value;
-      if (now !== committed) { committed = now; handlers.current.onCommit?.(now); }
-    };
-    // Set from outside, as a field is (an import filling the form in): into the editor too.
+    committed.current = el.value;
+    // Set from outside, as a field is: into the editor too.
     const outside = () => {
-      if (editor.current && el.value !== editor.current.getContent()) editor.current.setContent(toHtml(el.value));
-      emit();
+      editor.current?.setContent(toHtml(el.value));
+      mark(now());
+      handlers.current.onChange?.(now());
       commit();
     };
     el.addEventListener("change", outside);
-    const style = getComputedStyle(document.body);
-    // Prose reads in the page's serif, as it shows once saved.
-    const serif = getComputedStyle(document.documentElement).getPropertyValue("--al-font-serif") || style.fontFamily;
-    loadEditor().then((tinymce) => {
-      if (!alive) return null;
-      // Another language: the editor's words in it, and its toolbar the way it reads.
-      const language = LANG !== "en" && CATALOGS[LANG] ? LANG : undefined;
-      if (language) tinymce.addI18n(language, { _dir: CATALOGS[LANG].dir, ...Object.fromEntries(EDITOR_WORDS.map((w) => [w, t(w)])) });
-      return tinymce.init({
-        target: el,
-        license_key: "gpl",
-        skin: isDark() ? "oxide-dark" : "oxide",
-        content_css: isDark() ? "dark" : "default",
-        // The text runs as the page does: right to left in Arabic.
-        directionality: document.documentElement.dir === "rtl" ? "rtl" : "ltr",
-        language,
-        menubar: false,
-        statusbar: false,
-        branding: false,
-        promotion: false,
-        plugins: "autolink autoresize link lists",
-        toolbar: "bold italic | bullist numlist | blockquote link | removeformat",
-        min_height: Math.max(140, rows * 28),
-        autoresize_bottom_margin: 16,
-        link_default_target: "_blank",
-        link_target_list: false,
-        convert_urls: false,
-        // Only what rich text is shown with (lib/rich.ts): nothing else is kept.
-        valid_elements: "p,br,strong/b,em/i,u,s,a[href|target|rel],ul,ol,li,h2,h3,h4,blockquote,code,pre",
-        entity_encoding: "raw",
-        placeholder: placeholder && t(placeholder),
-        iframe_aria_text: t(label),
-        content_style: `${fontFaces()}\nbody { font-family: ${serif}; font-size: ${style.fontSize}; line-height: 1.6; margin: 0.75rem; }`,
-        setup: (ed: Editor) => {
-          ed.on("input change undo redo", emit);
-          ed.on("blur", commit);
-          ed.on("keydown", (e) => {
-            if ((e.metaKey || e.ctrlKey) && e.key === "s" && handlers.current.onSave) { e.preventDefault(); commit(); handlers.current.onSave(); }
-            else if (e.key === "Escape" && handlers.current.onEscape) { e.preventDefault(); handlers.current.onEscape(); }
-          });
-        },
+    loadEditor().then(({ createEditor }) => {
+      if (!alive) return;
+      focusOnReady.current = autoFocus || document.activeElement === el;
+      editor.current = createEditor(root.current!, {
+        html: el.value,
+        onChange: (html) => { mark(html); handlers.current.onChange?.(html); },
+        onFormats: setFormats,
       });
-    }).then((made) => {
-      if (!made) return;
-      if (!alive) { made[0]?.remove(); return; }
-      editor.current = made[0];
-      committed = editor.current.getContent();
-      if (autoFocus) editor.current.focus();
+      committed.current = editor.current.getContent();
+      mark(committed.current);
     }).catch(() => { /* the textarea stays, and still works */ });
     return () => {
       alive = false;
@@ -124,10 +90,48 @@ export function RichText({ id, value, label, placeholder, rows = 6, onChange, on
       editor.current = null;
     };
   }, []);
+  const ready = formats != null;
+  useEffect(() => {
+    if (ready && focusOnReady.current) { focusOnReady.current = false; editor.current?.focus(); }
+  }, [ready]);
+  const linkIt = async () => {
+    const was = formats?.link || "";
+    const answer = await ask({ title: "Insert/edit link", ok: "Save", body: <Input name="url" inputMode="url" aria-label="URL" placeholder="https://" defaultValue={was} autoFocus /> });
+    if (!answer) { editor.current?.focus(); return; }
+    const url = String(answer.get("url") || "").trim();
+    editor.current?.link(url ? (/^[a-z][a-z0-9+.-]*:/i.test(url) ? url : `https://${url}`) : null);
+  };
+  const keys = (e: KeyboardEvent) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === "k" && editor.current) { e.preventDefault(); linkIt(); }
+    // Saving with ⌘S (a note does) saves what's written up to now.
+    else if ((e.metaKey || e.ctrlKey) && e.key === "s") commit();
+  };
+  const tool = (a: Action, name: string, d: string, on: boolean, act = () => editor.current?.act(a)) => (
+    <button key={a} type="button" className="al-button al-button--sm al-button--quiet al-button--icon" aria-label={name} title={name}
+      aria-pressed={a === "clear" ? undefined : (String(on) as "true" | "false")}
+      // The cursor stays in the text as a button is pressed.
+      onMouseDown={(e) => e.preventDefault()} onClick={act}><PathIcon d={d} /></button>
+  );
   return (
-    <div className="rich-editor">
-      <textarea ref={area} id={id} className="al-textarea" rows={rows} aria-label={label} placeholder={placeholder} defaultValue={toHtml(value)} autoFocus={autoFocus}
-        onInput={(e) => handlers.current.onChange?.(e.currentTarget.value)} />
+    <div className="rich-editor" ref={wrap} data-ready={ready ? "" : undefined} onKeyDown={keys}
+      onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) commit(); }}>
+      {ready ? (
+        <div className="rich-editor-tools" role="toolbar" aria-label={`${label}: formatting`}>
+          {TOOLS.map(([a, name, d]) => tool(a, name, d, pressed(formats, a)))}
+          <button type="button" className="al-button al-button--sm al-button--quiet al-button--icon" aria-label="Insert/edit link" title="Insert/edit link"
+            aria-pressed={String(!!formats.link) as "true" | "false"} onMouseDown={(e) => e.preventDefault()} onClick={linkIt}><PathIcon d={LINK} /></button>
+          {tool("clear", "Clear formatting", CLEAR, false)}
+        </div>
+      ) : null}
+      <div className="rich-editor-text">
+        <div ref={root} id={ready ? id : undefined} className="rich" role="textbox" aria-multiline="true" aria-label={label}
+          contentEditable={ready} suppressContentEditableWarning translate="no"
+          hidden={!ready} style={{ minBlockSize: `${Math.max(140, rows * 28)}px` }} />
+        {ready && formats.empty && placeholder ? <div className="rich-editor-placeholder" aria-hidden="true">{placeholder}</div> : null}
+      </div>
+      <textarea ref={area} id={ready ? undefined : id} className="al-textarea" rows={rows} aria-label={label} placeholder={placeholder}
+        defaultValue={toHtml(value)} autoFocus={autoFocus} hidden={ready} tabIndex={ready ? -1 : undefined}
+        onInput={(e) => { mark(e.currentTarget.value); handlers.current.onChange?.(e.currentTarget.value); }} />
     </div>
   );
 }

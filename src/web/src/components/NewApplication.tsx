@@ -10,7 +10,7 @@ import { go, route } from "../lib/router";
 import { S } from "../lib/state";
 import { toast } from "../lib/toast";
 import type { Row } from "../lib/types";
-import { closeModal, openModal } from "./dialogs";
+import { closeModal, dismissModal, openModal } from "./dialogs";
 import { logoFromImport } from "./importer";
 import { Field, Input, Label, Notice, Select } from "./ui";
 
@@ -177,7 +177,7 @@ function NewApplication({ stageId }: { stageId: number | null }) {
         </p>
       </div>
       <div className="al-dialog__actions">
-        <button className="al-button" type="button" onClick={closeModal}>Cancel</button>
+        <button className="al-button" type="button" onClick={dismissModal}>Cancel</button>
         <button className="al-button al-button--primary" type="submit" disabled={!name} aria-busy={adding ? "true" : undefined}>{`Add to ${st?.name || "the board"}`}</button>
       </div>
     </form>

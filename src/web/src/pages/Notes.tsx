@@ -12,6 +12,7 @@ import { confirmDelete } from "../components/dialogs";
 import { TagChip, TagEditor, TagFilter } from "../components/tags";
 import { RichText, RichView } from "../components/RichText";
 import { toPlain } from "../lib/rich";
+import { mayDiscard } from "../lib/unsaved";
 import { EmptyState, Icon, Input, LoadingBlock, SearchBox } from "../components/ui";
 
 export function NotesPage() {
@@ -83,13 +84,13 @@ function NoteEditor({ note, done, cancel }: { note: Row | null; done: () => void
     if (saved) { toast(note ? "Saved" : "Note added"); done(); }
   };
   return (
-    <article className="al-card note-card editing" onKeyDown={(e) => {
+    <article className="al-card note-card editing" data-unsaved="" onKeyDown={(e) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "s") { e.preventDefault(); save(); }
-      if (e.key === "Escape") cancel();
+      if (e.key === "Escape" && mayDiscard(e.currentTarget)) cancel();
     }}>
       <Input aria-label="Title" placeholder="Title (optional)" value={title} onChange={(e) => setTitle(e.target.value)} />
       <RichText value={note?.body} label="Note" placeholder="Write anything…" rows={Math.max(6, (note?.body || "").split("\n").length + 1)} autoFocus
-        onChange={(html) => { body.current = html; }} onSave={save} onEscape={cancel} />
+        onChange={(html) => { body.current = html; }} />
       {note ? <TagEditor resource="memos" rec={note} /> : null}
       <div className="actions">
         {note ? <button className="al-button al-button--sm al-button--quiet al-button--danger" type="button" onClick={async () => {
@@ -97,7 +98,7 @@ function NoteEditor({ note, done, cancel }: { note: Row | null; done: () => void
           if (await attempt(() => del(`memos/${note.id}`))) { toast("Deleted"); done(); }
         }}>Delete</button> : null}
         <span className="spacer" />
-        <button className="al-button" type="button" onClick={cancel}>Cancel</button>
+        <button className="al-button" type="button" onClick={(e) => { if (mayDiscard(e.currentTarget)) cancel(); }}>Cancel</button>
         <button className="al-button al-button--primary" type="button" onClick={save}>{note ? "Save" : "Add note"}</button>
       </div>
     </article>

@@ -6,6 +6,7 @@
 pub mod api;
 pub mod auth;
 pub mod backup;
+pub mod choices;
 pub mod client;
 pub mod cycles;
 pub mod db;

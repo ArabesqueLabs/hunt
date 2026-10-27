@@ -9,7 +9,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { attempt, del, get, patch, post } from "../lib/api";
 import { fmtDay, fmtStamp, nf, parseLocal, zonedNow } from "../lib/format";
-import { CURRENCIES, builtInSignIn, isAdmin, myAccount, sitePage, tenancy } from "../lib/meta";
+import { CURRENCIES, applyChoices, builtInSignIn, isAdmin, myAccount, sitePage, tenancy } from "../lib/meta";
 import { settle } from "../lib/router";
 import { baseTitle, sectionNav } from "../lib/shell";
 import { S, changed, useShared } from "../lib/state";
@@ -17,7 +17,7 @@ import { toast } from "../lib/toast";
 import type { Row } from "../lib/types";
 import { ask } from "../components/dialogs";
 import { Facts, Field, Input, Label, LoadingBlock, Notice, SearchBox, Select, Table, TextArea } from "../components/ui";
-import { ChoiceSetting, ContactLine, REGIONS, SettingRow, SettingsPanel, TIME_ZONES, TextSetting, currencyName } from "./Settings";
+import { ChoiceSetting, ContactLine, OrderedSettings, REGIONS, SettingRow, SettingsPanel, TIME_ZONES, TextSetting, currencyName } from "./Settings";
 import { RecordsCard, ResourcesSection, Tile, fmtBytes, pct } from "./Stats";
 
 /** What Cloudflare Access says about who's signed in: their name, and how. */
@@ -114,6 +114,7 @@ function AskForAccount({ head, who }: { head: ReactNode; who: ReactNode }) {
 /** The admin centre's tabs: each one's key, name, what's in it, and its icon. */
 const ALL_ADMIN_TABS: [string, string, string, string][] = [
   ["general", "General", "Name, notice, new accounts", "sliders"],
+  ["lists", "Lists", "Work modes, interview steps, roles, kinds of file", "tag"],
   ["access", "Access and accounts", "Sign-ups, invites, accounts", "key"],
   ["users", "User stats", "How accounts use hunt", "users"],
   ["system", "System resources", "The machine, by account", "server"],
@@ -224,6 +225,7 @@ export function AdminPage() {
       <div className="settings-content" role="region" aria-labelledby={`admin-tab-${tab}`}>
         {error ? <Notice kind="danger">{error}</Notice> : data ? (
           tab === "general" ? <AdminGeneral data={data} />
+            : tab === "lists" ? <AdminLists data={data} />
             : tab === "access" ? <AdminAccess data={data} reload={reload} />
               : tab === "users" ? <AdminUsers />
                 : tab === "system" ? <AdminSystem />
@@ -244,6 +246,81 @@ async function saveAdmin(change: Row, was: Row, then: (saved: Row) => void) {
     if (back) { then(back); toast("Undone"); }
   } });
   return true;
+}
+
+/** Where each list shows, for its intro. */
+const LIST_INTROS: Record<string, string> = {
+  work_mode: "Where a role is done: on an application, and read from a posting.",
+  employment: "The kind of contract: on an application, and read from a posting.",
+  step_status: "Where an interview step stands: on the timeline, and how it went.",
+  step_format: "How an interview step happens, offered as one is added. A step can still say something else.",
+  step_length: "How long an interview step takes, in minutes, offered as one is added.",
+  person_role: "What someone is to an application: its recruiter, hiring manager…",
+  document_kind: "What a file is: a resume, a cover letter…",
+};
+
+/** A length as written, in minutes: `90`, `1.5 hours`, `2 hr`, `45 min`. */
+function minutesIn(text: string): number | null {
+  const t = text.trim().toLowerCase();
+  const h = t.match(/^(\d+(?:[.,]\d+)?)\s*h/);
+  if (h) return Math.round(Number(h[1].replace(",", ".")) * 60);
+  const m = t.match(/^(\d+)\s*(m|min|mins|minutes)?$/);
+  return m ? Number(m[1]) : null;
+}
+
+/**
+ * Lists: the choices offered across hunt, for everyone, each edited as the
+ * board's stages are (renamed in place, reordered, removed, added; Undo
+ * puts it back). What hunt itself relies on can be renamed, not removed;
+ * a list goes back to hunt's own with Reset.
+ */
+function AdminLists({ data }: { data: Row }) {
+  const [lists, setLists] = useState<Row>(data.choices || {});
+  const [focus, setFocus] = useState<Record<string, string | null>>({});
+  const items = (key: string): Row[] => lists[key].choices.map((c: Row, i: number) => ({ id: i + 1, name: c.label, value: c.value }));
+  const plain = (rows: Row[]) => rows.map((r) => ({ value: r.value ?? null, label: r.name ?? r.label }));
+  /** Save a list (null: hunt's own), giving back what puts it back. */
+  const save = async (key: string, rows: Row[] | null) => {
+    const was = lists[key].changed ? plain(lists[key].choices) : null;
+    const saved = await patch("admin/settings", { choices: { [key]: rows } });
+    data.choices = saved.choices;
+    setLists(saved.choices);
+    S.META.choices = saved.choices;
+    S.META.person_roles = saved.choices.person_role.choices;
+    applyChoices();
+    changed();
+    return () => save(key, was);
+  };
+  return <>
+    {Object.entries<Row>(lists).map(([key, list]) => {
+      const rows = items(key);
+      const redraw = (o: { focus?: string | number | null } = {}) => setFocus({ ...focus, [key]: o.focus == null ? null : String(o.focus) });
+      return (
+        <OrderedSettings key={key} list={`choices-${key}`} title={list.label} intro={LIST_INTROS[key]} items={rows} noun="choice"
+          focus={focus[key] ?? null} redraw={redraw}
+          placeholder={list.numeric ? "Minutes, e.g. 120 or 2 hours" : "A new choice"}
+          rename={(it, name) => save(key, plain(rows.map((r) => (r.id === it.id ? { ...r, name } : r))))}
+          reorder={(ids) => save(key, plain(ids.map((id) => rows.find((r) => r.id === id)!)))}
+          remove={async (it) => save(key, plain(rows.filter((r) => r.id !== it.id)))}
+          add={async (name) => {
+            if (!list.numeric) return save(key, [...plain(rows), { value: null, label: name }]);
+            const n = minutesIn(name);
+            if (!n) throw new Error("Say how long, in minutes (e.g. 120) or hours (e.g. 2 hours)");
+            const label = n % 60 === 0 && n >= 60 ? `${n / 60} hr` : `${n} min`;
+            return save(key, [...plain(rows), { value: String(n), label }]);
+          }}
+          extra={(it) => (list.kept.includes(it.value)
+            ? <span className="al-badge al-badge--outline" title="hunt relies on it: it can be renamed, not removed">Built in</span>
+            : list.numeric ? <span className="muted small">{`${it.value} min`}</span> : null)}
+          before={list.changed ? (
+            <p className="small"><button className="al-button al-button--sm al-button--quiet" type="button" onClick={async () => {
+              const undo = await attempt(() => save(key, null));
+              if (undo) toast(`${list.label}: back to hunt's own`, "info", { label: "Undo", onclick: async () => { if (await attempt(undo)) toast("Undone"); } });
+            }}>Reset to hunt's own</button></p>
+          ) : null} />
+      );
+    })}
+  </>;
 }
 
 /** General: what this hunt says of itself, and what new accounts start with. */

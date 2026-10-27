@@ -16,7 +16,7 @@ import { useColumns } from "../components/columns";
 import { FilterBar } from "../components/FilterBar";
 import { TagChip } from "../components/tags";
 import { LoadingPage, Logo, Table } from "../components/ui";
-import { BoardContext, BoardHead, CyclePicker, NextLabel, NoCycle } from "./Board";
+import { BoardContext, BoardHead, CyclePicker, NextLabel, NoCycle, ViewSwitch } from "./Board";
 
 const TABLE_DEFAULTS = { sort: "stage", desc: false };
 
@@ -95,9 +95,9 @@ function ApplicationsTable({ board, reload }: { board: Board; reload: () => void
   };
   return (
     <div className={`board table-mode${ro ? " read-only" : ""}`}>
-      <BoardHead b={board} current="table" />
+      <BoardHead b={board} />
       <BoardContext />
-      <FilterBar rows={rows} initial={f} onChange={setF} shown={shown.length} total={rows.length} lead={<CyclePicker />} />
+      <FilterBar rows={rows} initial={f} onChange={setF} shown={shown.length} total={rows.length} lead={<CyclePicker />} extra={<ViewSwitch current="table" />} />
       {cols.style}
       {cols.bar}
       <div className="al-table-wrap" tabIndex={0} aria-label="Applications">
@@ -124,7 +124,7 @@ function ApplicationsTable({ board, reload }: { board: Board; reload: () => void
                   {ro ? <td className="row-select" /> : <SelectCell sel={sel} id={r.card.id} keys={() => shownKeys} changed={redraw} label={name} />}
                   <td><a className="with-logo table-app" href={open} onClick={(e) => { if (ro) { e.preventDefault(); toast(`${r.company}: read-only in a past cycle`); } }}>
                     <Logo id={r.company_id} logo={r.card.company_logo} name={r.company} size={20} /><span translate="no">{r.company}</span></a></td>
-                  <td className="muted" translate="no">{r.title || ""}</td>
+                  <td className="muted" translate="no">{r.title || ""}{r.reference ? ` · ${r.reference}` : ""}</td>
                   <td>{r.stage.name}{r.card.lane ? <span className="muted">{` · ${r.card.lane}`}</span> : null}</td>
                   <td className={r.next?.overdue ? "table-overdue" : r.next ? undefined : "muted"}>{r.next ? <NextLabel n={r.next} /> : "—"}</td>
                   <td>{r.work_mode ? optionLabel(modes, r.work_mode) : ""}</td>

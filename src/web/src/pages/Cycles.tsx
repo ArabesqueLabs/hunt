@@ -9,9 +9,12 @@ import { fieldOf, optionLabel } from "../lib/meta";
 import { useShared } from "../lib/state";
 import { toast } from "../lib/toast";
 import type { Cycle } from "../lib/types";
+import { toPlain } from "../lib/rich";
+import { mayDiscard } from "../lib/unsaved";
 import { endCycle, ownOutcomes, resumeCycle, startCycle } from "../components/cycleDialogs";
 import { DatePicker } from "../components/DatePicker";
-import { FLAG, Field, Icon, Input, Label, Optional, PathIcon, Select, TextArea } from "../components/ui";
+import { RichText, RichView } from "../components/RichText";
+import { FLAG, Field, Icon, Input, Label, Optional, PathIcon, Select } from "../components/ui";
 
 const OUTCOME_BADGE: Record<string, string> = { offer: "al-badge--success" };
 
@@ -56,7 +59,7 @@ export function CyclesPage() {
                 <h3 translate="no">{c.name}</h3><span className="al-badge al-badge--accent">Active</span>
                 <span className="al-hint">{`Since ${longDate(c.started_on)} · week ${cycleWeek(c)}`}</span>
               </div>
-              {c.description ? <p className="cycle-desc" translate="no">{c.description}</p> : null}
+              {c.description ? <RichView className="cycle-desc" value={c.description} /> : null}
               <div className="cycle-stats">
                 {stat("Active", c.counts.active)}{stat("Closed", c.counts.archived)}
                 {stat("Interviewing", c.counts.interviewed)}{stat("Offers", c.counts.offers)}
@@ -75,7 +78,7 @@ export function CyclesPage() {
                 <h3 translate="no">{c.name}</h3>
                 <span className="al-hint">{`${longDate(c.started_on)} to ${longDate(c.ended_on)} · ${cycleWeeks(c)} weeks`}</span>
               </div>
-              {c.description ? <p className="cycle-desc" translate="no">{c.description}</p> : null}
+              {c.description ? <RichView className="cycle-desc" value={c.description} /> : null}
               <div className="cycle-outcome">
                 <span className={`al-badge ${OUTCOME_BADGE[c.outcome || ""] || "al-badge--outline"}`}>{optionLabel(fieldOf("cycles", "outcome").options, c.outcome || "other")}</span>
                 {c.outcome_note ? <span translate="no">{c.outcome_note}</span> : null}
@@ -105,7 +108,7 @@ function CycleEditor({ c, done, cancel }: { c: Cycle; done: () => void; cancel: 
   const bad = !!(c.ended_on && vals.started_on && vals.ended_on && vals.ended_on < vals.started_on);
   const disabled = !vals.name.trim() || !vals.started_on || (!!c.ended_on && (!vals.ended_on || (typing && !vals.outcome.trim()))) || bad;
   return (
-    <form className="cycle-edit" onSubmit={async (e) => {
+    <form className="cycle-edit" data-unsaved="" onSubmit={async (e) => {
       e.preventDefault();
       const fields: Record<string, unknown> = { name: vals.name.trim(), description: vals.description.trim() || null, started_on: vals.started_on };
       if (c.ended_on) Object.assign(fields, { ended_on: vals.ended_on, outcome: vals.outcome.trim(), outcome_note: vals.outcome_note.trim() || null });
@@ -118,7 +121,8 @@ function CycleEditor({ c, done, cancel }: { c: Cycle; done: () => void; cancel: 
     }}>
       <Field><Label htmlFor={`ce-name-${c.id}`}>Name</Label><Input id={`ce-name-${c.id}`} value={vals.name} onChange={(e) => setVals({ ...vals, name: e.target.value })} /></Field>
       <Field><Label htmlFor={`ce-desc-${c.id}`}>Description <Optional /></Label>
-        <TextArea id={`ce-desc-${c.id}`} rows={3} placeholder="What this cycle is for: a place, an industry, a kind of role" value={vals.description} onChange={(e) => setVals({ ...vals, description: e.target.value })} /></Field>
+        <RichText id={`ce-desc-${c.id}`} rows={3} label="Description" placeholder="What this cycle is for: a place, an industry, a kind of role" value={c.description}
+          onChange={(html) => setVals((x) => ({ ...x, description: toPlain(html).trim() ? html : "" }))} /></Field>
       <div className="cycle-dates">
         <Field><Label htmlFor={`ce-start-${c.id}`}>Started</Label>
           <DatePicker id={`ce-start-${c.id}`} value={vals.started_on} onChange={(v) => setVals((x) => ({ ...x, started_on: v }))} /></Field>
@@ -144,8 +148,8 @@ function CycleEditor({ c, done, cancel }: { c: Cycle; done: () => void; cancel: 
       <p className="al-error" id={`cycle-${c.id}-err`} hidden={!bad}>{bad ? "It ends before it starts. Pick a later end date, or an earlier start." : ""}</p>
       <p className="al-hint">{c.ended_on ? "Only the details change. Its board stays exactly as it was." : "Week numbers and stats count from the start date."}</p>
       <div className="cycle-actions">
-        <button className="al-button al-button--primary al-button--sm" type="submit" disabled={disabled}>Save</button>
-        <button className="al-button al-button--sm" type="button" onClick={cancel}>Cancel</button>
+        <button className="al-button" type="button" onClick={(e) => { if (mayDiscard(e.currentTarget)) cancel(); }}>Cancel</button>
+        <button className="al-button al-button--primary" type="submit" disabled={disabled}>Save</button>
       </div>
     </form>
   );
