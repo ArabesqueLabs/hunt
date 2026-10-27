@@ -145,12 +145,12 @@ restore: ## Replace everything in the running hunt (ADDR) with a backup: FILE=ba
 
 ##@ Work on hunt
 
-web: src/web/dist/app.js ## Build the web UI into src/web/dist (needs Node)
+web: src/web/dist/app.js src/web/dist/editor.js ## Build the web UI into src/web/dist (needs Node)
 
 src/web/node_modules/.package-lock.json: src/web/package-lock.json
 	cd src/web && $(NPM) ci
 
-src/web/dist/app.js: src/web/node_modules/.package-lock.json $(WEB_SRC)
+src/web/dist/app.js src/web/dist/editor.js: src/web/node_modules/.package-lock.json $(WEB_SRC)
 	cd src/web && $(NPM) run build
 
 build: web ## Build (debug)
@@ -193,12 +193,14 @@ dev-serve: web ## Like dev-tenants, on your own database (DB): never where other
 	$(BE_SOMEONE)
 	$(CARGO) run -- serve --addr $(ADDR) --db "$(DB)" $(TENANTS_FLAGS)
 
-# The web UI is rebuilt as it changes (vite build --watch), and hunt with it.
-watch: web ## Like dev-tenants, rebuilt and restarted on every change (needs cargo-watch)
+# The web UI is rebuilt as it changes (vite build --watch) and served from
+# src/web/dist as it is then (HUNT_WEB_DIST), so it needs only a reload;
+# hunt is rebuilt and restarted when anything else in src changes.
+watch: web ## Like dev-tenants, rebuilt and restarted on every change, the UI's only reloaded (needs cargo-watch)
 	@command -v cargo-watch >/dev/null || { echo "install it with: cargo install cargo-watch"; exit 1; }
 	$(BE_SOMEONE)
 	(cd src/web && $(NPM) run watch) & \
-	$(CARGO) watch -w src -i 'src/web/src/**' -i 'src/web/node_modules/**' -x 'run -- serve --addr $(ADDR) --db $(DEV_DB) $(TENANTS_FLAGS)'
+	HUNT_WEB_DIST=src/web/dist $(CARGO) watch -w src -i 'src/web/src/**' -i 'src/web/dist/**' -i 'src/web/node_modules/**' -x 'run -- serve --addr $(ADDR) --db $(DEV_DB) $(TENANTS_FLAGS)'
 
 # The image as CI builds it, for this machine: TARGET=demo for the demo's.
 TARGET ?= hunt

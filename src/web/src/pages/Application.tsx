@@ -1,40 +1,42 @@
 // The application page: one application on a page of its own
 // (/applications/ID). The board's cards and the Applications list both open
-// it. It reads first; Edit turns it into a form whose changes are saved
-// together, or discarded. What acts as you go (people, files sent, emails)
-// works in either mode.
+// it. It reads first; each section has an Edit of its own (the role and
+// company, the posting links, about the job, pay, notes, the timeline's
+// interviews and notes), which turns it into a form whose changes are
+// saved together, or discarded. What acts as you go (people, files sent,
+// links, emails) is changed in place.
 //
-// Edit works on a draft: the fields' inputs write into it as they're
-// typed, and Save sends what differs from how it was.
+// A section's Edit works on a draft: the fields' inputs write into it as
+// they're typed, and Save sends what differs from how it was.
 
-import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { attempt, del, get, patch, post, put } from "../lib/api";
 import { cycleById, loadCycles, runningCycles } from "../lib/cycles";
-import { LOC, fmtDay, fmtMoney, fmtStamp, HOME, homePay, isOverdue, isoToday, parseLocal, zonedNow } from "../lib/format";
-import { R, closedWhy, optionLabel, reloadTags, takeHomeOn } from "../lib/meta";
+import { LOC, fmtDay, fmtSize, fmtStamp, HOME, isOverdue, isoToday, parseLocal, zonedNow } from "../lib/format";
+import { R, closedWhy, listOf, optionLabel } from "../lib/meta";
 import { go, route, setLeaveGuard } from "../lib/router";
 import { baseTitle } from "../lib/shell";
-import { S } from "../lib/state";
 import { store } from "../lib/storage";
-import { tagNames } from "../lib/tags";
 import { t } from "../lib/i18n";
 import { toast } from "../lib/toast";
 import type { Row } from "../lib/types";
+import { mayDiscard } from "../lib/unsaved";
 import { MenuButton, MenuItem } from "../components/Menu";
 import { askArchive, closingLabel } from "../components/closing";
-import { Combo } from "../components/Combo";
+import { Combo, type ComboItem } from "../components/Combo";
 import { DatePicker } from "../components/DatePicker";
-import { closeModal, confirmDelete, openModal, pushDialog } from "../components/dialogs";
+import { closeModal, confirmDelete, dismissModal, openModal, pushDialog } from "../components/dialogs";
 import { refSource } from "../components/fields";
-import { useFileDrop } from "../components/files";
+import { FileDrop, acceptFile, uploadVersion, useFileDrop } from "../components/files";
 import { looksLikeProfile, openImport, personFromProfile, POSTING_FIELDS, postingImport } from "../components/importer";
 import { warnIfSamePosting } from "../components/NewApplication";
 import { RichText, RichView } from "../components/RichText";
-import { ColourTagChip, TagChip, TagEditor } from "../components/tags";
+import { isRich, toPlain } from "../lib/rich";
+import { TagEditor } from "../components/tags";
 import { Field, Icon, Input, Label, LoadingPage, Logo, Notice, Optional, Photo, Select, Table, TextArea, dotted } from "../components/ui";
 import { acceptOffer, atOffer, isAcceptedLane } from "./Celebrate";
 import { PRIORITY_ORDER, isDone, openPrepAdding, prepState } from "./Prep";
-import { PayPanel, TakeHomeLine } from "./TakeHome";
+import { PayPanel } from "./TakeHome";
 
 // ---- formatting text that was pasted in ---------------------------------------
 
@@ -144,7 +146,10 @@ function localNow() {
 /** A link's site: `jobs.ashbyhq.com`. */
 const hostOf = (url: string) => url.replace(/^https?:\/\/(www\.)?/, "").split(/[/?#]/)[0];
 
-interface PostingLink { key: string | number; url: string; text: string | null }
+/** A kept link's name, if it has one: the API's label is its address when it hasn't. */
+const linkName = (l: Row): string | null => (l.label && l.label !== l.url ? l.label : null);
+
+interface PostingLink { key: string | number; url: string; text: string | null; label?: string | null }
 interface Read extends PostingLink { found?: Row; error?: string }
 
 /**
@@ -190,7 +195,7 @@ function PostingReview({ links, current, apply, close }: { links: PostingLink[];
   }
   const fields = R("applications").fields;
   // A link by where it is; by its address too when two are on one site.
-  const base = (r: Read) => (r.found?.platform && r.found.platform !== "the page" ? r.found.platform : hostOf(r.url));
+  const base = (r: Read) => r.label || (r.found?.platform && r.found.platform !== "the page" ? r.found.platform : hostOf(r.url));
   const name = (r: Read) => (ok.filter((x) => base(x) === base(r)).length > 1
     ? r.url.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "").slice(0, 48) : base(r));
   const show = (k: string, v: any): ReactNode => {
@@ -281,11 +286,15 @@ const threadKey = (m: Row) => m.gm_thrid || `s:${(m.subject || "").toLowerCase()
 /** The fields of a record the page edits, as `{field: value}`. */
 const pickKeys = (rec: Row | null | undefined, keys: string[]) => Object.fromEntries(keys.map((k) => [k, rec?.[k] ?? null]));
 
-const APP_KEYS = ["company_id", "title", "url", "location", "work_mode", "employment", "source",
-  "salary_min", "salary_max", "currency", "pay_period", "bonus", "equity", "comp", "note", "description"];
-const COMPANY_KEYS = ["website", "industry", "size", "description"];
+/** What the rich text editor wrote, or null for nothing written. */
+const richOrNull = (html: string) => (toPlain(html).trim() ? html : null);
+
+const APP_KEYS = ["company_id", "title", "reference", "url", "location", "work_mode", "employment", "source",
+  "salary_min", "salary_max", "currency", "pay_period", "bonus", "equity", "comp", "note", "description", "posted_on", "closes_on"];
+const COMPANY_KEYS = ["website", "industry", "size", "headquarters", "description"];
 const PROCESS_KEYS = ["stage_id", "applied_on"];
-const STEP_KEYS = ["title", "at", "status", "format", "attendees", "note"];
+const POSTING_KEYS = ["url", "description"];
+const STEP_KEYS = ["title", "at", "status", "format", "minutes", "place", "prep_note", "attendees", "note"];
 const EVENT_KEYS = ["body", "happened_on"];
 
 interface Loaded {
@@ -318,18 +327,18 @@ async function loadApplication(id: number, processId: number | null): Promise<Lo
 }
 
 interface Draft {
-  app: Row; company: Row; companyName: string; companyLogo: string | null; tags: string[];
-  process: Row | null; steps: Row[]; events: Row[];
+  app: Row; company: Row; companyName: string; companyLogo: string | null;
+  postings: Row[]; process: Row | null; steps: Row[]; events: Row[];
 }
 
-/** What Edit starts from: the editable parts, copied. */
+/** What a section's editing starts from: the editable parts, copied. */
 function draftOf(s: Loaded): Draft {
   return {
     app: pickKeys(s.app, APP_KEYS),
     company: pickKeys(s.company, COMPANY_KEYS),
     companyName: s.company.name,
     companyLogo: s.company.logo,
-    tags: tagNames(s.app.tags),
+    postings: s.postings.map((p) => ({ id: p.id, ...pickKeys(p, POSTING_KEYS) })),
     process: s.process ? pickKeys(s.process, PROCESS_KEYS) : null,
     steps: (s.detail?.steps || []).map((x: Row) => ({ id: x.id, ...pickKeys(x, STEP_KEYS), people: (x.people || []).map((p: Row) => ({ id: p.id, name: p.name })) })),
     events: (s.detail?.notes || []).map((x: Row) => ({ id: x.id, ...pickKeys(x, EVENT_KEYS), happened_on: x.happened_on || x.created_at.slice(0, 10) })),
@@ -362,18 +371,58 @@ export function ApplicationPage({ id, processId, editing = false }: { id: number
   return <Application id={id} s={s} editing={editing} readLink={opts.readLink ?? null} />;
 }
 
+/** What can move to another application, and what each is called. */
+type Movable = "notes" | "steps" | "emails" | "links";
+
+/**
+ * Which application to move something to: one from the list, other than
+ * `not`. Resolves to it, or null.
+ */
+function pickApplication(title: string, not: number): Promise<{ id: number; label: string } | null> {
+  return new Promise((resolve) => {
+    let chosen: ComboItem | null = null;
+    let answered = false;
+    const apps = refSource("applications");
+    pushDialog({
+      className: "al-dialog ask",
+      onClosed: () => { if (!answered) resolve(null); },
+      render: (close) => (
+        <form method="dialog" onSubmit={(e) => {
+          e.preventDefault();
+          if (!chosen) { toast("Pick an application from the list", "error"); return; }
+          answered = true;
+          resolve({ id: chosen.value, label: chosen.label });
+          close();
+        }}>
+          <h2 className="al-dialog__title">{title}</h2>
+          <Field><Label htmlFor="move-to">To</Label>
+            <Combo id="move-to" label="Application" placeholder="Search applications…" source={async (q) => (await apps(q)).filter((it) => it.value !== not)}
+              onPick={(it) => { chosen = it; }} onInput={() => { chosen = null; }} /></Field>
+          <p className="muted small">It goes to that application's process on the board.</p>
+          <div className="al-dialog__actions">
+            <button className="al-button" type="button" onClick={close}>Cancel</button>
+            <button type="submit" className="al-button al-button--primary">Move</button>
+          </div>
+        </form>
+      ),
+    });
+  });
+}
+
 function Application({ id, s, editing, readLink }: { id: number; s: Loaded; editing: boolean; readLink: string | null }) {
   const [, force] = useState(0);
-  // The timeline, open unless folded.
-  const [tlOpen, setTlOpen] = useState(true);
   const render = () => force((n) => n + 1);
   const st = useRef({
-    edit: editing,
+    // The section being edited, if one: each is edited on its own.
+    section: (editing ? "role" : null) as string | null,
+    // On the timeline, the one interview or note being edited.
+    item: null as { kind: "step" | "event"; id: number } | null,
     orig: draftOf(s),
     draft: null as unknown as Draft,
-    // What's open: folded sections, and add forms shown in View mode.
+    // What's open: add forms, sections edited as they're changed (people,
+    // files, links), and posting texts read in full.
     opened: new Set<string>(),
-    // The form, drawn afresh each time Edit starts.
+    // The form, drawn afresh each time editing starts.
     formKey: 0,
     saving: false,
   }).current;
@@ -381,8 +430,8 @@ function Application({ id, s, editing, readLink }: { id: number; s: Loaded; edit
   const [saveState, setSaveState] = useState<{ state?: string; text: string }>({ text: "" });
   const page = useRef<HTMLDivElement>(null);
   const focusAfter = useRef<string | null>(null);
-  const { edit, draft, orig, opened } = st;
-  const dirty = () => st.edit && JSON.stringify(st.draft) !== JSON.stringify(st.orig);
+  const { draft, orig, opened } = st;
+  const dirty = () => st.section != null && JSON.stringify(st.draft) !== JSON.stringify(st.orig);
   useEffect(() => {
     setLeaveGuard(() => dirty());
     window.onbeforeunload = (e) => { if (dirty()) { e.preventDefault(); e.returnValue = ""; } };
@@ -391,26 +440,33 @@ function Application({ id, s, editing, readLink }: { id: number; s: Loaded; edit
   // After drawing, the cursor goes where it was sent.
   useEffect(() => {
     if (!focusAfter.current) return;
-    page.current?.querySelector<HTMLElement>(focusAfter.current)?.focus();
+    const el = page.current?.querySelector<HTMLElement>(focusAfter.current);
+    el?.focus();
+    el?.scrollIntoView({ block: "nearest" });
     focusAfter.current = null;
   });
+  // Opened to edit: the details, from the start.
+  useEffect(() => { if (editing) { focus('[data-section="role"] input'); force((n) => n + 1); } }, []);
   // A posting link just added: read it, as Refresh does.
   useEffect(() => { if (readLink) readPostings(postingLinks().filter((l) => l.url === readLink)); }, []);
   const reload = (o: { readLink?: string | null } = {}) => reloadWith({ processId: s.process?.id ?? null, ...o });
   const focus = (sel: string) => { focusAfter.current = sel; };
-  const setEdit = (on: boolean, at: string | null = null) => {
-    if (!on && dirty() && !confirm("Discard your changes?")) return;
-    st.edit = on;
+  /** Edit section `key` (null: none), from how it's saved; one at a time. */
+  const editSection = (key: string | null, at: string | null = null, item: typeof st.item = null) => {
+    if (dirty() && !confirm("Discard your changes?")) return;
+    st.section = key;
+    st.item = item;
     st.draft = structuredClone(st.orig);
+    opened.delete("tl-full");
     st.formKey++;
     render();
-    if (on) focus(at || ".app-head input, .app-head .combo input");
+    if (key) focus(at || `[data-section="${key}"] :is(input, select, .rich, textarea):not([hidden])`);
   };
   const toggle = (key: string) => { if (opened.has(key)) opened.delete(key); else opened.add(key); render(); };
 
   // ---- small parts ----
 
-  const input = (obj: Row, key: string, attrs: { type?: string; multiline?: boolean; rows?: number; placeholder?: string; "aria-label"?: string; step?: number } = {}) => {
+  const input = (obj: Row, key: string, attrs: { type?: string; multiline?: boolean; rows?: number; placeholder?: string; "aria-label"?: string; step?: number; list?: string } = {}) => {
     const label = attrs["aria-label"] || attrs.placeholder || key;
     // A date: the design system's date picker, in hunt's language and digits.
     if (attrs.type === "date") {
@@ -419,84 +475,107 @@ function Application({ id, s, editing, readLink }: { id: number; s: Loaded; edit
     }
     const onInput = (e: React.FormEvent<HTMLInputElement | HTMLTextAreaElement>) => { const v = e.currentTarget.value; obj[key] = v.trim() === "" ? null : v; };
     if (attrs.multiline) return <TextArea rows={attrs.rows} placeholder={attrs.placeholder} aria-label={label} defaultValue={obj[key] ?? ""} onInput={onInput} />;
-    return <Input type={attrs.type || "text"} step={attrs.step} placeholder={attrs.placeholder} aria-label={label} defaultValue={obj[key] ?? ""} onInput={onInput} />;
+    return <Input type={attrs.type || "text"} step={attrs.step} list={attrs.list} placeholder={attrs.placeholder} aria-label={label} defaultValue={obj[key] ?? ""} onInput={onInput} />;
   };
-  const select = (obj: Row, key: string, options: [string, string][], { empty = "Not set" as string | null, label = key } = {}) => (
-    <Select aria-label={label} defaultValue={obj[key] ?? ""} onChange={(e) => { obj[key] = e.target.value || null; }}>
-      {empty ? <option value="">{empty}</option> : null}
-      {options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-    </Select>
+  /** Rich text, written into `obj[key]`. */
+  const rich = (obj: Row, key: string, label: string, placeholder: string, rows = 4) => (
+    <RichText value={obj[key]} rows={rows} placeholder={placeholder} label={label} onChange={(html) => { obj[key] = richOrNull(html); }} />
   );
+  const select = (obj: Row, key: string, options: [string, string][], { empty = "Not set" as string | null, label = key } = {}) => {
+    // One it has that the list no longer offers stays, as it is.
+    const have = obj[key] == null || obj[key] === "" || options.some(([v]) => v === String(obj[key])) ? options : [...options, [String(obj[key]), String(obj[key])] as [string, string]];
+    return (
+      <Select aria-label={label} defaultValue={obj[key] ?? ""} onChange={(e) => { obj[key] = e.target.value || null; }}>
+        {empty ? <option value="">{empty}</option> : null}
+        {have.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+      </Select>
+    );
+  };
   const optionsOf = (resource: string, name: string) => R(resource).fields.find((f) => f.name === name)!.options;
   // A field is named by its label, not its placeholder.
-  const labeled = (label: string, control: ReactNode) => <label className="app-field"><span>{label}</span>{control}</label>;
-  const inline = (label: string, value: ReactNode) => <div className="app-inline"><dt>{label}</dt><dd>{value ?? <span className="muted">—</span>}</dd></div>;
-  // A section of the page: a panel, being read; a part of the form, being edited. None folds.
-  const section = (key: string, title: string, { count, action }: { count?: number | null; action?: ReactNode } = {}, ...body: ReactNode[]) => (edit
-    ? (
-      <section key={key} className="app-section" data-section={key}>
-        <header><h2>{title}{count != null ? <span className="count">{count}</span> : null}</h2>
-          {action ? <div className="app-section-tools">{action}</div> : null}</header>
-        <div className="app-section-body">{body}</div>
-      </section>
-    )
-    : panel(key, title, { count: count ?? undefined, action }, ...body));
-  const addButton = (label: string, onClick: () => void) => <button key={label} className="al-button al-button--quiet app-add" type="button" onClick={onClick}>+ {label}</button>;
-  /** Add a row to something saved with the rest: in View mode, this starts editing. */
-  const addRow = (fn: () => void, at: string) => () => {
-    if (!st.edit) { st.edit = true; st.draft = structuredClone(st.orig); st.formKey++; }
-    fn();
-    render();
-    focus(at);
-  };
-  /** An add form that acts at once: shown in Edit mode, behind its button in View mode. */
-  const showForm = (key: string) => edit || opened.has(key);
-  const formButton = (key: string, label: string) => (edit ? null
-    : <button key={key} className="al-button al-button--quiet app-add" type="button" aria-expanded={String(opened.has(key)) as "true" | "false"} onClick={() => toggle(key)}>{opened.has(key) ? "Close" : `+ ${label}`}</button>);
-  const removeButton = (label: string, onClick: () => void) => <button className="al-button al-button--icon al-button--sm al-button--danger" type="button" aria-label={label} title={label} onClick={onClick}>×</button>;
+  const labeled = (label: string, control: ReactNode, wide = false) => <label className={`app-field${wide ? " wide" : ""}`}><span>{label}</span>{control}</label>;
+  /** An add form that acts at once, behind its button. */
+  const showForm = (key: string) => opened.has(key);
+  const formButton = (key: string, label: string) => (
+    <button key={key} className="al-button al-button--quiet al-button--sm app-add" type="button" aria-expanded={String(opened.has(key)) as "true" | "false"} onClick={() => toggle(key)}>{opened.has(key) ? "Close" : `+ ${label}`}</button>
+  );
+  /** An add form in a dialog of its own, behind its button. */
+  const dialogButton = (label: string, open: () => void) => (
+    <button key="add" className="al-button al-button--quiet al-button--sm app-add" type="button" aria-haspopup="dialog" onClick={open}>{label}</button>
+  );
+  /** A small icon button: a link's or a file's own. */
+  const tool = (icon: string, label: string, onClick: () => void, extra: { danger?: boolean } = {}) => (
+    <button className={`al-button al-button--quiet al-button--icon al-button--sm${extra.danger ? " al-button--danger" : ""}`} type="button" aria-label={label} title={label} onClick={onClick}><Icon name={icon} /></button>
+  );
   const link = (url: string) => <a href={/^https?:/.test(url) ? url : `https://${url}`} target="_blank" rel="noreferrer">{url.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "")}{" ↗"}</a>;
+  /** A section's Edit, unless it's being edited (or its cycle has ended). */
+  const editButton = (key: string, what: string) => (ended() || st.section === key ? null
+    : <button key="edit" className="al-button al-button--quiet al-button--sm" type="button" aria-label={`Edit ${what}`} title={`Edit ${what}`} onClick={() => editSection(key)}><Icon name="edit" /><span>Edit</span></button>);
+  /** A section's form: its fields, then Cancel and Save. */
+  const form = (key: string, ...body: ReactNode[]) => (
+    <div key={`form-${key}-${st.formKey}`} className="app-edit">
+      {body}
+      <div className="app-edit-actions">
+        <button className="al-button" type="button" onClick={() => editSection(null)}>Cancel</button>
+        <button className="al-button al-button--primary" type="button" aria-busy={st.saving ? "true" : undefined} onClick={save}>Save</button>
+      </div>
+    </div>
+  );
+  const panelHead = (key: string, title: string, { count, action }: { count?: number | null; action?: ReactNode } = {}) => (
+    <div className="app-panel-head"><h2 id={`panel-${key}`}>{title}</h2>{count != null ? <span className="al-badge al-badge--count">{count}</span> : null}
+      {action ? <div className="app-panel-tools">{action}</div> : null}</div>
+  );
+  /** A panel; with `headless`, its body carries the heading (from panelHead) itself. */
+  const panel = (key: string, title: string, opts: { count?: number | null; action?: ReactNode; headless?: boolean } = {}, ...body: ReactNode[]) => (
+    <section key={key} className={`al-panel app-panel${st.section === key ? " is-editing" : ""}`} data-section={key} aria-labelledby={`panel-${key}`}>
+      {opts.headless ? null : panelHead(key, title, opts)}
+      {body}
+    </section>
+  );
+  /** A part of a panel, with a heading and buttons of its own. */
+  const part = (key: string, title: string, action: ReactNode, ...body: ReactNode[]) => (
+    <section key={key} className={`app-part${st.section === key ? " is-editing" : ""}`} data-section={key} aria-labelledby={`part-${key}`}>
+      <div className="app-part-head"><h3 id={`part-${key}`}>{title}</h3>{action ? <div className="app-panel-tools">{action}</div> : null}</div>
+      {body}
+    </section>
+  );
 
-  // ---- the head: logo, company and role, tags, and the mode ----
+  // ---- moving and deleting what's on the timeline, the emails and the links ----
 
-  function head() {
-    const a = s.app;
-    const title = edit
-      ? (
-        <div className="app-names">
-          <Combo label="Company" placeholder="Company" value={draft.companyName} source={refSource("companies")} allowCreate
-            onPick={async (it) => {
-              const c = it.create ? await attempt(() => post("companies", { name: it.value })) : await get(`companies/${it.value}`);
-              if (!c) return;
-              draft.app.company_id = c.id;
-              draft.companyName = c.name;
-              draft.companyLogo = c.logo;
-              // The company section follows the company chosen.
-              Object.assign(draft.company, pickKeys(c, COMPANY_KEYS));
-              orig.company = pickKeys(c, COMPANY_KEYS);
-              st.formKey++;
-              render();
-            }} />
-          {input(draft.app, "title", { placeholder: "Role" })}
-        </div>
-      )
-      : <h1 id="app-title">{s.company.name}{a.title ? <><span className="muted"> — </span>{a.title}</> : null}</h1>;
-    return (
-      <header className="app-head">
-        <Logo id={edit ? draft.app.company_id : a.company_id} logo={edit ? draft.companyLogo : s.company.logo} name={edit ? draft.companyName : s.company.name} size={48} />
-        <div className="app-title">{title}</div>
-        <div className="app-mode">
-          <div className="al-segmented" role="group" aria-label="Mode">
-            <button type="button" aria-pressed={String(!edit) as "true" | "false"} onClick={() => edit && setEdit(false)}>View</button>
-            <button type="button" aria-pressed={String(edit) as "true" | "false"} onClick={() => !edit && setEdit(true)}>Edit</button>
-          </div>
-          {edit ? <>
-            <button className="al-button" type="button" onClick={() => setEdit(false)}>Discard</button>
-            <button className="al-button al-button--primary" type="button" aria-busy={st.saving ? "true" : undefined} onClick={save}>✓ Save changes</button>
-          </> : null}
-        </div>
-      </header>
-    );
+  /** Move something to another application, with Undo. */
+  async function transfer(what: Movable, rid: number, name: string, after: () => void = reload) {
+    const to = await pickApplication(`Move ${name} to another application`, id);
+    if (!to) return false;
+    if (!(await saving(() => post(`${what}/${rid}/transfer`, { application_id: to.id })))) return false;
+    toast(`Moved to ${to.label}`, "info", { label: "Undo", onclick: async () => {
+      if (await attempt(() => post(`${what}/${rid}/transfer`, { application_id: id }))) { toast("Undone"); reload(); }
+    } });
+    after();
+    return true;
   }
+
+  /** Delete a note (with Undo, which writes it again) or an interview (asking first). */
+  async function removeItem(what: "notes" | "steps", x: Row) {
+    if (what === "steps" && !(await confirmDelete(`interview “${x.title}”`))) return;
+    if (!(await saving(() => del(`${what}/${x.id}`)))) return;
+    if (what === "notes") {
+      toast("Note deleted", "info", { label: "Undo", onclick: async () => {
+        if (await attempt(() => post("notes", { process_id: x.process_id, body: x.body, happened_on: x.happened_on }))) { toast("Undone"); refreshDetail(); }
+      } });
+    } else toast("Interview deleted");
+    refreshDetail();
+  }
+
+  /** A timeline entry's other buttons: Edit, Move, Delete. */
+  const itemMenu = (what: "notes" | "steps", x: Row, name: string) => (ended() ? null : (
+    <MenuButton className="al-button al-button--sm al-button--quiet" label={`More for ${name}`} items={(close) => <>
+      <MenuItem close={close} onClick={() => editSection("timeline", `.app-timeline [data-${what === "steps" ? "step" : "event"}-id="${x.id}"] :is(input, .rich)`,
+        { kind: what === "steps" ? "step" : "event", id: x.id })}>Edit</MenuItem>
+      <MenuItem close={close} onClick={() => transfer(what, x.id, what === "steps" ? `“${x.title}”` : "this note")}>Move to another application…</MenuItem>
+      <hr className="al-menu__separator" />
+      <MenuItem close={close} danger onClick={() => removeItem(what, x)}>Delete</MenuItem>
+    </>}><Icon name="more" /></MenuButton>
+  ));
 
   function importPosting() {
     openImport({
@@ -509,8 +588,8 @@ function Application({ id, s, editing, readLink }: { id: number; s: Loaded; edit
 
   /** Every posting link: the application's own first. */
   const postingLinks = (): PostingLink[] => [
-    ...(s.app.url ? [{ key: "main", url: s.app.url, text: s.app.description }] : []),
-    ...s.postings.map((p) => ({ key: p.id, url: p.url, text: p.description })),
+    ...(s.app.url ? [{ key: "main", url: s.app.url, text: s.app.description, label: s.app.url_label }] : []),
+    ...s.postings.map((p) => ({ key: p.id, url: p.url, text: p.description, label: p.label })),
   ];
 
   /** Read these links (all of them, by default) and choose what to keep;
@@ -525,7 +604,7 @@ function Application({ id, s, editing, readLink }: { id: number; s: Loaded; edit
           if (Object.keys(mine).length) await patch(`applications/${id}`, mine);
           for (const r of read) {
             if (r.key === "main") continue;
-            await patch(`postings/${r.key}`, { platform: r.found!.platform || null, read_at: localNow(), ...(r.key in texts ? { description: texts[r.key] } : {}) });
+            await patch(`postings/${r.key}`, { platform: r.found!.platform || null, read_at: localNow(), ...(r.found!.reference ? { reference: r.found!.reference } : {}), ...(r.key in texts ? { description: texts[r.key] } : {}) });
           }
           return Object.keys(mine).length + Object.keys(texts).length;
         });
@@ -534,17 +613,47 @@ function Application({ id, s, editing, readLink }: { id: number; s: Loaded; edit
     });
   }
 
-  /** Add a posting link, and read it straight away. */
-  async function addPostingLink(url: string) {
-    if (!s.app.url) {
-      if (!(await attempt(() => patch(`applications/${id}`, { url })))) return;
-    } else if (!(await attempt(() => post("postings", { application_id: id, url })))) {
-      return;
-    }
+  /** Add a posting link, named `label`, and `read` it straight away; `then`, once it's added. */
+  async function addPostingLink(url: string, label: string | null, read: boolean, then?: () => Promise<unknown>) {
+    const added = await attempt(async () => {
+      const made = await (s.app.url ? post("postings", { application_id: id, url, label }) : patch(`applications/${id}`, { url, url_label: label }));
+      if (then) await then();
+      return made;
+    });
+    if (!added) return;
     warnIfSamePosting({ ...s.app, url });
-    opened.delete("posting-add");
-    reload({ readLink: url });
+    closeModal();
+    reload({ readLink: read ? url : null });
   }
+
+  /** What a link can be: a job posting (read once it's added, if asked), or one kept with it. */
+  const linkKinds = (): [string, string][] => [["posting", "Job posting"], ...optionsOf("links", "kind")];
+
+  /**
+   * The link form, in a dialog, for both kinds: a new link (a job posting,
+   * unless another kind's chosen), a posting link changed, or a kept one. A
+   * link changing kind moves: a posting becomes a kept link (its text goes),
+   * a kept link a posting (read straight away, if asked).
+   */
+  const openLinkForm = (at: { posting: PostingLink } | { link: Row } | null) => {
+    const posting = at && "posting" in at ? at.posting : null, kept = at && "link" in at ? at.link : null;
+    const current = posting ? { url: posting.url, label: linkName(posting), kind: "posting" } : kept ? { url: kept.url, label: linkName(kept), kind: kept.kind } : null;
+    openModal(<LinkForm l={current} kinds={linkKinds()} onSave={async (v) => {
+      if (v.kind === "posting") {
+        if (posting) { if ((v.url === posting.url && v.label === linkName(posting)) || await changePostingLink(posting, v.url, v.label)) closeModal(); }
+        else await addPostingLink(v.url, v.label, !!v.read, kept ? () => del(`links/${kept.id}`) : undefined);
+        return;
+      }
+      const body = { url: v.url, label: v.label, kind: v.kind };
+      const ok = await saving(async () => {
+        if (kept) return patch(`links/${kept.id}`, body);
+        const made = await post("links", { application_id: id, ...body });
+        if (posting) await postingGone(posting)();
+        return made;
+      });
+      if (ok) { closeModal(); toast(kept ? "Link saved" : "Link added"); reload(); }
+    }} />);
+  };
 
   // ---- not on the board: a way on (on the board, the status card says where it stands) ----
 
@@ -559,177 +668,234 @@ function Application({ id, s, editing, readLink }: { id: number; s: Loaded; edit
     );
   }
 
-  // ---- sections ----
+  // ---- the role: what, where and how, the posting links, about the job ----
 
-  /** The role: where and how first, then pay, then the rest. */
-  function role() {
-    const a = s.app;
+  function rolePanel() {
+    const a = s.app, p = s.process;
     const f = (n: string) => optionsOf("applications", n);
-    if (edit) {
+    if (st.section === "role") {
+      return panel("role", "Role", {}, form("role",
+        <div key="cols" className="app-role-cols"><div className="app-grid">
+          {labeled("Role", input(draft.app, "title", { placeholder: "e.g. Senior Platform Engineer", "aria-label": "Role" }))}
+          {labeled("Role ID", input(draft.app, "reference", { placeholder: "Req-1234, JR0042…", "aria-label": "Role ID" }))}
+          {labeled("Location", input(draft.app, "location", { placeholder: "e.g. London", "aria-label": "Location" }))}
+          {labeled("Work mode", select(draft.app, "work_mode", f("work_mode"), { label: "Work mode" }))}
+          {labeled("Employment", select(draft.app, "employment", f("employment"), { label: "Employment" }))}
+          {labeled("Source", input(draft.app, "source", { placeholder: "e.g. LinkedIn, referral", "aria-label": "Source" }))}
+          {draft.process ? labeled("Applied on", input(draft.process, "applied_on", { type: "date", "aria-label": "Applied on" })) : null}
+          {labeled("Posted on", input(draft.app, "posted_on", { type: "date", "aria-label": "Posted on" }))}
+          {labeled("Applications close", input(draft.app, "closes_on", { type: "date", "aria-label": "Applications close" }))}
+        </div>
+        <div className="app-role-about">
+          <div className="app-field wide"><span>{draft.postings.length ? "The posting's text" : "The job"}</span>
+            {rich(draft.app, "description", "About the job", "Paste or write the job description", 10)}</div>
+          {draft.postings.map((x) => (
+            <div key={`t-${x.id}`} className="app-field wide"><span translate="no">{`From ${hostOf(x.url || "")}`}</span>
+              {rich(x, "description", `The posting's text from ${hostOf(x.url || "")}`, "Its text", 6)}</div>
+          ))}
+        </div></div>));
+    }
+    const o = (n: string, v: string | null) => (v ? optionLabel(f(n), v) : null);
+    const facts = ([
+      ["Role", a.title], ["Role ID", a.reference], ["Location", a.location], ["Work mode", o("work_mode", a.work_mode)],
+      ["Employment", o("employment", a.employment)], ["Source", a.source],
+      ["Applied", p ? (p.applied_on ? fmtDay(p.applied_on) : "Not yet") : null],
+      ["Posted", a.posted_on ? fmtDay(a.posted_on) : null], ["Closes", a.closes_on ? fmtDay(a.closes_on) : null],
+    ] as [string, ReactNode][]).filter(([, v]) => v);
+    // Its details and posting links in a narrow column; about the job beside, in a wide one.
+    return panel("role", "About the Role", { action: editButton("role", "the role") },
+      <div key="cols" className="app-role-cols">
+        <div className="app-role-details">
+          {facts.length ? <dl className="app-facts">{facts.map(([k, v]) => <Fragment key={k}><dt>{k}</dt><dd>{v}</dd></Fragment>)}</dl> : null}
+          {postingLinksPart()}
+        </div>
+        {aboutPart()}
+      </div>);
+  }
+
+  /** A posting link's name: where it's posted, as read; else its site. */
+  const postingName = (l: PostingLink) => {
+    const p = l.key === "main" ? null : s.postings.find((x) => x.id === l.key);
+    return linkName(l) || (p?.platform && p.platform !== "the page" ? p.platform : hostOf(l.url));
+  };
+
+  /** Change a posting link's address and name, in place. A posting's platform
+   * and when it was read were the old link's, so they go if the address changes. */
+  async function changePostingLink(l: PostingLink, url: string, label: string | null) {
+    if (l.key === "main") {
+      if (!(await saving(() => patch(`applications/${id}`, { url, url_label: label })))) return false;
+      s.app.url = st.orig.app.url = st.draft.app.url = url;
+      s.app.url_label = st.orig.app.url_label = st.draft.app.url_label = label;
+      if (url !== l.url) warnIfSamePosting({ ...s.app, url });
+    } else {
+      const body = url === l.url ? { label } : { url, label, platform: null, read_at: null };
+      if (!(await saving(() => patch(`postings/${l.key}`, body)))) return false;
+      Object.assign(s.postings.find((x) => x.id === l.key)!, body);
+      for (const d of [st.orig, st.draft]) { const x = d.postings.find((x) => x.id === l.key); if (x) x.url = url; }
+    }
+    render();
+    return true;
+  }
+
+  /** A posting link taken off, and its text with it. */
+  const postingGone = (l: PostingLink) => (l.key === "main" ? () => patch(`applications/${id}`, { url: null, url_label: null, description: null }) : () => del(`postings/${l.key}`));
+
+  /** Delete a posting link, and its text with it. */
+  async function removePostingLink(l: PostingLink) {
+    if (!(await confirmDelete(`posting ${hostOf(l.url)}`, "Its text goes with it."))) return;
+    if (await attempt(postingGone(l))) { toast("Removed"); reload(); }
+  }
+
+  /** The posting links: the application's own first, then the others, each read again, changed (in the link form) or deleted. */
+  function postingLinksPart() {
+    const links = postingLinks().filter((l) => l.url);
+    return part("postings", "Posting links", ended() ? null : dialogButton("+ Add", () => openLinkForm(null)),
+      links.length ? (
+        <ul key="list" className="app-links">
+          {links.map((l) => {
+            const main = l.key === "main";
+            const p = main ? null : s.postings.find((x) => x.id === l.key)!;
+            const name = postingName(l);
+            return (
+              <li key={String(l.key)}>
+                <div className="app-link"><a href={l.url} target="_blank" rel="noreferrer" title={l.url} translate="no">{name}</a>
+                  <span className="muted small">{dotted([main && links.length > 1 ? "Its own" : null, p?.read_at ? `Read ${fmtStamp(p.read_at)}` : null, p?.reference ? <span translate="no">{p.reference}</span> : null, <span translate="no">{hostOf(l.url)}</span>])}</span></div>
+                <span className="app-link-tools">
+                  {tool("refresh", `Refresh ${name}`, () => readPostings([l]))}
+                  {ended() ? null : <>
+                    {tool("edit", `Edit ${name}`, () => openLinkForm({ posting: l }))}
+                    {tool("trash", `Delete ${name}`, () => removePostingLink(l), { danger: true })}
+                  </>}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      ) : <p key="none" className="muted small">No posting yet: add its link, and hunt reads it.</p>);
+  }
+
+  // Postings read like emails: where each is from, its text in its own
+  // box. The application's own comes first.
+  function aboutPart() {
+    const a = s.app;
+    const card = (l: PostingLink) => {
+      const main = l.key === "main";
+      const p = main ? null : s.postings.find((x) => x.id === l.key)!;
+      const where = linkName(l) || (main ? a.title || "The posting" : p!.platform && p!.platform !== "the page" ? p!.platform : hostOf(l.url));
       return (
-        <div className="app-section app-role">
-          <div className="app-grid app-key-fields">
-            {labeled("Location", input(draft.app, "location", { placeholder: "e.g. London", "aria-label": "Location" }))}
-            {labeled("Work mode", select(draft.app, "work_mode", f("work_mode"), { label: "Work mode" }))}
-            {labeled("Employment", select(draft.app, "employment", f("employment"), { label: "Employment" }))}
-          </div>
-          <div className="app-grid app-pay-fields">
-            <label className="app-field wide"><span>Base salary</span><div className="app-salary">
-              {input(draft.app, "currency", { placeholder: HOME(), "aria-label": "Currency" })}
-              {input(draft.app, "salary_min", { placeholder: "From, e.g. 150k", "aria-label": "From" })}
-              {input(draft.app, "salary_max", { placeholder: "To", "aria-label": "To" })}
-              {select(draft.app, "pay_period", f("pay_period"), { empty: "Per…", label: "Per" })}
-            </div></label>
-            {labeled("Bonus", input(draft.app, "bonus", { placeholder: "e.g. 15% target", "aria-label": "Bonus" }))}
-            {labeled("Equity", input(draft.app, "equity", { placeholder: "e.g. £200k RSUs over 4 years", "aria-label": "Equity" }))}
-            <label className="app-field wide"><span>Pay notes</span>
-              {input(draft.app, "comp", { multiline: true, rows: 2, placeholder: "Benefits, negotiation…", "aria-label": "Pay notes" })}</label>
-          </div>
-          <div className="app-grid app-more-fields">
-            {labeled("Posting link", input(draft.app, "url", { type: "url", placeholder: "https://…", "aria-label": "Posting link" }))}
-            {labeled("Source", input(draft.app, "source", { placeholder: "e.g. LinkedIn, referral", "aria-label": "Source" }))}
-            {draft.process ? labeled("Applied on", input(draft.process, "applied_on", { type: "date", "aria-label": "Applied on" })) : null}
-          </div>
+        <article key={String(l.key)} className="email-msg app-posting" data-posting={String(l.key)}>
+          {texts.length > 1 ? <header><b>{where}</b>{l.url ? <span className="muted small">{` from ${hostOf(l.url)}`}</span> : null}</header> : null}
+          {postingText(String(l.key), l.text!)}
+        </article>
+      );
+    };
+    // Its first few sentences, and Read more for the rest, in place.
+    const postingText = (key: string, text: string) => {
+      const plain = isRich(text) ? toPlain(text) : text;
+      const { lead, more } = postingLead(plain);
+      const open = !more || opened.has(`posting-more-${key}`);
+      return (
+        <div className="email-text posting-text">
+          {open ? (isRich(text) ? <RichView className="prose" value={text} /> : formatPosting(text)) : <p>{linkify(lead)}</p>}
+          {more ? <button className="al-link app-more" type="button" aria-expanded={String(open) as "true" | "false"} onClick={() => toggle(`posting-more-${key}`)}>{open ? "Show less" : "Read more"}</button> : null}
         </div>
       );
+    };
+    const texts = [{ key: "main", url: a.url, text: a.description, label: a.url_label } as PostingLink, ...s.postings.map((p) => ({ key: p.id, url: p.url, text: p.description, label: p.label }))].filter((l) => l.text);
+    return part("about", "Description", null,
+      texts.length ? texts.map(card)
+        : <p key="none" className="muted small">{postingLinks().length ? "No text yet: Refresh reads it from the posting." : "Nothing yet: add the posting's link, or write it in."}</p>);
+  }
+
+  // Like a posting: its first few sentences, and Read more for the rest.
+  function readMore(key: string, text: string, className: string) {
+    const { lead, more } = postingLead(isRich(text) ? toPlain(text) : text);
+    const open = !more || opened.has(`more-${key}`);
+    return (
+      <div key={key} className="app-read-more">
+        {open ? <RichView className={className} value={text} /> : <p className={className}>{linkify(lead)}</p>}
+        {more ? <button className="al-link app-more" type="button" aria-expanded={String(open) as "true" | "false"} onClick={() => toggle(`more-${key}`)}>{open ? "Show less" : "Read more"}</button> : null}
+      </div>
+    );
+  }
+
+  // ---- its company: who they are, edited apart from the role ----
+
+  function companyPanel() {
+    const c = s.company;
+    if (st.section === "company") {
+      return panel("company", "Company", {}, form("company",
+        <div key="company" className="app-grid">
+          <div className="app-field"><span>Company</span><Combo label="Company" placeholder="Company" value={draft.companyName} source={refSource("companies")} allowCreate
+            onPick={async (it) => {
+              const co = it.create ? await attempt(() => post("companies", { name: it.value })) : await get(`companies/${it.value}`);
+              if (!co) return;
+              draft.app.company_id = co.id;
+              draft.companyName = co.name;
+              draft.companyLogo = co.logo;
+              // The company's facts follow the company chosen.
+              Object.assign(draft.company, pickKeys(co, COMPANY_KEYS));
+              orig.company = pickKeys(co, COMPANY_KEYS);
+              st.formKey++;
+              render();
+            }} /></div>
+          {labeled("Website", input(draft.company, "website", { type: "url", placeholder: "https://acme.com", "aria-label": "Website" }))}
+          {labeled("Industry", input(draft.company, "industry", { placeholder: "e.g. Software", "aria-label": "Industry" }))}
+          {labeled("Size", input(draft.company, "size", { placeholder: "e.g. 1,000+ employees", "aria-label": "Size" }))}
+          {labeled("Based in", input(draft.company, "headquarters", { placeholder: "e.g. London, UK", "aria-label": "Based in" }))}
+          <div className="app-field wide"><span>About the company</span>{rich(draft.company, "description", "About the company", "Culture, team, research…")}</div>
+        </div>));
     }
-    const salary = fmtMoney(a.salary_min, a.salary_max, a.currency, a.pay_period);
-    // Pay in the home currency leads; the posting's own figures follow, smaller.
-    const foreign = salary && (a.currency || "").toUpperCase() !== HOME();
-    const home = foreign ? homePay(a) : null;
-    const inHome = home ? fmtMoney(home[0] == null ? null : Math.round(home[0]), home[1] == null ? null : Math.round(home[1]), HOME(), a.pay_period) : "";
-    const rate = a.gbp_rate != null ? `${a.gbp_rate.toFixed(4)} GBP per ${a.currency}, the rate on ${a.gbp_rate_on}` : null;
-    const payLine = !salary ? null : inHome
-      ? <><p className="app-salary-line">{inHome}</p>
-        <p className="muted small app-salary-orig" title={rate ? `At ${rate}${HOME() !== "GBP" ? `; GBP to ${HOME()} at the rate on ${S.PREFS.currency_rate_on}` : ""}` : ""}>{salary}</p></>
-      : <><p className="app-salary-line">{salary}</p>{foreign ? <p className="muted small app-salary-orig">{`No ${HOME()} rate yet`}</p> : null}</>;
-    return (
-      <div className="app-section app-role">
-        <dl className="app-inlines app-key">
-          {inline("Location", a.location)}
-          {inline("Work mode", a.work_mode ? optionLabel(f("work_mode"), a.work_mode) : null)}
-          {inline("Employment", a.employment ? optionLabel(f("employment"), a.employment) : null)}
-        </dl>
-        {salary || a.bonus || a.equity ? (
-          <div className="app-pay">
-            {payLine}
-            {/* What it would leave, where take-home pay is on. */}
-            {salary && takeHomeOn() ? <TakeHomeLine a={a} /> : null}
-            {a.bonus || a.equity ? <dl className="app-inlines">{a.bonus ? inline("Bonus", a.bonus) : null}{a.equity ? inline("Equity", a.equity) : null}</dl> : null}
-          </div>
-        ) : null}
-        {a.comp ? <p className="muted small app-pay-notes">{a.comp}</p> : null}
-        <dl className="app-inlines app-more">
-          {inline("Posting", a.url ? link(a.url) : null)}
-          {inline("Source", a.source)}
-          {s.process ? inline("Applied", s.process.applied_on ? fmtDay(s.process.applied_on) : null) : null}
-          {a.posted_on ? inline("Posted", fmtDay(a.posted_on)) : null}
-          {a.closes_on ? inline("Closes", fmtDay(a.closes_on)) : null}
-        </dl>
-      </div>
-    );
+    const facts = ([
+      ["Website", c.website ? link(c.website) : null], ["Industry", c.industry], ["Size", c.size], ["Based in", c.headquarters],
+    ] as [string, ReactNode][]).filter(([, v]) => v);
+    return panel("company", "Company", { action: editButton("company", "the company") },
+      <span key="name" className="with-logo app-company-name"><Logo id={c.id} logo={c.logo} name={c.name} size={28} /><a href={`/companies/${c.id}`} translate="no">{c.name}</a></span>,
+      facts.length ? <dl key="facts" className="app-facts">{facts.map(([k, v]) => <Fragment key={k}><dt>{k}</dt><dd>{v}</dd></Fragment>)}</dl> : null,
+      c.description ? readMore("about", c.description, "prose small app-company-about") : null);
+  }
+  // ---- pay ----
+
+  function payPanel() {
+    const a = s.app;
+    const f = (n: string) => optionsOf("applications", n);
+    if (st.section === "pay") {
+      return panel("pay", "Pay", {}, form("pay",
+        <div key="fields" className="app-grid app-pay-fields">
+          <label className="app-field wide"><span>Base salary</span><div className="app-salary">
+            {input(draft.app, "currency", { placeholder: HOME(), "aria-label": "Currency" })}
+            {input(draft.app, "salary_min", { placeholder: "From, e.g. 150k", "aria-label": "From" })}
+            {input(draft.app, "salary_max", { placeholder: "To", "aria-label": "To" })}
+            {select(draft.app, "pay_period", f("pay_period"), { empty: "Per…", label: "Per" })}
+          </div></label>
+          {labeled("Bonus", input(draft.app, "bonus", { placeholder: "e.g. 15% target", "aria-label": "Bonus" }))}
+          {labeled("Equity", input(draft.app, "equity", { placeholder: "e.g. £200k RSUs over 4 years", "aria-label": "Equity" }))}
+          <div className="app-field wide"><span>Pay notes</span>{rich(draft.app, "comp", "Pay notes", "Benefits, negotiation…", 3)}</div>
+        </div>));
+    }
+    const more = a.bonus || a.equity || a.comp ? <div key="more" className="app-pay-more">
+      {a.bonus || a.equity ? <dl className="app-facts">{a.bonus ? <><dt>Bonus</dt><dd>{a.bonus}</dd></> : null}{a.equity ? <><dt>Equity</dt><dd>{a.equity}</dd></> : null}</dl> : null}
+      {a.comp ? <RichView className="prose small app-pay-notes" value={a.comp} /> : null}
+    </div> : null;
+    return <PayPanel key="pay" a={a} p={s.process} stages={s.stages} onAdd={() => editSection("pay", '[data-section="pay"] input[aria-label="From"]')}
+      tools={editButton("pay", "pay")}>{more}</PayPanel>;
   }
 
-  /** The timeline: interview steps and what happened, in date order. */
-  function timeline() {
-    if (!s.process) return section("timeline", "Timeline", {}, <p key="none" className="muted small">Put it on the board to track its steps.</p>);
-    const statuses = optionsOf("steps", "status");
-    const steps: Row[] = edit ? draft.steps : s.detail?.steps || [];
-    const events: Row[] = edit ? draft.events : (s.detail?.notes || []).map((n: Row) => ({ ...n, happened_on: n.happened_on || n.created_at.slice(0, 10) }));
-    // Undated rows (new steps) go last.
-    const items = [
-      ...steps.map((x, i) => ({ kind: "step", when: x.at || "~", x, i })),
-      ...events.map((x, i) => ({ kind: "event", when: x.happened_on || "~", x, i })),
-    ].sort((x, y) => x.when.localeCompare(y.when));
-    const action = <>
-      {addButton("Add an interview", addRow(() => {
-        draft.steps.push({ id: null, title: null, at: null, status: "scheduled", format: null, attendees: null, note: null, people: [], fresh: true, key: Math.random() });
-      }, ".app-timeline .fresh input"))}
-      {addButton("Add a timeline note", addRow(() => {
-        draft.events.push({ id: null, body: null, happened_on: isoToday(), fresh: true, key: Math.random() });
-      }, ".app-timeline .fresh input[type=text]"))}
-    </>;
-    const stepRow = ({ x, i }: { x: Row; i: number }) => (
-      <li key={`s${x.id ?? x.key}`} className={`is-${x.status}${x.fresh ? " fresh" : ""}`} data-step={i}>
-        <span className="dot" aria-hidden="true" />
-        {edit ? (
-          <div className="app-step-edit">
-            <div className="app-row">{input(x, "title", { placeholder: "A step, e.g. Recruiter screen", "aria-label": "Step" })}
-              {removeButton("Remove step", () => { draft.steps.splice(i, 1); render(); })}</div>
-            <div className="app-grid">
-              {input(x, "at", { type: "datetime-local", step: 900, "aria-label": "When" })}
-              {select(x, "status", statuses, { empty: null, label: "Status" })}
-              {input(x, "format", { placeholder: "Format: video call, on-site…", "aria-label": "Format" })}
-            </div>
-            {stepPeople(x, i)}
-            {input(x, "note", { multiline: true, rows: 2, placeholder: "Prep, questions asked, feedback…", "aria-label": "Notes" })}
-          </div>
-        ) : (
-          <div>
-            <div className="app-step-head"><h3>{x.title || "Untitled step"}</h3><span className="muted small">{x.at ? fmtStamp(x.at) : "No date"}</span></div>
-            <p className="muted small">{[optionLabel(statuses, x.status), x.format].filter(Boolean).join(" · ")}
-              {x.people?.length
-                ? <>{" · with "}{x.people.map((pe: Row, j: number) => <Fragment key={pe.id}>{j ? ", " : ""}<a href={`/people/${pe.id}`}>{pe.name}</a></Fragment>)}</>
-                : x.attendees ? ` · with ${x.attendees}` : null}</p>
-            {x.note ? <p className="app-step-note">{x.note}</p> : null}
-          </div>
-        )}
-      </li>
-    );
-    const eventRow = ({ x, i }: { x: Row; i: number }) => (
-      <li key={`e${x.id ?? x.key}`} className={`is-event${x.fresh ? " fresh" : ""}`}>
-        <span className="dot" aria-hidden="true" />
-        {edit ? (
-          <div className="app-event-edit">{input(x, "happened_on", { type: "date", "aria-label": "When" })}
-            {input(x, "body", { placeholder: "What happened", "aria-label": "What happened" })}
-            {removeButton("Remove event", () => { draft.events.splice(i, 1); render(); })}</div>
-        ) : <div className="app-event"><span className="app-event-body" translate="no">{x.body}</span><time className="muted small" dateTime={x.happened_on}>{fmtDay(x.happened_on)}</time></div>}
-      </li>
-    );
-    return section("timeline", "Timeline", { count: items.length, action },
-      items.length ? <ol key="list" className="app-steps app-timeline">{items.map((it) => (it.kind === "step" ? stepRow(it) : eventRow(it)))}</ol>
-        : <p key="none" className="muted small">No steps or events yet.</p>);
-  }
+  // ---- notes on the application ----
 
-  /** Who a step is with: people from People, or new names, made on Save. */
-  function stepPeople(x: Row, i: number) {
-    const refocus = () => focus(`.app-timeline [data-step="${i}"] .app-with input`);
-    const people = refSource("people");
-    return (
-      <div className="app-with">
-        <span className="app-with-label">With</span>
-        {x.people.map((p: Row, j: number) => (
-          <span key={`${p.id}-${p.name}`} className="al-tag" title={p.id == null ? "Added to People when you save" : undefined}>{p.name}{p.id == null ? " (new)" : ""}
-            <button className="al-tag__remove" type="button" aria-label={`Remove ${p.name}`} onClick={() => { x.people.splice(j, 1); render(); refocus(); }}>×</button></span>
-        ))}
-        <Combo key={x.people.length} label="With whom" placeholder={x.people.length ? "Add someone else…" : "With whom: someone from People, or a new name"} allowCreate
-          source={async (q) => (await people(q)).filter((it) => !x.people.some((p: Row) => p.id === it.value))}
-          onPick={(it) => {
-            if (it.create) {
-              if (!x.people.some((p: Row) => p.id == null && p.name.toLowerCase() === it.value.toLowerCase())) x.people.push({ id: null, name: it.value });
-            } else {
-              x.people.push({ id: it.value, name: it.label.replace(/ \([^)]*\)$/, "") });
-            }
-            render();
-            refocus();
-          }} />
-        {x.attendees ? <p className="muted small app-with-before">{`Written before: “${x.attendees}” `}
-          <button className="al-button al-button--sm al-button--quiet" type="button" onClick={() => { x.attendees = null; render(); }}>Clear</button></p> : null}
-      </div>
-    );
-  }
-
-  function notes() {
-    const action = addButton("Add a note", addRow(() => {}, 'textarea[aria-label="Your notes"]'));
-    return section("notes", "Notes", { action }, edit
-      ? <RichText key="edit" value={draft.app.note} rows={6} placeholder="Your private notes on this application" label="Your notes"
-        onChange={(html) => { draft.app.note = html.trim() ? html : null; }} />
-      : s.app.note ? <RichView key="read" className="app-notes" value={s.app.note} /> : <p key="none" className="muted small">No notes.</p>);
+  function notesPanel() {
+    if (st.section === "notes") {
+      return panel("notes", "Notes", {}, form("notes", rich(draft.app, "note", "Your notes", "Your private notes on this application", 6)));
+    }
+    return panel("notes", "Notes", { action: editButton("notes", "your notes") },
+      s.app.note ? readMore("read", s.app.note, "app-notes") : <p key="none" className="muted small">No notes.</p>);
   }
 
   async function refreshDetail() {
     if (!s.process) return;
     s.detail = await get(`processes/${s.process.id}/detail`);
+    Object.assign(st.orig, { steps: draftOf(s).steps, events: draftOf(s).events });
+    if (!st.section) st.draft = structuredClone(st.orig);
     render();
   }
 
@@ -744,120 +910,41 @@ function Application({ id, s, editing, readLink }: { id: number; s: Loaded; edit
       threads.get(k)!.push(m);
     }
     const ordered = [...threads.values()].sort((x, y) => y[y.length - 1].sent_at.localeCompare(x[x.length - 1].sent_at));
-    return section("emails", "Emails", { count: list.length, action: formButton("emails", "Add an email") },
-      showForm("emails") ? <EmailAdd key="add" processId={s.process.id} onAdded={() => { opened.delete("emails"); refreshDetail(); }} onCancel={() => { if (!st.edit) toggle("emails"); }} /> : null,
-      ordered.length ? <ul key="list" className="app-emails">{ordered.map((msgs) => <EmailThread key={threadKey(msgs[0])} msgs={msgs} edit={edit} onRemoved={refreshDetail} />)}</ul>
+    const onMove = ended() ? null : (m: Row) => transfer("emails", m.id, `“${m.subject || "(no subject)"}”`, refreshDetail);
+    return panel("emails", "Emails", { count: list.length, action: ended() ? null : formButton("emails", "Add an email") },
+      showForm("emails") ? <EmailAdd key="add" processId={s.process.id} onAdded={() => { opened.delete("emails"); refreshDetail(); }} onCancel={() => toggle("emails")} /> : null,
+      ordered.length ? <ul key="list" className="app-emails">{ordered.map((msgs) => <EmailThread key={threadKey(msgs[0])} msgs={msgs} onMove={onMove} onRemoved={refreshDetail} />)}</ul>
         : <p key="none" className="muted small">No emails saved.</p>);
   }
-
-  // Postings read like emails: where each is from, its text in its own
-  // box (their links are in Links, beside). The application's own comes first.
-  function posting() {
-    const a = s.app;
-    const links = postingLinks();
-    const count = links.length || (a.description ? 1 : 0);
-    const card = (l: PostingLink) => {
-      const main = l.key === "main";
-      const p = main ? null : s.postings.find((x) => x.id === l.key)!;
-      const when = main
-        ? [a.posted_on ? `Posted ${fmtDay(a.posted_on)}` : null, a.closes_on ? `closes ${fmtDay(a.closes_on)}` : null].filter(Boolean).join(", ")
-        : p!.read_at ? `Read ${fmtStamp(p!.read_at)}` : "";
-      const where = main ? a.title || "The posting" : p!.platform && p!.platform !== "the page" ? p!.platform : hostOf(l.url);
-      return (
-        <article key={String(l.key)} className="email-msg app-posting" data-posting={String(l.key)}>
-          <header><b>{where}</b>
-            {l.url && (main || where !== hostOf(l.url)) ? <span className="muted small">{` from ${hostOf(l.url)}`}</span> : null}
-            {main && links.length > 1 ? <span className="al-badge al-badge--outline" title="The application's own link">main</span> : null}
-            {when ? <span className="muted small posting-when">{when}</span> : null}</header>
-          {l.text ? postingText(String(l.key), l.text)
-            : <p className="muted small">{l.url ? "No text yet: Refresh from the posting, in the menu at the top, reads it." : "No text."}</p>}
-          {!main && !edit ? <div className="app-email-tools">
-            <button className="al-button al-button--sm al-button--quiet al-button--danger" type="button" onClick={async () => {
-              if (!(await confirmDelete(`posting ${hostOf(l.url)}`))) return;
-              if (await attempt(() => del(`postings/${l.key}`))) { toast("Removed"); reload(); }
-            }}>Remove</button>
-          </div> : null}
-        </article>
-      );
-    };
-    // Read, its first few sentences, and Read more for the rest, in place.
-    const postingText = (key: string, text: string) => {
-      const { lead, more } = postingLead(text);
-      const open = edit || !more || opened.has(`posting-more-${key}`);
-      return (
-        <div className="email-text posting-text">
-          {open ? formatPosting(text) : <p>{linkify(lead)}</p>}
-          {more && !edit ? <button className="al-link app-more" type="button" aria-expanded={String(open) as "true" | "false"} onClick={() => toggle(`posting-more-${key}`)}>{open ? "Show less" : "Read more"}</button> : null}
-        </div>
-      );
-    };
-    const adding = !edit && opened.has("posting-add")
-      ? <PostingAdd key="add" onAdd={addPostingLink} />
-      : null;
-    const action = edit ? null : <>
-      {links.length > 1 ? <button className="al-button al-button--quiet app-add" type="button" onClick={() => readPostings()}>Refresh all</button> : null}
-      {formButton("posting-add", "Add a posting link")}
-    </>;
-    const body = edit
-      ? [<Fragment key="text">{input(draft.app, "description", { multiline: true, rows: 14, placeholder: "Paste the job description", "aria-label": "Posting text" })}</Fragment>,
-        ...s.postings.map((p) => card({ key: p.id, url: p.url, text: p.description }))]
-      : [adding, ...(count ? [a.url || a.description ? card({ key: "main", url: a.url, text: a.description }) : null,
-        ...s.postings.map((p) => card({ key: p.id, url: p.url, text: p.description }))] : [<p key="none" className="muted small">No posting yet: add its link, and hunt reads it.</p>])];
-    return section("posting", "About the job", { count: count > 1 ? count : null, action }, ...body);
-  }
-
-  function company() {
-    const c = s.company;
-    return section("company", "Company", {}, edit
-      ? (
-        <div key="edit" className="app-grid">
-          {labeled("Website", input(draft.company, "website", { type: "url", placeholder: "https://acme.com", "aria-label": "Website" }))}
-          {labeled("Industry", input(draft.company, "industry", { placeholder: "e.g. Software", "aria-label": "Industry" }))}
-          {labeled("Size", input(draft.company, "size", { placeholder: "e.g. 1,000+ employees", "aria-label": "Size" }))}
-          <div className="app-field wide"><span>About</span><RichText value={draft.company.description} rows={4} placeholder="Culture, team, research…" label="About"
-            onChange={(html) => { draft.company.description = html.trim() ? html : null; }} /></div>
-        </div>
-      )
-      : (
-        <dl key="read" className="facts al-summary-list">
-          {([["Website", c.website ? link(c.website) : <span className="muted">—</span>], ["Industry", c.industry || <span className="muted">—</span>],
-            ["Size", c.size || <span className="muted">—</span>], ...(c.headquarters ? [["Based in", c.headquarters]] : []),
-            ["About", c.description ? <RichView className="prose small" value={c.description} /> : <span className="muted">—</span>]] as [string, ReactNode][]).map(([k, v]) => (
-            <div key={k} className="al-summary-list__row al-summary-list__row--no-actions"><dt className="al-summary-list__key">{k}</dt><dd className="al-summary-list__value">{v}</dd></div>
-          ))}
-        </dl>
-      ),
-    <p key="link" className="small"><a href={`/companies/${edit ? draft.app.company_id : c.id}`}>The company's page →</a></p>);
-  }
-
-  const panel = (key: string, title: string, { count, action }: { count?: number; action?: ReactNode } = {}, ...body: ReactNode[]) => (
-    <section key={key} className="al-panel app-panel" data-section={key} aria-labelledby={`panel-${key}`}>
-      <div className="app-panel-head"><h2 id={`panel-${key}`}>{title}</h2>{count != null ? <span className="al-badge al-badge--count">{count}</span> : null}
-        {action ? <div className="app-panel-tools">{action}</div> : null}</div>
-      {body}
-    </section>
-  );
-  /** People and files: a section of the form, being edited; a panel beside, being read. */
-  const holder = (key: string, title: string, o: { count?: number; action?: ReactNode }, ...body: ReactNode[]) => (edit ? section(key, title, o, ...body) : panel(key, title, o, ...body));
 
   // People on the process, and files attached to it: these act at once.
   function people() {
     const p = s.process!;
     const list: Row[] = s.detail!.people || [];
-    const roles = S.META.person_roles.map((r: Row) => [r.value, r.label]) as [string, string][];
+    const roles = listOf("person_role");
     const after = (fresh: Row[] | undefined) => { if (fresh) { s.detail!.people = fresh; render(); } };
-    return holder("people", "People", { count: list.length, action: formButton("people", "Add a person") },
+    const add = () => openModal(<PersonAdd roles={roles} onAdd={async (body) => {
+      const fresh = await attempt(() => post(`processes/${p.id}/people`, body));
+      if (fresh) { closeModal(); after(fresh); }
+    }} />);
+    // Their role, in a dialog.
+    const edit = (pe: Row) => openModal(<PersonRole pe={pe} roles={roles} onSave={async (role) => {
+      const fresh = await saving(() => patch(`processes/${p.id}/people/${pe.id}`, { role }));
+      if (fresh) { closeModal(); toast("Saved"); after(fresh); }
+    }} />);
+    const remove = async (pe: Row) => {
+      const fresh = await saving(() => del(`processes/${p.id}/people/${pe.id}`));
+      if (!fresh) return;
+      toast(`Removed ${pe.name}`, "info", { label: "Undo", onclick: async () => after(await attempt(() => post(`processes/${p.id}/people`, { person_id: pe.id, role: pe.role ?? null }))) });
+      after(fresh);
+    };
+    return panel("people", "People", { count: list.length, action: ended() ? null : dialogButton("+ Add", add) },
       list.length ? (
         <ul key="list" className="app-people">
           {list.map((pe) => (
-            <li key={pe.id}>
-              <span className="with-logo"><Photo id={pe.id} photo={pe.photo} name={pe.name} size={28} /><a href={`/people/${pe.id}`}>{pe.name}</a></span>
-              {edit ? <>
-                <Select aria-label={`${pe.name}'s role`} defaultValue={pe.role ?? ""} onChange={async (e) => after(await attempt(() => patch(`processes/${p.id}/people/${pe.id}`, { role: e.target.value || null })))}>
-                  <option value="">Role…</option>{roles.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-                </Select>
-                {removeButton(`Take ${pe.name} off`, async () => after(await attempt(() => del(`processes/${p.id}/people/${pe.id}`))))}
-              </> : <>
+            <li key={pe.id} className="app-person">
+              <div className="app-person-about">
+                <span className="with-logo"><Photo id={pe.id} photo={pe.photo} name={pe.name} size={28} /><a href={`/people/${pe.id}`}>{pe.name}</a></span>
                 <span className="muted small">{[pe.role ? optionLabel(roles, pe.role) : null, pe.title].filter(Boolean).join(" · ")}</span>
                 {/* Their email and phone, a click away. */}
                 {pe.email || pe.phone ? (
@@ -866,79 +953,75 @@ function Application({ id, s, editing, readLink }: { id: number; s: Loaded; edit
                     {pe.phone ? <a href={`tel:${pe.phone.replace(/[^\d+]/g, "")}`} title={`Call ${pe.name}`}><Icon name="phone" />{pe.phone}</a> : null}
                   </span>
                 ) : null}
-              </>}
+              </div>
+              {ended() ? null : (
+                <MenuButton className="al-button al-button--quiet al-button--sm" label={`More for ${pe.name}`} items={(close) => <>
+                  <MenuItem close={close} onClick={() => edit(pe)}>Edit</MenuItem>
+                  <hr className="al-menu__separator" />
+                  <MenuItem close={close} danger onClick={() => remove(pe)}>Remove</MenuItem>
+                </>}><Icon name="more" /></MenuButton>
+              )}
             </li>
           ))}
         </ul>
-      ) : <p key="none" className="muted small">Nobody yet.</p>,
-      showForm("people") ? <PersonAdd key="add" roles={roles} onAdd={async (body) => { opened.delete("people"); after(await attempt(() => post(`processes/${p.id}/people`, body))); }} /> : null);
+      ) : <p key="none" className="muted small">Nobody yet.</p>);
   }
 
+  /**
+   * The files sent with it, the latest three, each a thumbnail: edited (in
+   * a dialog, another version sent, or a new one uploaded) or detached; the
+   * rest in Files, with this application chosen.
+   */
   function files() {
     const p = s.process!;
     const list: Row[] = s.detail!.files || [];
     const after = (fresh: Row[] | undefined) => { if (fresh) { s.detail!.files = fresh; render(); } };
-    return holder("files", "Attached files", { count: list.length, action: formButton("files", "Link file") },
+    const attach = (versionId: number) => post(`processes/${p.id}/files`, { version_id: versionId });
+    const add = () => openModal(<FileAdd onAdd={async (versionId) => {
+      const fresh = await attempt(() => attach(versionId));
+      if (fresh) { closeModal(); after(fresh); }
+    }} />);
+    // Another version in its place: the new one sent (unless it was already), the old taken off.
+    const edit = (f: Row) => openModal(<FileEdit f={f} onSave={async (versionId) => {
+      if (versionId === f.id) { closeModal(); return; }
+      const fresh = await attempt(async () => {
+        if (!list.some((x) => x.id === versionId)) await attach(versionId);
+        return del(`processes/${p.id}/files/${f.id}`);
+      });
+      if (fresh) { closeModal(); toast("Saved"); after(fresh); }
+    }} />);
+    const detach = async (f: Row) => {
+      const fresh = await saving(() => del(`processes/${p.id}/files/${f.id}`));
+      if (!fresh) return;
+      toast(`Detached ${f.label}`, "info", { label: "Undo", onclick: async () => after(await attempt(() => attach(f.id))) });
+      after(fresh);
+    };
+    const shown = [...list].reverse().slice(0, 3);
+    return panel("files", "Attached files", { count: list.length, action: ended() ? null : dialogButton("+ Link file", add) },
       list.length ? (
-        <ul key="list" className="files">
-          {list.map((f) => (
-            <li key={f.id}><a href={`/files/${f.document_id}?version=${f.id}`}>{f.label}</a><span className="muted">{` ${f.filename}`}</span>
-              {edit ? removeButton(`Take ${f.label} off`, async () => after(await attempt(() => del(`processes/${p.id}/files/${f.id}`)))) : null}</li>
+        <ul key="list" className="app-files">
+          {shown.map((f) => (
+            <li key={f.id}>
+              <a className="app-file" href={`/files/${f.document_id}?version=${f.id}`} title={`${f.label}\n${f.filename}`}>
+                <FileThumb f={f} />
+                <span className="app-file-name"><span translate="no">{f.label}</span><span className="muted small" translate="no">{f.filename}</span></span>
+              </a>
+              {ended() ? null : <span className="app-link-tools">
+                {tool("edit", `Edit ${f.label}`, () => edit(f))}
+                {tool("x", `Detach ${f.label}`, () => detach(f), { danger: true })}
+              </span>}
+            </li>
           ))}
         </ul>
       ) : <p key="none" className="muted small">None recorded.</p>,
-      showForm("files") ? <FileAdd key="add" onAdd={async (versionId) => { opened.delete("files"); after(await attempt(() => post(`processes/${p.id}/files`, { version_id: versionId }))); }} /> : null,
-      showForm("files") ? <p key="hint" className="muted small">Upload new versions under <a href="/files">Files</a>.</p> : null);
-  }
-
-  /** The end of the page: tags, other processes, and what's done to the whole application. */
-  function footer() {
-    const p = s.process;
-    const rest = s.procs.filter((x) => x.id !== p?.id);
-    const tags = edit
-      ? <>{draft.tags.map((x) => (
-        <TagChip key={x} name={x}><button className="al-tag__remove" type="button" aria-label={`Remove tag ${x}`}
-          onClick={() => { draft.tags = draft.tags.filter((y) => y !== x); render(); }}>×</button></TagChip>
-      ))}<DraftTag onAdd={(x) => { if (x && !draft.tags.some((y) => y.toLowerCase() === x.toLowerCase())) draft.tags.push(x); render(); }} /></>
-      : <>{tagNames(s.app.tags).map((x) => <ColourTagChip key={x} name={x} />)}
-        {opened.has("tag") ? <Input className="tag-input" aria-label="New tag" placeholder="A tag, then Enter" autoFocus onKeyDown={async (e) => {
-          const add = e.currentTarget;
-          if (e.key === "Escape") { opened.delete("tag"); render(); return; }
-          if (e.key !== "Enter" || !add.value.trim()) return;
-          e.preventDefault();
-          const saved = await attempt(() => put(`applications/${id}/tags`, { tags: [...tagNames(s.app.tags), add.value.trim()] }));
-          if (saved) { s.app.tags = saved; orig.tags = saved; opened.delete("tag"); await reloadTags(); render(); }
-        }} /> : <button className="al-button al-button--quiet app-add" type="button" onClick={() => toggle("tag")}>+ Add tag</button>}</>;
-    return (
-      <section key="footer" className="app-section app-footer">
-        <div className="app-tags"><span className="eyebrow">Tags</span>{tags}</div>
-        {rest.length ? <div className="app-others"><span className="eyebrow">Other processes</span>
-          {rest.map((x, i) => <Fragment key={x.id}>{i ? ", " : ""}<a href={`/applications/${id}?process=${x.id}`}>{`#${x.id}`}</a>
-            {` (${x.status === "archived" ? "closed" : "active"}, added ${fmtDay(x.created_at.slice(0, 10))})`}</Fragment>)}</div> : null}
-        {edit ? null : (
-          <div className="actions">
-            <button className="al-button" type="button" onClick={() => readPostings()}>Import from link…</button>
-            {/* At its offer: accept it, wrap up the rest, and celebrate. */}
-            {atOffer(p, s.stages) && !s.lanes.some((l) => l.id === p!.lane_id && isAcceptedLane(l)) ? <button className="al-button al-button--primary" type="button" onClick={() => acceptOffer(p!, s.company.name, s.app.title)}>🎉 Accept the offer…</button> : null}
-            {p && p.status === "active" ? <button className="al-button" type="button" onClick={async () => {
-              const body = await askArchive(`${s.company.name}${s.app.title ? ` — ${s.app.title}` : ""}`);
-              if (body && await attempt(() => patch(`processes/${p.id}`, body))) { toast("Closed"); reload(); }
-            }}>Close…</button> : null}
-            <span className="spacer" />
-            <button className="al-button al-button--quiet al-button--danger" type="button" onClick={async () => {
-              if (!(await confirmDelete(`application ${s.app.label}`, "Its processes on the board go with it."))) return;
-              if (await attempt(() => del(`applications/${id}`))) { setLeaveGuard(null); toast("Deleted"); go("/applications"); }
-            }}>Delete application</button>
-          </div>
-        )}
-      </section>
-    );
+      list.length ? <a key="all" className="al-link al-link--arrow small app-files-all" href={`/files?application=${id}`}>View all files</a> : null);
   }
 
   // ---- saving ----
 
   const changed = (a: Row, b: Row, keys: string[]) => Object.fromEntries(keys.filter((k) => (a[k] ?? null) !== (b[k] ?? null)).map((k) => [k, a[k] ?? null]));
 
+  /** Save the section being edited: what differs from how it was. */
   async function save() {
     if (st.saving) return;
     st.saving = true;
@@ -954,15 +1037,9 @@ function Application({ id, s, editing, readLink }: { id: number; s: Loaded; edit
       if (Object.keys(cfields).length) {
         Object.assign(o.company, pickKeys(await patch(`companies/${d.app.company_id}`, cfields), COMPANY_KEYS));
       }
-      if (JSON.stringify(d.tags) !== JSON.stringify(o.tags)) {
-        o.tags = await put(`applications/${id}/tags`, { tags: d.tags });
-      }
+      await saveList("postings", d.postings, o.postings, POSTING_KEYS, (x) => !x.url, { application_id: id });
       if (s.process) {
         const pid = s.process.id;
-        if (d.process!.stage_id !== o.process!.stage_id) {
-          await post(`processes/${pid}/move`, { stage_id: d.process!.stage_id });
-          o.process!.stage_id = d.process!.stage_id;
-        }
         const pfields = changed(d.process!, o.process!, ["applied_on"]);
         if (Object.keys(pfields).length) {
           Object.assign(o.process!, pickKeys(await patch(`processes/${pid}`, pfields), PROCESS_KEYS));
@@ -990,7 +1067,8 @@ function Application({ id, s, editing, readLink }: { id: number; s: Loaded; edit
     if (done) {
       toast("Saved");
       // A new posting link is read, as Refresh does.
-      const l = d.app.url && d.app.url !== s.app.url ? d.app.url : null;
+      const added = d.postings.find((x) => !s.postings.some((p) => p.id === x.id))?.url;
+      const l = d.app.url && d.app.url !== s.app.url ? d.app.url : added || null;
       reload({ readLink: l });
     }
   }
@@ -1056,7 +1134,18 @@ function Application({ id, s, editing, readLink }: { id: number; s: Loaded; edit
     if (await attempt(() => del(`applications/${id}`))) { setLeaveGuard(null); toast("Deleted"); go("/"); }
   }
 
-  /** The role and company; editing, and the rarer things, in a menu. */
+  /** Refresh from a posting, in the menu: with more than one, which. */
+  function refreshItems(close: () => void) {
+    const links = postingLinks();
+    if (links.length <= 1) return <MenuItem close={close} onClick={() => readPostings()}>{links.length ? "Refresh from a posting" : "Import from a link…"}</MenuItem>;
+    return <>
+      <div className="al-menu__label">Refresh from a posting</div>
+      {links.map((l) => <MenuItem key={String(l.key)} close={close} onClick={() => readPostings([l])}><span translate="no">{postingName(l)}</span></MenuItem>)}
+      <MenuItem close={close} onClick={() => readPostings()}>All of them</MenuItem>
+    </>;
+  }
+
+  /** The role and company; the rarer things in a menu. */
   function pageHead() {
     const a = s.app, c = s.company;
     const mode = a.work_mode ? optionLabel(optionsOf("applications", "work_mode"), a.work_mode) : null;
@@ -1067,14 +1156,15 @@ function Application({ id, s, editing, readLink }: { id: number; s: Loaded; edit
         <div className="app-titles">
           <h1 id="app-title" translate="no">{a.title || c.name}</h1>
           <div className="app-sub"><a href={`/companies/${c.id}`} translate="no">{c.name}</a>
-            {where ? <><span aria-hidden="true">·</span><span>{where}</span></> : null}</div>
+            {where ? <><span aria-hidden="true">·</span><span>{where}</span></> : null}
+            {a.reference ? <><span aria-hidden="true">·</span><span translate="no" title="Role ID">{a.reference}</span></> : null}</div>
         </div>
         <div className="al-page-head__end">
           <span className="al-save-state" role="status" data-state={saveState.state}>{saveState.text}</span>
           {ended() ? null : moves()}
           <MenuButton className="al-button app-head-more" label="More" items={(close) => <>
             {ended() ? null : <>
-              <MenuItem close={close} onClick={() => readPostings()}>{postingLinks().length ? "Refresh from the posting" : "Import from a link…"}</MenuItem>
+              {refreshItems(close)}
               {s.process && runningCycles().length > 1 ? <>
                 <hr className="al-menu__separator" />
                 <div className="al-menu__label">Cycle</div>
@@ -1132,19 +1222,17 @@ function Application({ id, s, editing, readLink }: { id: number; s: Loaded; edit
 
   /**
    * The moves: Add (to the timeline), Stage (the board's stages to change
-   * to, by swimlane, with their sub stages), Edit, and Close. At its offer,
-   * Accept leads; closed, Reopen takes Stage's place.
+   * to, by swimlane, with their sub stages), and Close.
+   * At its offer, Accept leads; closed, Reopen takes Stage's place.
    */
   function moves() {
     const p = s.process;
-    const edit = <button key="edit" className="al-button" type="button" title="Edit details" onClick={() => setEdit(true)}><Icon name="edit" /><span>Edit</span></button>;
-    if (!p) return edit;
+    if (!p) return null;
     if (p.status === "archived") {
       const at = s.stages.findIndex((x) => x.id === p.reached_stage_id);
       return <>
         {adds()}
         <button className="al-button al-button--primary" type="button" onClick={() => moveTo(s.stages[Math.max(at, 0)])}>Reopen</button>
-        {edit}
       </>;
     }
     const offer = atOffer(p, s.stages) && !s.lanes.some((l) => l.id === p.lane_id && isAcceptedLane(l));
@@ -1168,7 +1256,6 @@ function Application({ id, s, editing, readLink }: { id: number; s: Loaded; edit
       {offer ? <button className="al-button al-button--primary" type="button" onClick={() => acceptOffer(p, s.company.name, s.app.title)}>Accept the offer…</button> : null}
       {adds()}
       <MenuButton title="Change stage" items={stageMenu}><span>Stage</span><Icon name="chevron" /></MenuButton>
-      {edit}
       <button className="al-button" type="button" onClick={archiveIt}><Icon name="archive" /><span>Close</span></button>
     </>;
   }
@@ -1211,7 +1298,12 @@ function Application({ id, s, editing, readLink }: { id: number; s: Loaded; edit
   const steps = (): Row[] => s.detail?.steps || [];
   const isUrl = (v: string | null | undefined) => /^(https?:\/\/|[\w-]+\.[\w.-]+\/)/i.test(v || "");
   const hrefOf = (v: string) => (/^https?:/i.test(v) ? v : `https://${v}`);
-  const minutesText = (n: number | null | undefined) => (n ? (n >= 240 ? "Half a day" : n % 60 === 0 && n >= 60 ? `${n / 60} hr` : `${n} min`) : null);
+  /** A step's length: as Admin's list names it, or in minutes and hours. */
+  const minutesText = (n: number | null | undefined) => {
+    if (!n) return null;
+    const named = listOf("step_length").find(([v]) => Number(v) === Number(n));
+    return named ? named[1] : n % 60 === 0 && n >= 60 ? `${n / 60} hr` : `${n} min`;
+  };
   const withWhom = (x: Row) => (x.people?.length || x.attendees
     ? <span><span>with</span>{" "}<span translate="no">{x.people?.length ? x.people.map((pe: Row) => pe.name).join(", ") : x.attendees}</span></span> : null);
 
@@ -1219,15 +1311,60 @@ function Application({ id, s, editing, readLink }: { id: number; s: Loaded; edit
    * The timeline, the system's: one line, in the order things happen, top
    * to bottom. What happened: the stages it came through (the one it's in
    * marked), your notes, and the interviews that took place. Then what's
-   * coming up, the soonest first: interviews still to happen (each gets its
-   * outcome here, and then joins the rest) and reminders not yet done. Last,
-   * its swimlane's stages still to come, greyed. A stage with an icon (the
-   * board's settings) is marked with it. Each is added from Add, beside
-   * Stage, in a dialog; the timeline folds from its head.
+   * coming up, the soonest first: interviews still to happen and reminders
+   * not yet done. Last, its swimlane's stages still to come, greyed. A stage
+   * with an icon (the board's settings) is marked with it. On the page it's
+   * compact, each entry a line, beside the interviews as cards (each gets
+   * its outcome there); Full timeline, beneath it, opens it whole, every
+   * entry's details and buttons with it. Each is added from Add, beside
+   * Stage, in a dialog; each note and interview has Edit, Move and Delete,
+   * Edit opening a form for it alone.
    */
   function timelinePanel() {
     if (!s.process) return null;
-    const p = s.process;
+    return panel("timeline", "Timeline", { headless: true },
+      <div key="cols" className="app-tl-cols">
+        <div className="app-tl-col">
+          {panelHead("timeline", "Timeline")}
+          <ol className="al-timeline app-tl is-compact" aria-label="Timeline">{timelineLine(true)}</ol>
+          <button className="al-button al-button--quiet al-button--sm app-tl-full" type="button" aria-haspopup="dialog" onClick={() => { opened.add("tl-full"); render(); }}>Full timeline</button>
+        </div>
+        {stepCards()}
+      </div>,
+      opened.has("tl-full") ? <PageDialog key="full" title="Timeline" onClose={() => { opened.delete("tl-full"); render(); }}>
+        <ol className="al-timeline app-tl">{timelineLine(false)}</ol>
+      </PageDialog> : null,
+      st.section === "timeline" ? itemForm() : null);
+  }
+
+  /** How an interview went, to say once it's happened (or as it's due). */
+  const logOutcome = (x: Row, gone: boolean) => {
+    const statuses = optionsOf("steps", "status");
+    return (
+      <MenuButton className={`al-button al-button--sm${gone ? "" : " al-button--quiet"}`} items={(close) => <>
+        <div className="al-menu__label">How did it go?</div>
+        {statuses.filter(([v]) => v !== "scheduled").map(([v, l]) => (
+          <MenuItem key={v} close={close} onClick={async () => {
+            if (await saving(() => patch(`steps/${x.id}`, { status: v }))) {
+              toast(`${x.title}: ${l}`, "info", { label: "Undo", onclick: async () => { if (await attempt(() => patch(`steps/${x.id}`, { status: "scheduled" }))) refreshDetail(); } });
+              refreshDetail();
+            }
+          }}>{l}</MenuItem>
+        ))}
+      </>}><span>Log outcome</span></MenuButton>
+    );
+  };
+  /** An interview's link to join by, while it's still to come. */
+  const joinButton = (x: Row) => (isUrl(x.place) && !isOverdue(x.at)
+    ? <a className="al-button al-button--sm" href={hrefOf(x.place)} target="_blank" rel="noreferrer" title={x.place}>Join</a> : null);
+  /** Where an interview is, and what to prepare. */
+  const stepPlace = (x: Row) => (x.place ? (isUrl(x.place) ? <a className="al-link tl-sub" href={hrefOf(x.place)} target="_blank" rel="noreferrer">{x.place}</a> : <span className="tl-sub">{x.place}</span>) : null);
+  const stepPrep = (x: Row) => (x.prep_note ? <div className="tl-prep"><span className="tl-prep-label">Prepare:</span> <RichView className="tl-rich" value={x.prep_note} /></div> : null);
+  const stepTone = (x: Row) => (x.status === "failed" ? "danger" : ["passed", "completed", "done"].includes(x.status) ? "success" : undefined);
+
+  /** The timeline's entries, in order; compact, each a line, its details and an interview's buttons left to the cards. */
+  function timelineLine(compact: boolean) {
+    const p = s.process!;
     const archived = p.status === "archived";
     const statuses = optionsOf("steps", "status");
     // Closed, it's in an inactive stage: the line shows the one it reached, and none to come.
@@ -1240,11 +1377,11 @@ function Application({ id, s, editing, readLink }: { id: number; s: Loaded; edit
         <span className="al-timeline__marker" data-tone={o.tone} aria-hidden="true">{o.marker}</span>
         <div className="al-timeline__event">
           <div className="app-tl-head">
-            <p className="al-timeline__title">{o.title}</p>
+            <div className="al-timeline__title">{o.title}</div>
             {o.tools ? <span className="app-tl-tools">{o.tools}</span> : null}
             {o.time ? <span className={`al-timeline__time${o.late ? " is-late" : ""}`}>{o.datetime ? <time dateTime={o.datetime}>{o.time}</time> : o.time}</span> : null}
           </div>
-          {o.body ? <div className="al-timeline__body">{o.body}</div> : null}
+          {o.body && !compact ? <div className="al-timeline__body">{o.body}</div> : null}
         </div>
       </li>
     );
@@ -1272,24 +1409,11 @@ function Application({ id, s, editing, readLink }: { id: number; s: Loaded; edit
       return entry(`s${x.id}`, {
         cls: "app-tl-step", tone: "accent", marker: <Icon name="cal" />, title: <span translate="no">{x.title}</span>,
         time: x.at ? fmtStamp(x.at) : "Date not set", datetime: x.at, late: gone,
-        tools: ended() ? null : <>
-          {isUrl(x.place) && !gone ? <a className="al-button al-button--sm" href={hrefOf(x.place)} target="_blank" rel="noreferrer" title={x.place}>Join</a> : null}
-          <MenuButton className={`al-button al-button--sm${gone ? "" : " al-button--quiet"}`} items={(close) => <>
-            <div className="al-menu__label">How did it go?</div>
-            {statuses.filter(([v]) => v !== "scheduled").map(([v, l]) => (
-              <MenuItem key={v} close={close} onClick={async () => {
-                if (await saving(() => patch(`steps/${x.id}`, { status: v }))) {
-                  toast(`${x.title}: ${l}`, "info", { label: "Undo", onclick: async () => { if (await attempt(() => patch(`steps/${x.id}`, { status: "scheduled" }))) refreshDetail(); } });
-                  refreshDetail();
-                }
-              }}>{l}</MenuItem>
-            ))}
-          </>}><span>Log outcome</span></MenuButton>
-        </>,
+        tools: ended() || compact ? null : <>{joinButton(x)}{logOutcome(x, gone)}{itemMenu("steps", x, x.title)}</>,
         body: sub.length || x.place || x.prep_note ? <>
           {sub.length ? <span className="tl-sub">{sub}</span> : null}
-          {x.place ? (isUrl(x.place) ? <a className="al-link tl-sub" href={hrefOf(x.place)} target="_blank" rel="noreferrer">{x.place}</a> : <span className="tl-sub">{x.place}</span>) : null}
-          {x.prep_note ? <span className="tl-prep">Prepare: <span translate="no">{x.prep_note}</span></span> : null}
+          {stepPlace(x)}
+          {stepPrep(x)}
         </> : null,
       });
     };
@@ -1305,28 +1429,28 @@ function Application({ id, s, editing, readLink }: { id: number; s: Loaded; edit
               reload();
             }
           }}><Icon name="check" /><span>Done</span></button>
-          <button className="al-button al-button--quiet al-button--sm" type="button" onClick={async () => {
+          {compact ? null : <button className="al-button al-button--quiet al-button--sm" type="button" onClick={async () => {
             const before = r.due_at;
             if (await saving(() => patch(`reminders/${r.id}`, { due_at: dayAfter(r.due_at) }))) {
               toast("Snoozed until tomorrow", "info", { label: "Undo", onclick: async () => { if (await attempt(() => patch(`reminders/${r.id}`, { due_at: before }))) reload(); } });
               reload();
             }
-          }}>Snooze a day</button>
+          }}>Snooze a day</button>}
         </>,
       });
     };
     const happened = (x: Row) => {
       const sub = dotted([<span className="tl-status">{optionLabel(statuses, x.status)}</span>, x.format, minutesText(x.minutes), withWhom(x)]);
-      const tone = x.status === "failed" ? "danger" : ["passed", "completed", "done"].includes(x.status) ? "success" : undefined;
       return entry(`s${x.id}`, {
-        cls: `app-tl-step is-${x.status}`, tone, title: <span translate="no">{x.title}</span>,
+        cls: `app-tl-step is-${x.status}`, tone: stepTone(x), title: <span translate="no">{x.title}</span>,
         time: x.at ? fmtStamp(x.at) : "No date", datetime: x.at,
+        tools: compact ? null : itemMenu("steps", x, x.title),
         body: <><span className="tl-sub">{sub}</span>{x.note ? <span className="tl-note" translate="no">{x.note}</span> : null}</>,
       });
     };
     const note = (n: Row) => {
       const day = n.happened_on || n.created_at.slice(0, 10);
-      return entry(`n${n.id}`, { cls: "app-tl-note", title: <span className="tl-serif" translate="no">{n.body}</span>, time: fmtDay(day), datetime: day });
+      return entry(`n${n.id}`, { cls: "app-tl-note", title: <RichView className="tl-serif" value={n.body} />, time: fmtDay(day), datetime: day, tools: itemMenu("notes", n, "this note") });
     };
 
     // What happened, oldest first, the stage it's in among it (at the end, if when it came in isn't known).
@@ -1351,34 +1475,122 @@ function Application({ id, s, editing, readLink }: { id: number; s: Loaded; edit
     const future = archived || at < 0 ? [] : s.stages.map((x, i) => ({ x, i }))
       .filter(({ x, i }) => i > at && swimlaneOf(x) === swimlaneOf(s.stages[at]))
       .map(({ x, i }, n) => stage(x, i, n === 0));
-
-    // Folded and unfolded from its head; what's added comes from Add, beside Stage.
-    const fold = (
-      <button className="al-button al-button--quiet al-button--sm app-tl-fold" type="button" aria-expanded={String(tlOpen) as "true" | "false"}
-        aria-controls="app-tl-list" onClick={() => setTlOpen(!tlOpen)}><Icon name="chevron" /><span>{tlOpen ? "Collapse" : "Expand"}</span></button>
-    );
-    return panel("timeline", "Timeline", { action: fold },
-      tlOpen ? <ol key="list" id="app-tl-list" className="al-timeline app-tl">
-        {past.map((c) => c.node)}
-        {coming.map((c) => c.node)}
-        {future}
-      </ol> : null);
+    return [...past.map((c) => c.node), ...coming.map((c) => c.node), ...future];
   }
 
-  /** The facts of the role, at a glance. */
-  function detailsPanel() {
-    const a = s.app, p = s.process;
-    const o = (n: string, v: string | null) => (v ? optionLabel(optionsOf("applications", n), v) : null);
-    const facts = ([
-      ["Work mode", o("work_mode", a.work_mode)], ["Employment", o("employment", a.employment)], ["Location", a.location],
-      ["Source", a.source], ["Applied", p ? (p.applied_on ? fmtDay(p.applied_on) : "Not yet") : null],
-      ["Posted", a.posted_on ? fmtDay(a.posted_on) : null], ["Closes", a.closes_on ? fmtDay(a.closes_on) : null],
-      ["Posting", a.url ? <a href={a.url} target="_blank" rel="noreferrer">{hostOf(a.url)}</a> : null],
-      ["Bonus", a.bonus], ["Equity", a.equity],
-    ] as [string, ReactNode][]).filter(([, v]) => v);
-    return panel("details", "Details", {}, facts.length
-      ? <dl key="facts" className="app-facts">{facts.map(([k, v]) => <Fragment key={k}><dt>{k}</dt><dd>{v}</dd></Fragment>)}</dl>
-      : <p key="none" className="muted small">Nothing filled in yet.</p>);
+  /** The interviews, each a card: those to come first, the soonest first; then those that happened, the latest first. */
+  function stepCards() {
+    const statuses = optionsOf("steps", "status");
+    const upcoming = steps().filter((x) => x.status === "scheduled").sort((a, b) => (a.at || "9").localeCompare(b.at || "9"));
+    const done = steps().filter((x) => x.status !== "scheduled").sort((a, b) => (b.at || b.created_at).localeCompare(a.at || a.created_at));
+    const card = (x: Row) => {
+      const coming = x.status === "scheduled";
+      const gone = coming && isOverdue(x.at);
+      const sub = dotted([x.format, minutesText(x.minutes), withWhom(x)]);
+      const tone = stepTone(x);
+      return (
+        <article key={x.id} className={`al-card app-step-card is-${x.status}`} data-step-id={x.id}>
+          <div className="app-step-card-head">
+            <h4 translate="no">{x.title}</h4>
+            {ended() ? null : <span className="app-tl-tools">{coming ? <>{joinButton(x)}{logOutcome(x, gone)}</> : null}{itemMenu("steps", x, x.title)}</span>}
+          </div>
+          <div className="app-step-card-when">
+            {coming ? <Icon name="cal" /> : <span className={`al-badge${tone ? ` al-badge--${tone}` : ""}`}>{optionLabel(statuses, x.status)}</span>}
+            <span className={gone ? "is-late" : undefined}>{x.at ? <time dateTime={x.at}>{fmtStamp(x.at)}</time> : coming ? "Date not set" : "No date"}</span>
+          </div>
+          {sub.length ? <span className="tl-sub">{sub}</span> : null}
+          {coming ? stepPlace(x) : null}
+          {coming ? stepPrep(x) : null}
+          {x.note ? <span className="tl-note" translate="no">{x.note}</span> : null}
+        </article>
+      );
+    };
+    const add = ended() ? null : (
+      <button className="al-button al-button--quiet al-button--sm" type="button" onClick={() => openAdding("step", s, saving, (fresh) => { if (fresh) refreshDetail(); else reload(); })}>
+        <Icon name="plus" /><span>Interview</span></button>
+    );
+    return (
+      <section className="app-step-cards" aria-label="Interviews">
+        {upcoming.length ? <><h4 className="app-step-cards-sub">Upcoming Interviews</h4>{upcoming.map(card)}</> : null}
+        {done.length ? <><h4 className="app-step-cards-sub">Past Interviews</h4>{done.map(card)}</> : null}
+        {upcoming.length || done.length ? null : <p className="muted small">No interviews yet.</p>}
+        {add ? <div className="app-panel-tools">{add}</div> : null}
+      </section>
+    );
+  }
+
+  /** An interview or note on the timeline, edited on its own, in a dialog. */
+  function itemForm() {
+    const statuses = optionsOf("steps", "status");
+    const lengths = listOf("step_length");
+    const it = st.item!;
+    const i = (it.kind === "step" ? draft.steps : draft.events).findIndex((x) => x.id === it.id);
+    if (i < 0) return null;
+    const stepRow = (x: Row) => (
+      <li key={`s${x.id}`} className={`is-${x.status}`} data-step={i} data-step-id={x.id}>
+        <span className="dot" aria-hidden="true" />
+        <div className="app-step-edit">
+          {input(x, "title", { placeholder: "A step, e.g. Recruiter screen", "aria-label": "Step" })}
+          <div className="app-grid app-step-fields">
+            {labeled("When", input(x, "at", { type: "datetime-local", step: 900, "aria-label": "When" }))}
+            {labeled("Status", select(x, "status", statuses, { empty: null, label: "Status" }))}
+            {labeled("Format", input(x, "format", { placeholder: "e.g. Video call", "aria-label": "Format", list: "app-step-formats" }))}
+            {labeled("Length", select(x, "minutes", lengths, { label: "Length" }))}
+            {labeled("Joining link or address", input(x, "place", { placeholder: "meet.example/… or an office address", "aria-label": "Joining link or address" }), true)}
+          </div>
+          {stepPeople(x, i)}
+          <div className="app-field"><span>What to prepare</span>{rich(x, "prep_note", "What to prepare", "Topics they mentioned, things to bring", 2)}</div>
+          {labeled("Notes", input(x, "note", { multiline: true, rows: 2, placeholder: "Questions asked, feedback…", "aria-label": "Notes" }))}
+        </div>
+      </li>
+    );
+    const eventRow = (x: Row) => (
+      <li key={`e${x.id}`} className="is-event" data-event-id={x.id}>
+        <span className="dot" aria-hidden="true" />
+        <div className="app-event-edit">
+          {input(x, "happened_on", { type: "date", "aria-label": "When" })}
+          {rich(x, "body", "Note", "What happened", 4)}
+        </div>
+      </li>
+    );
+    const step = it.kind === "step";
+    return (
+      <PageDialog key={`item-${st.formKey}`} title={step ? "Edit the interview" : "Edit the note"} dismiss={() => editSection(null)} actions={<>
+        <button className="al-button" type="button" onClick={() => editSection(null)}>Cancel</button>
+        <button className="al-button al-button--primary" type="button" aria-busy={st.saving ? "true" : undefined} onClick={save}>Save</button>
+      </>}>
+        <ol className="app-steps app-timeline">{step ? stepRow(draft.steps[i]) : eventRow(draft.events[i])}</ol>
+        {step ? <datalist id="app-step-formats">{listOf("step_format").map(([v]) => <option key={v} value={v} />)}</datalist> : null}
+      </PageDialog>
+    );
+  }
+
+  /** Who a step is with: people from People, or new names, made on Save. */
+  function stepPeople(x: Row, i: number) {
+    const refocus = () => focus(`.app-timeline [data-step="${i}"] .app-with input`);
+    const people = refSource("people");
+    return (
+      <div className="app-with">
+        <span className="app-with-label">With</span>
+        {x.people.map((p: Row, j: number) => (
+          <span key={`${p.id}-${p.name}`} className="al-tag" title={p.id == null ? "Added to People when you save" : undefined}>{p.name}{p.id == null ? " (new)" : ""}
+            <button className="al-tag__remove" type="button" aria-label={`Remove ${p.name}`} onClick={() => { x.people.splice(j, 1); render(); refocus(); }}>×</button></span>
+        ))}
+        <Combo key={x.people.length} label="With whom" placeholder={x.people.length ? "Add someone else…" : "With whom: someone from People, or a new name"} allowCreate
+          source={async (q) => (await people(q)).filter((it) => !x.people.some((p: Row) => p.id === it.value))}
+          onPick={(it) => {
+            if (it.create) {
+              if (!x.people.some((p: Row) => p.id == null && p.name.toLowerCase() === it.value.toLowerCase())) x.people.push({ id: null, name: it.value });
+            } else {
+              x.people.push({ id: it.value, name: it.label.replace(/ \([^)]*\)$/, "") });
+            }
+            render();
+            refocus();
+          }} />
+        {x.attendees ? <p className="muted small app-with-before">{`Written before: “${x.attendees}” `}
+          <button className="al-button al-button--sm al-button--quiet" type="button" onClick={() => { x.attendees = null; render(); }}>Clear</button></p> : null}
+      </div>
+    );
   }
 
   /** Its prep: how far along, and what's next. */
@@ -1407,76 +1619,71 @@ function Application({ id, s, editing, readLink }: { id: number; s: Loaded; edit
         ) : null,
       ] : [<p key="none" className="muted small">Nothing to prepare yet.</p>]),
       ended() ? null : (
-        <button key="add" className="al-button al-button--quiet al-button--sm app-panel-add" type="button" onClick={() => { toPrep(); openPrepAdding(String(p.id)); }}>
+        <button key="add" className="al-button al-button--quiet al-button--sm app-panel-add" type="button" aria-haspopup="dialog" onClick={() => openPrepAdding(p.id, () => reload())}>
           <Icon name="plus" /><span>{`Add prep for ${s.company.name}`}</span></button>
       ));
   }
 
-  /** Links kept with it: the candidate portal, prep material, invites; and its postings', first. */
+  /** Links kept with it: the candidate portal, prep material, invites; each added, changed, moved or removed from its menu, in a dialog. */
   function linksPanel() {
     const kinds = optionsOf("links", "kind");
-    const adding = opened.has("link");
-    const postings = postingLinks().filter((l) => l.url);
+    const named = (l: Row) => linkName(l) || hostOf(l.url);
+    const remove = async (l: Row) => {
+      if (!(await saving(() => del(`links/${l.id}`)))) return;
+      toast("Link removed", "info", { label: "Undo", onclick: async () => {
+        if (await attempt(() => post("links", { application_id: id, url: l.url, label: linkName(l), kind: l.kind }))) reload();
+      } });
+      reload();
+    };
     return panel("links", "Links", {
-      action: <button className="al-button al-button--quiet al-button--sm" type="button" aria-expanded={String(adding) as "true" | "false"} onClick={() => toggle("link")}>{adding ? "Cancel" : "Add a link"}</button>,
+      action: ended() ? null : dialogButton("Add a link", () => openLinkForm(null)),
     },
-    s.links.length || postings.length ? (
+    s.links.length ? (
       <ul key="list" className="app-links">
-        {/* Its postings, from About the job (removed there). */}
-        {postings.map((l) => {
-          const p = l.key === "main" ? null : s.postings.find((x) => x.id === l.key);
-          const name = p?.platform && p.platform !== "the page" ? p.platform : l.key === "main" && s.app.title ? s.app.title : hostOf(l.url);
-          return (
-            <li key={`posting-${l.key}`}>
-              <div className="app-link"><a href={l.url} target="_blank" rel="noreferrer" title={l.url} translate="no">{name}</a>
-                <span className="muted small">{dotted(["Job posting", <span translate="no">{hostOf(l.url)}</span>])}</span></div>
-            </li>
-          );
-        })}
         {s.links.map((l) => (
           <li key={l.id}>
-            <div className="app-link"><a href={l.url} target="_blank" rel="noreferrer" title={l.url} translate="no">{l.label || hostOf(l.url)}</a>
-              <span className="muted small">{dotted([optionLabel(kinds, l.kind), <span translate="no">{hostOf(l.url)}</span>])}</span></div>
-            <button className="al-button al-button--quiet al-button--sm" type="button" aria-label={`Remove ${l.label || l.url}`} onClick={async () => {
-              if (!(await saving(() => del(`links/${l.id}`)))) return;
-              toast("Link removed", "info", { label: "Undo", onclick: async () => {
-                if (await attempt(() => post("links", { application_id: id, url: l.url, label: l.label, kind: l.kind }))) reload();
-              } });
-              reload();
-            }}>Remove</button>
+            {/* By its name, if it has one; else where it goes. */}
+            <div className="app-link"><a href={l.url} target="_blank" rel="noreferrer" title={l.url} translate="no">{named(l)}</a>
+              <span className="muted small">{dotted([optionLabel(kinds, l.kind), linkName(l) ? <span translate="no">{hostOf(l.url)}</span> : null])}</span></div>
+            {ended() ? null : (
+              <MenuButton className="al-button al-button--quiet al-button--sm" label={`More for ${named(l)}`} items={(close) => <>
+                <MenuItem close={close} onClick={() => openLinkForm({ link: l })}>Edit</MenuItem>
+                <MenuItem close={close} onClick={() => transfer("links", l.id, named(l))}>Move to another application…</MenuItem>
+                <hr className="al-menu__separator" />
+                <MenuItem close={close} danger onClick={() => remove(l)}>Remove</MenuItem>
+              </>}><Icon name="more" /></MenuButton>
+            )}
           </li>
         ))}
       </ul>
-    ) : adding ? null : <p key="none" className="muted small">Keep the candidate portal, prep material and anything else you'll open again.</p>,
-    adding ? <LinkAdd key="add" kinds={kinds} onAdd={async (v) => {
-      if (await saving(() => post("links", { application_id: id, ...v }))) { opened.delete("link"); toast("Link added"); reload(); }
-    }} /> : null);
+    ) : <p key="none" className="muted small">Keep the candidate portal, prep material and anything else you'll open again.</p>);
   }
 
-  // Where it stands first; then the timeline, the posting, the mail, the
-  // company and the pay. The facts, its prep and what's kept with it beside.
-  function readLayout() {
-    const p = s.process;
-    const rest = s.procs.filter((x) => x.id !== p?.id);
-    return <>
+  // Where it stands first; then the timeline, the details, the notes, the
+  // mail and the pay. Its prep, people, links and files beside.
+  const p = s.process;
+  const rest = s.procs.filter((x) => x.id !== p?.id);
+  return (
+    <div className="page application reading" ref={page}
+      onKeyDown={(e) => { if (st.section && (e.metaKey || e.ctrlKey) && e.key === "s") { e.preventDefault(); save(); } }}>
       <a className="al-back-link" href="/">Applications</a>
       {pageHead()}
       {statusCard()}
       <div className="app-layout">
         <div className="app-main">
           {timelinePanel()}
-          {posting()}
+          {rolePanel()}
+          {companyPanel()}
+          {payPanel()}
+          {notesPanel()}
           {p ? emails() : null}
-          {company()}
-          {takeHomeOn() || s.app.salary_min != null || s.app.salary_max != null ? <PayPanel a={s.app} p={p} stages={s.stages} onAdd={() => setEdit(true, ".app-pay-fields input")} /> : null}
         </div>
         <aside className="app-aside" aria-label="About this application">
-          {detailsPanel()}
           {prepPanel()}
           {p ? people() : null}
           {linksPanel()}
           {p ? files() : null}
-          {panel("tags", "Tags", {}, <TagEditor key="tags" resource="applications" rec={s.app} onChange={(saved) => { s.app.tags = saved; orig.tags = saved; }} />)}
+          {panel("tags", "Tags", {}, <TagEditor key="tags" resource="applications" rec={s.app} />)}
           {rest.length ? panel("others", "Other processes", {}, (
             <ul key="list" className="app-links">
               {rest.map((x) => (
@@ -1487,67 +1694,40 @@ function Application({ id, s, editing, readLink }: { id: number; s: Loaded; edit
           )) : null}
         </aside>
       </div>
-    </>;
-  }
-
-  // ---- the page ----
-
-  return (
-    <div className={`page application${edit ? "" : " reading"}`} ref={page}
-      onKeyDown={(e) => { if (st.edit && (e.metaKey || e.ctrlKey) && e.key === "s") { e.preventDefault(); save(); } }}>
-      {!edit ? readLayout() : <>
-        <nav className="crumbs" aria-label="Back to"><a href="/">← Applications</a></nav>
-        <article className="al-card app editing" key={st.formKey}>
-          {head()}
-          {standing()}
-          <div className="app-sections">
-            {role()}{timeline()}{notes()}{posting()}
-            {s.process ? <>{people()}{emails()}{files()}</> : null}
-            {company()}
-            {footer()}
-          </div>
-        </article>
-      </>}
     </div>
+  );
+}
+
+/**
+ * A dialog drawn with the page, so what's in it stays as current as the page;
+ * closed, `onClose`. With `dismiss`, Escape and a click outside ask it
+ * instead, and the page takes the dialog away; `actions` replace Close.
+ */
+function PageDialog({ title, onClose, dismiss, actions, children }: { title: string; onClose?: () => void; dismiss?: () => void; actions?: ReactNode; children: ReactNode }) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useLayoutEffect(() => { ref.current?.showModal(); }, []);
+  return (
+    <dialog ref={ref} className="al-dialog wide app-page-dialog" aria-labelledby="page-dialog-title" onClose={onClose}
+      onCancel={(e) => { if (dismiss) { e.preventDefault(); dismiss(); } }}
+      onClick={(e) => { if (e.target === e.currentTarget) { if (dismiss) dismiss(); else e.currentTarget.close(); } }}>
+      <div className="al-dialog__inner">
+        <h2 className="al-dialog__title" id="page-dialog-title">{title}</h2>
+        <div className="al-dialog__body">{children}</div>
+        <div className="al-dialog__actions">{actions ?? <button className="al-button" type="button" onClick={() => ref.current?.close()}>Close</button>}</div>
+      </div>
+    </dialog>
   );
 }
 
 // ---- adding, in place ------------------------------------------------------------------
 
-/** A tag for the draft: Enter or a comma adds it, and so does leaving it. */
-function DraftTag({ onAdd }: { onAdd: (t: string) => void }) {
-  const ref = useRef<HTMLInputElement>(null);
-  const add = () => {
-    const el = ref.current!;
-    const v = el.value.trim();
-    el.value = "";
-    onAdd(v);
-    requestAnimationFrame(() => document.querySelector<HTMLElement>(".tag-input")?.focus());
-  };
-  return <Input className="tag-input" ref={ref} aria-label="Add a tag" placeholder="Add a tag…"
-    onKeyDown={(e) => { if (e.key === "Enter" || e.key === ",") { e.preventDefault(); add(); } }}
-    onBlur={() => { if (ref.current?.value.trim()) add(); }} />;
-}
-
-/** A posting link, added and read straight away. */
-function PostingAdd({ onAdd }: { onAdd: (url: string) => void }) {
-  const ref = useRef<HTMLInputElement>(null);
-  useEffect(() => { ref.current?.focus(); }, []);
-  return (
-    <form className="inline-add posting-add" onSubmit={(e) => { e.preventDefault(); const v = ref.current?.value.trim(); if (v) onAdd(v); }}>
-      <Input type="url" ref={ref} placeholder="https://…" aria-label="Posting link" required />
-      <button className="al-button al-button--primary" type="submit">Add and read</button>
-    </form>
-  );
-}
-
 /** Someone on the process: from People, a new name, or a LinkedIn profile link. */
-function PersonAdd({ roles, onAdd }: { roles: [string, string][]; onAdd: (body: Row) => void }) {
+function PersonAdd({ roles, onAdd }: { roles: [string, string][]; onAdd: (body: Row) => Promise<void> }) {
   const chosen = useRef<Row | null>(null);
   const who = useRef<HTMLInputElement>(null);
   const [role, setRole] = useState("");
   return (
-    <form className="person-add" onSubmit={async (e) => {
+    <form onSubmit={async (e) => {
       e.preventDefault();
       const name = (who.current?.value || "").trim();
       if (!name) return;
@@ -1561,50 +1741,154 @@ function PersonAdd({ roles, onAdd }: { roles: [string, string][]; onAdd: (body: 
         body = { person_id: person.id };
       }
       body.role = role || null;
-      onAdd(body);
+      await onAdd(body);
     }}>
-      <Combo label="Person" placeholder="Name, or a LinkedIn profile link" source={refSource("people")} allowCreate inputRef={who}
-        onPick={(it) => { chosen.current = it; }} onInput={() => { chosen.current = null; }} />
-      <Select aria-label="Role" value={role} onChange={(e) => setRole(e.target.value)}>
-        <option value="">Role…</option>{roles.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-      </Select>
-      <button className="al-button" type="submit">Add</button>
+      <h2 className="al-dialog__title" id="modal-title">Add someone</h2>
+      <div className="al-dialog__body">
+        <Field><Label htmlFor="pa-person">Person</Label>
+          <Combo id="pa-person" label="Person" placeholder="Name, or a LinkedIn profile link" source={refSource("people")} allowCreate typeFirst inputRef={who}
+            onPick={(it) => { chosen.current = it; }} onInput={() => { chosen.current = null; }} /></Field>
+        <Field><Label htmlFor="pa-role">Role <Optional /></Label>
+          <Select id="pa-role" value={role} onChange={(e) => setRole(e.target.value)}>
+            <option value="">Not set</option>{roles.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </Select></Field>
+      </div>
+      {dialogActions("Add")}
     </form>
   );
 }
 
-/** A file version sent with the process. */
-function FileAdd({ onAdd }: { onAdd: (versionId: number) => void }) {
+/** A file's thumbnail: an image, small; anything else, its kind by its extension. */
+function FileThumb({ f }: { f: Row }) {
+  if ((f.content_type || "").startsWith("image/")) return <img className="file-thumb" src={`/api/versions/${f.id}/file`} alt="" loading="lazy" />;
+  const ext = f.filename.match(/\.([a-z0-9]{1,5})$/i)?.[1];
+  return <span className="file-thumb" aria-hidden="true"><Icon name="file" />{ext ? <span translate="no">{ext.toUpperCase()}</span> : null}</span>;
+}
+
+/** A file being uploaded, named, with a way to choose again. */
+const uploading = (file: File, label: string, clear: () => void) => (
+  <p className="small app-upload-chosen">{`${label}: ${file.name} (${fmtSize(file.size)})`}{" "}
+    <button className="al-button al-button--quiet al-button--sm" type="button" onClick={clear}>Remove</button></p>
+);
+
+/** A file sent with the process: a version from Files, or a file uploaded here (the next version of the document named like it, or a new one). */
+function FileAdd({ onAdd }: { onAdd: (versionId: number) => Promise<void> }) {
   const chosen = useRef<Row | null>(null);
+  const [file, setFile] = useState<File | null>(null);
   return (
-    <form className="file-add" onSubmit={(e) => {
+    <form onSubmit={async (e) => {
       e.preventDefault();
-      if (!chosen.current) { toast("Pick a version from the list", "error"); return; }
-      onAdd(chosen.current.value);
+      if (file) {
+        const v = await attempt(() => acceptFile(file));
+        if (v) await onAdd(v.id);
+        return;
+      }
+      if (!chosen.current) { toast("Pick a file from the list, or upload one", "error"); return; }
+      await onAdd(chosen.current.value);
     }}>
-      <Combo label="File" placeholder="Search files, e.g. resume" source={refSource("versions")}
-        onPick={(it) => { chosen.current = it; }} onInput={() => { chosen.current = null; }} />
-      <button className="al-button" type="submit">Add</button>
+      <h2 className="al-dialog__title" id="modal-title">Link a file</h2>
+      <div className="al-dialog__body">
+        {file ? uploading(file, "To upload", () => setFile(null)) : <>
+          <Field><Label htmlFor="fa-file">From Files</Label>
+            <Combo id="fa-file" label="File" placeholder="Search files, e.g. resume" source={refSource("versions")} typeFirst
+              onPick={(it) => { chosen.current = it; }} onInput={() => { chosen.current = null; }} /></Field>
+          <FileDrop label="Or upload one" hint="A file named like a document (cv.pdf → “cv”) becomes its next version; anything else, a new document." onFiles={([f]) => setFile(f)} />
+        </>}
+      </div>
+      {dialogActions(file ? "Upload and link" : "Link file")}
     </form>
   );
 }
 
-/** A link kept with the application. */
-function LinkAdd({ kinds, onAdd }: { kinds: [string, string][]; onAdd: (v: { url: string; label: string | null; kind: string }) => void }) {
-  const [v, setV] = useState({ url: "", label: "", kind: "portal" });
-  const url = useRef<HTMLInputElement>(null);
-  useEffect(() => { url.current?.focus(); }, []);
+/** A file sent with the process, changed: another of its versions sent instead, or a new version uploaded and sent. */
+function FileEdit({ f, onSave }: { f: Row; onSave: (versionId: number) => Promise<void> }) {
+  const [versions, setVersions] = useState<Row[] | null>(null);
+  const [pick, setPick] = useState<number>(f.id);
+  const [file, setFile] = useState<File | null>(null);
+  const [tag, setTag] = useState("");
+  useEffect(() => {
+    attempt(() => get(`versions?document_id=${f.document_id}`)).then((vs) => setVersions(vs ? [...vs].sort((a: Row, b: Row) => b.number - a.number) : null));
+  }, []);
+  const name = (v: Row) => `v${v.number}${v.tag ? ` (${v.tag})` : ""} · ${v.filename}`;
   return (
-    <form className="app-link-form" onSubmit={(e) => {
+    <form onSubmit={async (e) => {
+      e.preventDefault();
+      if (file) {
+        const v = await attempt(() => uploadVersion(f.document_id, file, { tag: tag.trim() || undefined }));
+        if (v) await onSave(v.id);
+        return;
+      }
+      await onSave(pick);
+    }}>
+      <h2 className="al-dialog__title" id="modal-title"><span translate="no">{f.document}</span></h2>
+      <div className="al-dialog__body">
+        {file ? <>
+          {uploading(file, "New version", () => setFile(null))}
+          <Field><Label htmlFor="fe-tag">Tag <Optional /></Label>
+            <Input id="fe-tag" placeholder="e.g. rust-focused" value={tag} onChange={(e) => setTag(e.target.value)} /></Field>
+        </> : <>
+          <Field><Label htmlFor="fe-version">Version sent</Label>
+            <Select id="fe-version" value={String(pick)} disabled={!versions} onChange={(e) => setPick(Number(e.target.value))}>
+              {(versions || [f]).map((v) => <option key={v.id} value={String(v.id)} translate="no">{name(v)}</option>)}
+            </Select></Field>
+          <FileDrop label="Or upload a new version" onFiles={([x]) => setFile(x)} />
+        </>}
+        <a className="al-link small" href={`/files/${f.document_id}?version=${f.id}`}>Open in Files</a>
+      </div>
+      {dialogActions(file ? "Upload and send" : "Save")}
+    </form>
+  );
+}
+
+type LinkValue = { url: string; label: string | null; kind: string; read?: boolean };
+
+/**
+ * A link, in a dialog: a job posting (`kind` "posting", the first, and
+ * chosen for a new one) or one kept with the application; a new one, or `l`
+ * changed. A posting is named as it's read, so it has no Name.
+ */
+function LinkForm({ l, kinds, onSave }: { l: LinkValue | null; kinds: [string, string][]; onSave: (v: LinkValue) => Promise<void> }) {
+  const [v, setV] = useState({ url: l?.url ?? "", label: l?.label ?? "", kind: l?.kind ?? "posting", read: false });
+  const posting = v.kind === "posting";
+  // A posting link that's new (or was kept as another kind) can be read once it's added.
+  const added = posting && l?.kind !== "posting";
+  const hint = posting ? (added ? null : "Its text stays; Refresh reads the new link.")
+    : l?.kind === "posting" ? "Kept as a link: the text read from it goes." : null;
+  return (
+    <form onSubmit={async (e) => {
       e.preventDefault();
       if (!v.url.trim()) return;
-      onAdd({ url: v.url.trim(), label: v.label.trim() || null, kind: v.kind });
+      await onSave({ url: v.url.trim(), label: v.label.trim() || null, kind: v.kind, read: added && v.read });
     }}>
-      <Field><Label htmlFor="lf-url">Link</Label><Input id="lf-url" ref={url} type="url" placeholder="https://" value={v.url} onChange={(e) => setV({ ...v, url: e.target.value })} /></Field>
-      <Field><Label htmlFor="lf-label">Name <Optional /></Label><Input id="lf-label" placeholder="e.g. Candidate portal" value={v.label} onChange={(e) => setV({ ...v, label: e.target.value })} /></Field>
-      <Field><Label htmlFor="lf-kind">Kind</Label>
-        <Select id="lf-kind" value={v.kind} onChange={(e) => setV({ ...v, kind: e.target.value })}>{kinds.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</Select></Field>
-      <button className="al-button al-button--primary al-button--sm" type="submit">Add link</button>
+      <h2 className="al-dialog__title" id="modal-title">{l ? "Edit the link" : "Add a link"}</h2>
+      <div className="al-dialog__body">
+        <Field><Label htmlFor="lf-kind">Kind</Label>
+          <Select id="lf-kind" value={v.kind} onChange={(e) => setV({ ...v, kind: e.target.value })}>{kinds.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</Select></Field>
+        <Field><Label htmlFor="lf-url">Link</Label><Input id="lf-url" type="url" required placeholder="https://…" value={v.url} onChange={(e) => setV({ ...v, url: e.target.value })} />
+          {hint ? <span className="al-hint">{hint}</span> : null}</Field>
+        <Field><Label htmlFor="lf-label">Name <Optional /></Label><Input id="lf-label" placeholder={posting ? "e.g. On LinkedIn" : "e.g. Candidate portal"} value={v.label} onChange={(e) => setV({ ...v, label: e.target.value })} /></Field>
+        {added ? <label className="check al-choice"><input type="checkbox" id="lf-read" checked={v.read} onChange={(e) => setV({ ...v, read: e.target.checked })} /><span>Refresh role details from the link</span></label> : null}
+      </div>
+      {dialogActions(l ? "Save" : posting && v.read ? "Add and read" : "Add link")}
+    </form>
+  );
+}
+
+/** Someone's role on the process, changed. */
+function PersonRole({ pe, roles, onSave }: { pe: Row; roles: [string, string][]; onSave: (role: string | null) => Promise<void> }) {
+  const [role, setRole] = useState<string>(pe.role ?? "");
+  // A role no longer on the list still shows.
+  const options = pe.role && !roles.some(([v]) => v === pe.role) ? [...roles, [pe.role, pe.role] as [string, string]] : roles;
+  return (
+    <form onSubmit={async (e) => { e.preventDefault(); await onSave(role || null); }}>
+      <h2 className="al-dialog__title" id="modal-title"><span translate="no">{pe.name}</span></h2>
+      <div className="al-dialog__body">
+        <Field><Label htmlFor="pr-role">Role</Label>
+          <Select id="pr-role" value={role} onChange={(e) => setRole(e.target.value)}>
+            <option value="">Not set</option>{options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </Select></Field>
+      </div>
+      {dialogActions("Save")}
     </form>
   );
 }
@@ -1629,7 +1913,7 @@ function EmailAdd({ processId, onAdded, onCancel }: { processId: number; onAdded
   };
   const drop = useFileDrop((files) => add(files.map((f) => [f.name, f])));
   return (
-    <form className={`email-add${drop.over ? " file-over" : ""}`} {...drop.props} onSubmit={async (e) => {
+    <form className={`email-add${drop.over ? " file-over" : ""}`} data-unsaved="" {...drop.props} onSubmit={async (e) => {
       e.preventDefault();
       const el = box.current!;
       if (!el.value.trim()) { toast("Paste the message first, or choose a file", "error"); el.focus(); return; }
@@ -1648,7 +1932,11 @@ function EmailAdd({ processId, onAdded, onCancel }: { processId: number; onAdded
       </div>
       <TextArea ref={box} rows={5} placeholder="…or paste the message's original text here" aria-label="The email's original text" />
       <div className="actions">
-        <button className="al-button" type="button" onClick={() => { if (box.current) box.current.value = ""; onCancel(); }}>Cancel</button>
+        <button className="al-button" type="button" onClick={(e) => {
+          if (!mayDiscard(e.currentTarget)) return;
+          if (box.current) box.current.value = "";
+          onCancel();
+        }}>Cancel</button>
         <button className="al-button al-button--primary" type="submit">Add email</button>
       </div>
     </form>
@@ -1656,7 +1944,7 @@ function EmailAdd({ processId, onAdded, onCancel }: { processId: number; onAdded
 }
 
 /** A thread of emails, folded until opened (its messages loaded then). */
-function EmailThread({ msgs, edit, onRemoved }: { msgs: Row[]; edit: boolean; onRemoved: () => void }) {
+function EmailThread({ msgs, onMove, onRemoved }: { msgs: Row[]; onMove: ((m: Row) => unknown) | null; onRemoved: () => void }) {
   const [open, setOpen] = useState(false);
   const last = msgs[msgs.length - 1];
   const who = (m: Row) => (m.outgoing ? "You" : m.from_name || m.from_addr || "Unknown");
@@ -1670,13 +1958,13 @@ function EmailThread({ msgs, edit, onRemoved }: { msgs: Row[]; edit: boolean; on
             <span className="muted small">{people.join(", ")}{msgs.length > 1 ? ` · ${msgs.length} messages` : ""}</span></span>
           <time className="muted small" dateTime={last.sent_at}>{fmtStamp(last.sent_at)}</time>
         </summary>
-        <div className="email-thread-body">{msgs.map((m) => <EmailMessage key={m.id} m={m} who={who(m)} load={open} edit={edit} onRemoved={onRemoved} />)}</div>
+        <div className="email-thread-body">{msgs.map((m) => <EmailMessage key={m.id} m={m} who={who(m)} load={open} onMove={onMove} onRemoved={onRemoved} />)}</div>
       </details>
     </li>
   );
 }
 
-function EmailMessage({ m, who, load, edit, onRemoved }: { m: Row; who: string; load: boolean; edit: boolean; onRemoved: () => void }) {
+function EmailMessage({ m, who, load, onMove, onRemoved }: { m: Row; who: string; load: boolean; onMove: ((m: Row) => unknown) | null; onRemoved: () => void }) {
   const [full, setFull] = useState<Row | null>(null);
   useEffect(() => {
     if (!load || full) return;
@@ -1689,10 +1977,11 @@ function EmailMessage({ m, who, load, edit, onRemoved }: { m: Row; who: string; 
       <div className="email-text">{full ? (full.body ? formatEmail(full.body) : <span className="muted">(no text)</span>) : <span className="muted small">Loading…</span>}</div>
       <div className="app-email-tools">
         {m.gmail_url ? <a className="small-button button" href={m.gmail_url} target="_blank" rel="noreferrer">Open in Gmail ↗</a> : null}
-        {edit ? <button className="al-button al-button--sm al-button--quiet al-button--danger" type="button" onClick={async () => {
+        {onMove ? <button className="al-button al-button--sm al-button--quiet" type="button" onClick={() => onMove(m)}>Move to another application…</button> : null}
+        <button className="al-button al-button--sm al-button--quiet al-button--danger" type="button" onClick={async () => {
           if (!(await confirmDelete(`email “${m.subject || "(no subject)"}”`))) return;
           if (await attempt(() => del(`emails/${m.id}`))) { toast("Removed"); onRemoved(); }
-        }}>Remove</button> : null}
+        }}>Delete</button>
       </div>
     </article>
   );
@@ -1715,7 +2004,7 @@ function openAdding(kind: "note" | "step" | "reminder", s: Loaded, saving: Savin
 /** A dialog's foot: Cancel, and what it adds. */
 const dialogActions = (label: string) => (
   <div className="al-dialog__actions">
-    <button className="al-button" type="button" onClick={closeModal}>Cancel</button>
+    <button className="al-button" type="button" onClick={dismissModal}>Cancel</button>
     <button className="al-button al-button--primary" type="submit">{label}</button>
   </div>
 );
@@ -1726,14 +2015,15 @@ function NoteForm({ p, saving, done }: { p: Row; saving: Saving; done: Done }) {
   return (
     <form ref={form} onSubmit={async (e) => {
       e.preventDefault();
-      if (!v.body.trim()) return;
-      if (await saving(() => post("notes", { process_id: p.id, body: v.body.trim(), happened_on: v.on || isoToday() }))) { toast("Note added"); done(true); }
+      if (!v.body) return;
+      if (await saving(() => post("notes", { process_id: p.id, body: v.body, happened_on: v.on || isoToday() }))) { toast("Note added"); done(true); }
     }}>
       <h2 className="al-dialog__title" id="modal-title">Add a note</h2>
       <div className="al-dialog__body composer-form">
         <Field className="composer-wide"><Label htmlFor="nf-body">Note</Label>
-          <TextArea id="nf-body" rows={5} placeholder="What happened, what you heard, what you think" onInput={(e) => { v.body = e.currentTarget.value; }}
-            onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); form.current?.requestSubmit(); } }} /></Field>
+          <div onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); form.current?.requestSubmit(); } }}>
+            <RichText id="nf-body" value="" rows={5} label="Note" placeholder="What happened, what you heard, what you think" onChange={(html) => { v.body = richOrNull(html) || ""; }} />
+          </div></Field>
         <Field><Label htmlFor="nf-on">When</Label><DatePicker id="nf-on" value={v.on} onChange={(d) => { v.on = d; }} /></Field>
       </div>
       {dialogActions("Add note")}
@@ -1742,7 +2032,10 @@ function NoteForm({ p, saving, done }: { p: Row; saving: Saving; done: Done }) {
 }
 
 function StepForm({ p, people, saving, done }: { p: Row; people: Row[]; saving: Saving; done: Done }) {
-  const v = useRef({ title: "", date: null as string | null, time: "", minutes: "60", format: "Video call", status: "scheduled", with: "", place: "", prep: "", remind: "hour" }).current;
+  const lengths = listOf("step_length"), formats = listOf("step_format");
+  // An hour, and the first format, unless the lists say otherwise.
+  const v = useRef({ title: "", date: null as string | null, time: "", minutes: lengths.some(([m]) => m === "60") ? "60" : lengths[0]?.[0] || "", format: formats[0]?.[0] || "",
+    status: "scheduled", with: "", place: "", prep: "", remind: "hour" }).current;
   const set = (k: keyof typeof v) => (e: React.FormEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => { (v as Row)[k] = e.currentTarget.value; };
   return (
     <form onSubmit={async (e) => {
@@ -1752,7 +2045,7 @@ function StepForm({ p, people, saving, done }: { p: Row; people: Row[]; saving: 
       const made = await saving(async () => {
         const made = await post("steps", { process_id: p.id, title: v.title.trim(), at: v.date ? `${v.date}T${v.time || "00:00"}` : null,
           minutes: v.minutes ? Number(v.minutes) : null, format: v.format || null, status: v.status, attendees: person ? null : v.with.trim() || null,
-          place: v.place.trim() || null, prep_note: v.prep.trim() || null, remind: v.status === "scheduled" ? v.remind || null : null });
+          place: v.place.trim() || null, prep_note: v.prep || null, remind: v.status === "scheduled" ? v.remind || null : null });
         if (person) await put(`steps/${made.id}/people`, { person_ids: [person.id] });
         return made;
       });
@@ -1765,11 +2058,11 @@ function StepForm({ p, people, saving, done }: { p: Row; people: Row[]; saving: 
         <Field><Label htmlFor="sf-time">Time</Label><Input id="sf-time" type="time" onInput={set("time")} /></Field>
         <Field><Label htmlFor="sf-dur">Length</Label>
           <Select id="sf-dur" defaultValue={v.minutes} onChange={set("minutes")}>
-            {[["30", "30 min"], ["45", "45 min"], ["60", "60 min"], ["90", "90 min"], ["240", "Half a day"], ["", "Not set"]].map(([m, l]) => <option key={m} value={m}>{l}</option>)}
+            {[...lengths, ["", "Not set"]].map(([m, l]) => <option key={m} value={m}>{l}</option>)}
           </Select></Field>
         <Field><Label htmlFor="sf-format">Format</Label>
           <Select id="sf-format" defaultValue={v.format} onChange={set("format")}>
-            {["Video call", "Phone", "On-site", "Take-home"].map((f) => <option key={f} value={f}>{f}</option>)}
+            {[...formats, ["", "Not set"]].map(([f, l]) => <option key={f} value={f}>{l}</option>)}
           </Select></Field>
         <Field><Label htmlFor="sf-status">Status</Label>
           <Select id="sf-status" defaultValue={v.status} onChange={set("status")}>
@@ -1785,7 +2078,7 @@ function StepForm({ p, people, saving, done }: { p: Row; people: Row[]; saving: 
         <Field className="composer-half"><Label htmlFor="sf-where">Joining link or address <Optional /></Label>
           <Input id="sf-where" placeholder="meet.example/… or office address" onInput={set("place")} /></Field>
         <Field className="composer-wide"><Label htmlFor="sf-prep">What to prepare <Optional /></Label>
-          <TextArea id="sf-prep" rows={2} placeholder="Topics they mentioned, things to bring" onInput={set("prep")} /></Field>
+          <RichText id="sf-prep" value="" rows={2} label="What to prepare" placeholder="Topics they mentioned, things to bring" onChange={(html) => { v.prep = richOrNull(html) || ""; }} /></Field>
       </div>
       {dialogActions("Add interview")}
     </form>

@@ -21,7 +21,7 @@ const SCHEMA_POSTGRES: &str = include_str!("schema_postgres.sql");
 const SCHEMA_MYSQL: &str = include_str!("schema_mysql.sql");
 /// "hunt" in ASCII: marks a database as ours.
 const APP_ID: i64 = 0x6875_6e74;
-pub const SCHEMA_VERSION: i64 = 26;
+pub const SCHEMA_VERSION: i64 = 29;
 /// The version schema*.sql describe: a new database is made at it, then
 /// brought up to [`SCHEMA_VERSION`] by the migrations after it.
 const SCHEMA_BASE: i64 = 14;
@@ -54,6 +54,9 @@ const MIGRATIONS: &[&str] = &[
     include_str!("migrate_v24.sql"),
     include_str!("migrate_v25.sql"),
     include_str!("migrate_v26.sql"),
+    include_str!("migrate_v27.sql"),
+    include_str!("migrate_v28.sql"),
+    include_str!("migrate_v29.sql"),
 ];
 /// Upgrades PostgreSQL and MySQL databases can take: (version reached, its
 /// SQL for PostgreSQL, for MySQL). They start at version 8.
@@ -147,6 +150,21 @@ const SERVER_MIGRATIONS: &[(i64, &str, &str)] = &[
         26,
         include_str!("migrate_v26_postgres.sql"),
         include_str!("migrate_v26_mysql.sql"),
+    ),
+    (
+        27,
+        include_str!("migrate_v27_postgres.sql"),
+        include_str!("migrate_v27_mysql.sql"),
+    ),
+    (
+        28,
+        include_str!("migrate_v28_postgres.sql"),
+        include_str!("migrate_v28_mysql.sql"),
+    ),
+    (
+        29,
+        include_str!("migrate_v29_postgres.sql"),
+        include_str!("migrate_v29_mysql.sql"),
     ),
 ];
 
@@ -585,6 +603,18 @@ impl Db {
                 params.push(Sql::Text(v.clone()));
                 continue;
             }
+            // Documents `application_id=N`: those with a version sent with
+            // one of its processes.
+            if k == "application_id" && r.entity == "document" {
+                let id: i64 = v
+                    .parse()
+                    .map_err(|_| invalid(format!("application_id {v:?} isn't a number")))?;
+                sql += " AND t.id IN (SELECT v.document_id FROM version v \
+                         JOIN process_file pf ON pf.version_id = v.id \
+                         JOIN process p ON p.id = pf.process_id WHERE p.application_id = ?)";
+                params.push(Sql::Integer(id));
+                continue;
+            }
             if k != "id" && r.field(k).is_none() {
                 return Err(invalid(format!("{} have no field {k:?}", r.name)));
             }
@@ -600,6 +630,14 @@ impl Db {
             sql += &format!(" LIMIT {n}");
         }
         let mut rows = self.query(&sql, &params)?;
+        // A note's label, from its text (rich, or plain): its words, not its markup.
+        if matches!(r.entity, "note" | "memo") {
+            for row in rows.iter_mut() {
+                if let Some(Value::String(l)) = row.get_mut("label") {
+                    *l = plain_label(l);
+                }
+            }
+        }
         if r.taggable {
             self.attach_tags(r, &mut rows)?;
         }
@@ -920,9 +958,13 @@ impl Db {
     ) -> Result<Vec<(&'static str, Value)>> {
         let mut out = Vec::new();
         for (k, v) in input {
+            // `label` is derived (`label_sql`), unless it's a field: a link's name.
+            if k == "label" && r.field("label").is_none() {
+                continue;
+            }
             if matches!(
                 k.as_str(),
-                "id" | "label" | "created_at" | "updated_at" | "position"
+                "id" | "created_at" | "updated_at" | "position"
                     // Derived, not set: a company's logo has its own endpoint,
                     // and GBP figures follow the pay.
                     | "tags" | "people" | "mail_label" | "emails" | "logo" | "logo_type" | "photo" | "photo_type" | "salary_min_gbp" | "salary_max_gbp" | "gbp_rate" | "gbp_rate_on"
@@ -1052,11 +1094,19 @@ impl Db {
             FieldKind::Date => Value::String(time::check_date(&text)?),
             FieldKind::DateTime => Value::String(time::check_datetime(&text)?),
             FieldKind::Enum { options } => {
+                // An admin's list, where they can change it; else hunt's own.
+                let options = match crate::choices::of_field(r.name, f.name) {
+                    Some(list) => self.choices(list)?,
+                    None => options
+                        .iter()
+                        .map(|(v, l)| (v.to_string(), l.to_string()))
+                        .collect(),
+                };
                 let found = options
                     .iter()
                     .find(|(v, l)| v.eq_ignore_ascii_case(&text) || l.eq_ignore_ascii_case(&text));
                 match found {
-                    Some((v, _)) => Value::String(v.to_string()),
+                    Some((v, _)) => Value::String(v.clone()),
                     // One that suggests takes your own words too.
                     None if f.suggest => Value::String(text),
                     None => {
@@ -1065,7 +1115,7 @@ impl Db {
                             f.label,
                             options
                                 .iter()
-                                .map(|(v, _)| *v)
+                                .map(|(v, _)| v.as_str())
                                 .collect::<Vec<_>>()
                                 .join(", ")
                         )));
@@ -1499,7 +1549,14 @@ impl Db {
                     .flatten()
                     .unwrap_or_else(|| code.clone()),
                 (FieldKind::Enum { options }, Value::String(s)) => {
-                    option_label(options, s).unwrap_or(s).to_string()
+                    match crate::choices::of_field(r.name, f.name) {
+                        Some(list) => self
+                            .choices(list)
+                            .ok()
+                            .and_then(|c| c.into_iter().find(|(v, _)| v == s).map(|(_, l)| l))
+                            .unwrap_or_else(|| option_label(options, s).unwrap_or(s).to_string()),
+                        None => option_label(options, s).unwrap_or(s).to_string(),
+                    }
                 }
                 (_, Value::String(s)) if s.chars().count() > 50 => {
                     format!("{}…", s.chars().take(50).collect::<String>())
@@ -1578,6 +1635,33 @@ fn field_of(set: &[(&str, Value)], n: &str) -> Value {
         .find(|(k, _)| *k == n)
         .map(|(_, v)| v.clone())
         .unwrap_or(Value::Null)
+}
+
+/// Rich text (the editor's HTML) as a one-line label: its words, the first
+/// 60 characters of them.
+pub fn plain_label(html: &str) -> String {
+    let mut text = String::new();
+    let mut in_tag = false;
+    for c in html.chars() {
+        match c {
+            '<' => {
+                in_tag = true;
+                text.push(' ');
+            }
+            '>' if in_tag => in_tag = false,
+            _ if !in_tag => text.push(c),
+            _ => {}
+        }
+    }
+    let text = text
+        .replace("&nbsp;", " ")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+        .replace("&amp;", "&");
+    let words = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    words.chars().take(60).collect()
 }
 
 pub fn label(rec: &Record) -> &str {

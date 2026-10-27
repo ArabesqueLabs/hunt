@@ -16,6 +16,7 @@ import { tagPaint } from "../lib/tags";
 import { chooseTheme, currentTheme } from "../lib/theme";
 import { toast } from "../lib/toast";
 import type { Row, Tag } from "../lib/types";
+import { mayDiscard } from "../lib/unsaved";
 import { ask, confirmDelete } from "../components/dialogs";
 import { useFilePicker } from "../components/files";
 import { profileBookmarklet } from "../components/importer";
@@ -30,9 +31,11 @@ export function SettingsPanel({ title, editing = false, onToggle, intro, done = 
   title?: string; editing?: boolean; onToggle?: (on: boolean) => void; intro?: ReactNode; done?: string; className?: string; list?: string; children?: ReactNode;
 }) {
   return (
-    <section className={`al-panel panel settings-panel${editing ? " editing" : ""}${className ? ` ${className}` : ""}`} data-list={list}>
+    <section className={`al-panel panel settings-panel${editing ? " editing" : ""}${className ? ` ${className}` : ""}`} data-list={list} data-unsaved={editing ? "" : undefined}>
       <div className="panel-head">{title ? <h2>{title}</h2> : <span />}
-        {onToggle ? <button className="al-button al-button--sm al-button--quiet settings-edit" type="button" onClick={() => onToggle(!editing)}>{editing ? done : "Edit"}</button> : null}
+        {onToggle ? <button className="al-button al-button--sm al-button--quiet settings-edit" type="button" onClick={(e) => {
+          if (!editing || mayDiscard(e.currentTarget)) onToggle(!editing);
+        }}>{editing ? done : "Edit"}</button> : null}
       </div>
       {intro ? <p className="muted">{intro}</p> : null}
       {children}
@@ -54,7 +57,7 @@ const AddLink = ({ label, onClick }: { label: string; onClick: () => void }) => 
 const SaveCancel = ({ save, cancel }: { save: () => void; cancel: () => void }) => (
   <div className="actions">
     <button className="al-button al-button--primary" type="button" onClick={save}>Save</button>
-    <button className="al-button" type="button" onClick={cancel}>Cancel</button>
+    <button className="al-button" type="button" onClick={(e) => { if (mayDiscard(e.currentTarget)) cancel(); }}>Cancel</button>
   </div>
 );
 
@@ -777,7 +780,7 @@ function NameField({ it, label, save, redraw }: { it: Row; label: string; save: 
  * and gives back what puts it back, or null if nothing was removed.
  * Adding one is said, without Undo.
  */
-function OrderedSettings({ list, title, intro, items, noun, focus, redraw, rename, remove, reorder, add, placeholder, sub = null, extra = null, rowClass = null, nest = null, scope = "", bare = false, before = null }: OrderedProps) {
+export function OrderedSettings({ list, title, intro, items, noun, focus, redraw, rename, remove, reorder, add, placeholder, sub = null, extra = null, rowClass = null, nest = null, scope = "", bare = false, before = null }: OrderedProps) {
   const listEl = useRef<HTMLOListElement>(null);
   const nameBox = useRef<HTMLInputElement>(null);
   const [dragOrder, setDragOrder] = useState<number[] | null>(null);

@@ -39,16 +39,18 @@ export function guessKind(filename: string) {
   return "other";
 }
 
-/** Take in files: each becomes the next version of the document named like it, or a new document. */
+/** Take in a file: the next version of the document named like it, or a new document's first. Resolves to the version. */
+export async function acceptFile(f: File) {
+  const name = stem(f.name);
+  const found = (await get(`documents?q=${enc(name)}`)).find((d: Row) => d.name.toLowerCase() === name.toLowerCase());
+  const doc = found || (await post("documents", { name, kind: guessKind(f.name) }));
+  return uploadVersion(doc.id, f);
+}
+
+/** Take in files, each as acceptFile does. */
 export async function acceptFiles(files: File[]) {
   const done: string[] = [];
-  for (const f of files) {
-    const name = stem(f.name);
-    const found = (await get(`documents?q=${enc(name)}`)).find((d: Row) => d.name.toLowerCase() === name.toLowerCase());
-    const doc = found || (await post("documents", { name, kind: guessKind(f.name) }));
-    const v = await uploadVersion(doc.id, f);
-    done.push(v.label);
-  }
+  for (const f of files) done.push((await acceptFile(f)).label);
   return done;
 }
 

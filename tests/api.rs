@@ -761,6 +761,35 @@ async fn suggestions_and_search() {
 }
 
 #[tokio::test]
+async fn roles_with_the_same_title_are_told_apart_by_their_id() {
+    let app = app();
+    for reference in ["R-1001", "R-2002"] {
+        ok(
+            &app,
+            "POST",
+            "/api/processes",
+            Some(
+                json!({ "company": "Acme", "title": "Software Engineer", "reference": reference }),
+            ),
+        )
+        .await;
+    }
+    let found = ok(&app, "GET", "/api/processes?q=r-2002", None).await;
+    assert_eq!(found.as_array().unwrap().len(), 1);
+    assert_eq!(found[0]["label"], "Acme — Software Engineer · R-2002");
+    let found = ok(&app, "GET", "/api/applications?q=1001", None).await;
+    assert_eq!(found[0]["reference"], "R-1001");
+    let board = ok(&app, "GET", "/api/board", None).await;
+    let refs: Vec<&str> = board["stages"][0]["cards"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|c| c["reference"].as_str())
+        .collect();
+    assert_eq!(refs.len(), 2);
+}
+
+#[tokio::test]
 async fn the_web_ui_is_served() {
     let app = app();
     for path in [
@@ -947,6 +976,23 @@ async fn documents_keep_their_versions_and_where_they_were_sent() {
     )
     .await;
     assert_eq!(uses[0]["label"], "Acme — SRE");
+    // The files sent with an application's processes, listed by it.
+    ok(
+        &app,
+        "POST",
+        "/api/documents",
+        Some(json!({ "name": "Unsent" })),
+    )
+    .await;
+    let sent = ok(
+        &app,
+        "GET",
+        &format!("/api/documents?application_id={}", card["application_id"]),
+        None,
+    )
+    .await;
+    assert_eq!(sent.as_array().unwrap().len(), 1);
+    assert_eq!(sent[0]["name"], "Resume");
     let board = ok(&app, "GET", "/api/board", None).await;
     assert_eq!(board["stages"][0]["cards"][0]["files"], 2);
     let detail = ok(&app, "GET", &format!("/api/processes/{pid}/detail"), None).await;
@@ -3507,9 +3553,10 @@ async fn general_notes() {
         Some(json!({ "body": "Ask every recruiter about on-call.\nAnd remote days." })),
     )
     .await;
+    // Its label is one line: its words, up to 60 characters.
     assert_eq!(
         m["label"],
-        "Ask every recruiter about on-call.\nAnd remote days."
+        "Ask every recruiter about on-call. And remote days."
     );
     let titled = ok(
         &app,
@@ -4332,14 +4379,12 @@ fn an_upgraded_database_takes_the_new_kinds_of_file_and_keeps_its_own() {
         )
         .unwrap();
     assert_eq!((owner, kind.as_str()), (1, "resume"));
-    // The database still checks: a kind it doesn't know is turned away.
-    assert!(
-        conn.execute(
-            "INSERT INTO document (name, kind, created_at, updated_at) VALUES ('X', 'nonsense', 'x', 'x')",
-            [],
-        )
-        .is_err()
-    );
+    // hunt checks the kinds, not the database (admins can add to them): a
+    // kind it doesn't know is turned away.
+    let mut rec = hunt::Record::new();
+    rec.insert("name".into(), json!("X"));
+    rec.insert("kind".into(), json!("nonsense"));
+    assert!(db.create(documents, &rec).is_err());
     let indexes: i64 = conn
         .query_row(
             "SELECT count(*) FROM sqlite_master WHERE type = 'index' AND name = 'document_by_owner'",
@@ -4390,10 +4435,9 @@ fn an_upgraded_database_keeps_its_steps_and_who_they_were_with() {
     assert_eq!(with, 1, "still with Sam");
     conn.execute("UPDATE step SET status = 'completed' WHERE id = 1", [])
         .unwrap();
-    assert!(
-        conn.execute("UPDATE step SET status = 'nonsense' WHERE id = 1", [])
-            .is_err()
-    );
+    // Its statuses are hunt's to check (admins can add to them), not the database's.
+    conn.execute("UPDATE step SET status = 'rescheduled' WHERE id = 1", [])
+        .unwrap();
     // Deleting a step still takes who it was with.
     conn.execute_batch("PRAGMA foreign_keys = ON; DELETE FROM step WHERE id = 1;")
         .unwrap();
@@ -5014,6 +5058,17 @@ async fn prep_is_ticked_off_and_gathers_around_interviews() {
         (link["kind"].as_str(), link["label"].as_str()),
         (Some("portal"), Some("https://careers.example/portal"))
     );
+    // A link's name is its label: kept when it's added, and changed.
+    let named = ok(&app, "POST", "/api/links", Some(json!({ "application_id": p["application_id"], "url": "https://careers.example/me", "label": "My portal" }))).await;
+    assert_eq!(named["label"], "My portal");
+    let renamed = ok(
+        &app,
+        "PATCH",
+        &format!("/api/links/{}", named["id"]),
+        Some(json!({ "label": "Their portal" })),
+    )
+    .await;
+    assert_eq!(renamed["label"], "Their portal");
     let story = ok(&app, "POST", "/api/stories", Some(json!({ "title": "Cut p99 by 60%", "situation": "Billing timed out", "themes": "Impact" }))).await;
     assert_eq!(story["label"], "Cut p99 by 60%");
 }
@@ -6097,4 +6152,227 @@ async fn the_owner_runs_the_hunt_and_a_new_one_is_closed_to_others() {
     )
     .await;
     assert_eq!(mine, theirs, "both empty, and apart");
+}
+
+#[tokio::test]
+async fn admins_change_the_lists_of_choices() {
+    let app = hunt::api::router_with_owner(test_db(), "me@example.com", "correct horse");
+    let me = basic("me@example.com", "correct horse");
+    let send = |method: &str, path: &str, body: Option<Value>| {
+        let app = app.clone();
+        let req = request(method, path, &[("authorization", &me)], body);
+        async move {
+            let res = app.oneshot(req).await.unwrap();
+            let status = res.status();
+            let v = serde_json::from_slice::<Value>(
+                &res.into_body().collect().await.unwrap().to_bytes(),
+            )
+            .unwrap_or(Value::Null);
+            (status, v)
+        }
+    };
+    // hunt's own to start with.
+    let (_, meta) = send("GET", "/api/meta", None).await;
+    assert_eq!(
+        meta["choices"]["work_mode"]["choices"][0]["value"],
+        "remote"
+    );
+    assert_eq!(meta["choices"]["step_length"]["choices"][2]["value"], "60");
+    // A new kind of employment, named; its value made from its name.
+    let mut employment = meta["choices"]["employment"]["choices"]
+        .as_array()
+        .unwrap()
+        .clone();
+    employment.push(json!({ "label": "Contract to hire" }));
+    employment[0]["label"] = json!("Permanent");
+    let (status, saved) = send(
+        "PATCH",
+        "/api/admin/settings",
+        Some(json!({ "choices": { "employment": employment, "person_role": [{ "label": "Mentor" }] } })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{saved}");
+    assert_eq!(
+        saved["choices"]["employment"]["choices"][5]["value"],
+        "contract-to-hire"
+    );
+    assert_eq!(saved["choices"]["employment"]["changed"], true);
+    // Used as the field's choices: by value or name.
+    let (status, card) = send(
+        "POST",
+        "/api/processes",
+        Some(json!({ "company": "Acme", "employment": "Contract to hire" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{card}");
+    let (_, app_row) = send(
+        "GET",
+        &format!("/api/applications/{}", card["application_id"]),
+        None,
+    )
+    .await;
+    assert_eq!(app_row["employment"], "contract-to-hire");
+    let (status, people) = send(
+        "POST",
+        &format!("/api/processes/{}/people", card["id"]),
+        Some(json!({ "name": "Sam Lee", "role": "mentor" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{people}");
+    assert_eq!(people[0]["role"], "mentor");
+    // One the list no longer has isn't taken.
+    let (status, _) = send(
+        "POST",
+        &format!("/api/processes/{}/people", card["id"]),
+        Some(json!({ "name": "Dana", "role": "recruiter" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    // What hunt relies on stays (renamed, if they like).
+    let (status, why) = send(
+        "PATCH",
+        "/api/admin/settings",
+        Some(json!({ "choices": { "work_mode": [{ "value": "remote", "label": "Remote" }] } })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert!(why["error"].as_str().unwrap().contains("Hybrid"), "{why}");
+    // Lengths are minutes.
+    let (status, _) = send(
+        "PATCH",
+        "/api/admin/settings",
+        Some(json!({ "choices": { "step_length": [{ "value": "two hours", "label": "Two hours" }] } })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    // Back to hunt's own.
+    let (_, saved) = send(
+        "PATCH",
+        "/api/admin/settings",
+        Some(json!({ "choices": { "employment": null } })),
+    )
+    .await;
+    assert_eq!(saved["choices"]["employment"]["changed"], false);
+    assert_eq!(
+        saved["choices"]["employment"]["choices"][0]["label"],
+        "Full-time"
+    );
+}
+
+#[tokio::test]
+async fn notes_steps_emails_and_links_move_to_another_application() {
+    let app = app();
+    let from = ok(
+        &app,
+        "POST",
+        "/api/processes",
+        Some(json!({ "company": "Acme" })),
+    )
+    .await;
+    let to = ok(
+        &app,
+        "POST",
+        "/api/processes",
+        Some(json!({ "company": "Globex" })),
+    )
+    .await;
+    let note = ok(
+        &app,
+        "POST",
+        "/api/notes",
+        Some(json!({ "process_id": from["id"], "body": "<p>Spoke to <b>Sam</b></p>" })),
+    )
+    .await;
+    let step = ok(
+        &app,
+        "POST",
+        "/api/steps",
+        Some(json!({ "process_id": from["id"], "title": "Screen", "format": "Coffee chat", "minutes": 20 })),
+    )
+    .await;
+    let prep = ok(
+        &app,
+        "POST",
+        "/api/prep",
+        Some(json!({ "title": "Read the blog", "description": "<p>Their <i>engineering</i> blog</p>", "process_id": from["id"], "step_id": step["id"] })),
+    )
+    .await;
+    assert_eq!(prep["description"], "<p>Their <i>engineering</i> blog</p>");
+    let link = ok(
+        &app,
+        "POST",
+        "/api/links",
+        Some(json!({ "application_id": from["application_id"], "url": "https://acme.example/portal" })),
+    )
+    .await;
+    let target = json!({ "application_id": to["application_id"] });
+    for (what, id) in [("notes", &note["id"]), ("steps", &step["id"])] {
+        let moved = ok(
+            &app,
+            "POST",
+            &format!("/api/{what}/{id}/transfer"),
+            Some(target.clone()),
+        )
+        .await;
+        assert_eq!(moved["process_id"], to["id"]);
+        let rec = ok(&app, "GET", &format!("/api/{what}/{id}"), None).await;
+        assert_eq!(rec["process_id"], to["id"], "{what}");
+    }
+    // A note's label is its words, not its markup.
+    let moved_note = ok(&app, "GET", &format!("/api/notes/{}", note["id"]), None).await;
+    assert_eq!(moved_note["label"], "Spoke to Sam");
+    // An interview's prep goes with it.
+    let prep = ok(&app, "GET", &format!("/api/prep/{}", prep["id"]), None).await;
+    assert_eq!(prep["process_id"], to["id"]);
+    let moved = ok(
+        &app,
+        "POST",
+        &format!("/api/links/{}/transfer", link["id"]),
+        Some(target.clone()),
+    )
+    .await;
+    assert_eq!(moved["application_id"], to["application_id"]);
+    // Both timelines say so.
+    for p in [&from, &to] {
+        let log = ok(
+            &app,
+            "GET",
+            &format!("/api/processes/{}/detail", p["id"]),
+            None,
+        )
+        .await["activity"]
+            .clone();
+        assert!(
+            log.as_array().unwrap().iter().any(|a| a["summary"]
+                .as_str()
+                .unwrap()
+                .starts_with("Moved step “Screen” to Globex")),
+            "{log}"
+        );
+    }
+    // Only these move, and only to an application on the board.
+    let (status, _) = call(&app, "POST", "/api/reminders/1/transfer", Some(target)).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    let lone = ok(
+        &app,
+        "POST",
+        "/api/applications",
+        Some(json!({ "company": "Initech" })),
+    )
+    .await;
+    let (status, why) = call(
+        &app,
+        "POST",
+        &format!("/api/notes/{}/transfer", note["id"]),
+        Some(json!({ "application_id": lone["id"] })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert!(
+        why["error"]
+            .as_str()
+            .unwrap()
+            .contains("isn't on the board"),
+        "{why}"
+    );
 }

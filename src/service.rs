@@ -37,7 +37,7 @@ const CARD_SQL: &str = "
              ORDER BY coalesce(r.due_at, '9'), r.id LIMIT 1) AS reminder,
            (SELECT r.due_at FROM reminder r WHERE r.process_id = p.id AND r.done_at IS NULL
              ORDER BY coalesce(r.due_at, '9'), r.id LIMIT 1) AS reminder_at,
-           a.title, a.source, a.location, a.work_mode, a.url, a.employment, a.closes_on,
+           a.title, a.reference, a.source, a.location, a.work_mode, a.url, a.employment, a.closes_on,
            a.salary_min, a.salary_max, a.currency, a.pay_period, a.salary_min_gbp, a.salary_max_gbp,
            c.id AS company_id, c.name AS company, c.logo AS company_logo, s.name AS stage,
            (SELECT count(*) FROM process_person pp WHERE pp.process_id = p.id) AS people,
@@ -572,7 +572,7 @@ impl Db {
             })?;
             let who = db.label_of("people", &Value::from(person_id));
             let summary = match &role {
-                Some(r) => format!("Added {who} to {} as {}", label(&process), role_label(r)),
+                Some(r) => format!("Added {who} to {} as {}", label(&process), db.role_label(r)),
                 None => format!("Added {who} to {}", label(&process)),
             };
             db.log(
@@ -618,8 +618,10 @@ impl Db {
                         "Updated {} on {}: role: {} → {}",
                         who,
                         label(&process),
-                        old["role"].as_str().map_or("—", role_label),
-                        role.as_deref().map_or("—", role_label)
+                        old["role"]
+                            .as_str()
+                            .map_or("—".into(), |r| db.role_label(r)),
+                        role.as_deref().map_or("—".into(), |r| db.role_label(r))
                     ),
                     Some(json!({ "role": [old["role"], role], "person_id": person_id })),
                 )?;
@@ -651,6 +653,14 @@ impl Db {
         })
     }
 
+    /// A role's name, as the admins' list has it.
+    fn role_label(&self, r: &str) -> String {
+        self.choices(crate::choices::list("person_role").expect("a list"))
+            .ok()
+            .and_then(|c| c.into_iter().find(|(v, _)| v == r).map(|(_, l)| l))
+            .unwrap_or_else(|| r.to_string())
+    }
+
     fn check_role(&self, v: Option<&Value>) -> Result<Option<String>> {
         match v
             .and_then(Value::as_str)
@@ -658,20 +668,23 @@ impl Db {
             .filter(|s| !s.is_empty())
         {
             None => Ok(None),
-            Some(s) => resource::PERSON_ROLES
-                .iter()
-                .find(|(v, l)| v.eq_ignore_ascii_case(s) || l.eq_ignore_ascii_case(s))
-                .map(|(v, _)| Some(v.to_string()))
-                .ok_or_else(|| {
-                    invalid(format!(
-                        "role {s:?} isn't one of {}",
-                        resource::PERSON_ROLES
-                            .iter()
-                            .map(|(v, _)| *v)
-                            .collect::<Vec<_>>()
-                            .join(", ")
-                    ))
-                }),
+            Some(s) => {
+                let roles = self.choices(crate::choices::list("person_role").expect("a list"))?;
+                roles
+                    .iter()
+                    .find(|(v, l)| v.eq_ignore_ascii_case(s) || l.eq_ignore_ascii_case(s))
+                    .map(|(v, _)| Some(v.clone()))
+                    .ok_or_else(|| {
+                        invalid(format!(
+                            "role {s:?} isn't one of {}",
+                            roles
+                                .iter()
+                                .map(|(v, _)| v.as_str())
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        ))
+                    })
+            }
         }
     }
 
@@ -831,10 +844,6 @@ impl Db {
     }
 }
 
-fn role_label(r: &str) -> &str {
-    resource::option_label(resource::PERSON_ROLES, r).unwrap_or(r)
-}
-
 /// `changes` is stored as JSON text; hand it out as JSON.
 pub(crate) fn parse_changes(mut rec: Record) -> Record {
     if let Some(Value::String(s)) = rec.get("changes")
@@ -843,6 +852,108 @@ pub(crate) fn parse_changes(mut rec: Record) -> Record {
         rec.insert("changes".into(), v);
     }
     rec
+}
+
+/// Moving a note, an interview step, an email or a link to another application.
+impl Db {
+    /// Move one of an application's things (`notes`, `steps`, `emails`,
+    /// `links`) to another application: a link to it, the rest to its
+    /// process (its newest open one, or else its newest). An interview's
+    /// prep goes with it. Neither may be in a cycle that has ended.
+    pub fn transfer(&self, what: &str, id: i64, application_id: i64) -> Result<Value> {
+        self.atomic(|db| {
+            let app = db.get(res("applications"), application_id)?;
+            let at = db.stamp();
+            if what == "links" {
+                let link = db.get(res("links"), id)?;
+                if link["application_id"].as_i64() == Some(application_id) {
+                    return Ok(json!(link));
+                }
+                db.exec(
+                    "UPDATE link SET application_id = ?1, updated_at = ?2 WHERE id = ?3",
+                    args![application_id, at, id],
+                )?;
+                let moved = db.get(res("links"), id)?;
+                db.log(
+                    &at,
+                    res("links"),
+                    &moved,
+                    "updated",
+                    &format!("Moved link {} to {}", label(&moved), label(&app)),
+                    Some(json!({ "application_id": [link["application_id"], application_id] })),
+                )?;
+                return Ok(json!(moved));
+            }
+            let (table, r) = match what {
+                "notes" => ("note", Some(res("notes"))),
+                "steps" => ("step", Some(res("steps"))),
+                "emails" => ("email", None),
+                _ => {
+                    return Err(invalid(format!(
+                        "{what} can't move: notes, steps, emails and links can"
+                    )));
+                }
+            };
+            let (from, name) = match r {
+                Some(r) => {
+                    let rec = db.get(r, id)?;
+                    (rec["process_id"].as_i64(), format!("{} “{}”", r.entity, label(&rec)))
+                }
+                None => {
+                    let e = db.email(id)?;
+                    (
+                        e["process_id"].as_i64(),
+                        format!("email “{}”", e["subject"].as_str().unwrap_or("")),
+                    )
+                }
+            };
+            let to = db
+                .int(
+                    "SELECT coalesce((SELECT id FROM process WHERE application_id = ?1 \
+                     ORDER BY CASE WHEN status = 'active' THEN 0 ELSE 1 END, created_at DESC, id DESC LIMIT 1), 0)",
+                    args![application_id],
+                )?;
+            if to == 0 {
+                return Err(invalid(format!(
+                    "{} isn't on the board: add it there first",
+                    label(&app)
+                )));
+            }
+            let target = db.get(res("processes"), to)?;
+            db.check_process_open(&target)?;
+            if from == Some(to) {
+                return Ok(json!({ "process_id": to }));
+            }
+            let source = from.map(|p| db.get(res("processes"), p)).transpose()?;
+            if let Some(p) = &source {
+                db.check_process_open(p)?;
+            }
+            db.exec(
+                &format!("UPDATE {table} SET process_id = ?1, updated_at = ?2 WHERE id = ?3"),
+                args![to, at, id],
+            )?;
+            if table == "step" {
+                db.exec(
+                    "UPDATE prep_item SET process_id = ?1, updated_at = ?2 WHERE step_id = ?3",
+                    args![to, at, id],
+                )?;
+            }
+            if table == "email" {
+                db.exec(
+                    "UPDATE email SET status = 'linked', matched_by = 'you', suggestions = NULL WHERE id = ?1",
+                    args![id],
+                )?;
+            }
+            // On both timelines: gone from one, come to the other.
+            let summary = format!("Moved {name} to {}", label(&target));
+            let changes = json!({ "process_id": [from, to] });
+            if let Some(p) = &source {
+                db.log(&at, res("processes"), p, "updated", &summary, Some(changes.clone()))?;
+            }
+            db.log(&at, res("processes"), &target, "updated", &summary, Some(changes))?;
+            Ok(json!({ "process_id": to }))
+        })
+    }
 }
 
 /// The reasons for closing, for clients.

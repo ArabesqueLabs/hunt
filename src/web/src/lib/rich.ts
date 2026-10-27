@@ -1,4 +1,4 @@
-// Rich text: what people write in the editor (TinyMCE) is kept as HTML.
+// Rich text: what people write in the editor (Lexical) is kept as HTML.
 // Text written before, or brought in from a page (a company's About), is
 // plain: it shows as it was written, and the editor opens it as paragraphs.
 // HTML is always cleaned before it's shown.
@@ -41,10 +41,12 @@ export function toPlain(v: string | null | undefined): string {
 }
 
 /**
- * The fields written with the editor: prose people write themselves. Not
- * a posting's text, read from its page, nor the short notes on a step or
- * a version, which show on one line.
+ * The fields written with the editor: prose people write themselves, and
+ * a posting's text (plain as it's read from its page, until it's edited).
+ * Not the short notes on a step, which show on one line.
  */
-const RICH = new Set(["memos.body", "applications.note", "companies.description", "companies.note", "people.about", "people.note",
-  "documents.description", "stories.situation", "stories.task", "stories.action", "stories.result"]);
+const RICH = new Set(["memos.body", "applications.note", "applications.comp", "applications.description", "postings.description",
+  "companies.description", "companies.note", "people.about", "people.note", "notes.body", "steps.prep_note",
+  "cycles.description", "prep.description", "documents.description", "versions.note",
+  "stories.situation", "stories.task", "stories.action", "stories.result"]);
 export const isRichField = (resource: string, field: string) => RICH.has(`${resource}.${field}`);

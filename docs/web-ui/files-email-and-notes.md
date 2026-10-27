@@ -9,7 +9,9 @@ Documents and their versions. A document is a resume, cover letter,
 portfolio, reference, certificate or transcript, screenshot, job
 description, take-home assignment, offer, contract, NDA, background check,
 right to work or ID, candidate resource, feedback or other. The list
-filters by kind, and a new file's kind is guessed from its name.
+filters by kind, and by application (those sent with its processes; an
+application's **View all files** opens it so, with **Back to application**
+above), and a new file's kind is guessed from its name.
 
 - Drop files anywhere on the page, or choose them (the drop zone is under
   the list): a file named like a document becomes its next version, and

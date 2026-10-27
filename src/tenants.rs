@@ -819,6 +819,15 @@ impl Tenants {
         self.defaults()
     }
 
+    /// The lists of choices admins can change (see [`crate::choices`]).
+    pub fn choices(&self) -> Result<Value> {
+        self.with(|db| db.all_choices())
+    }
+
+    pub fn set_choices(&self, v: &Value) -> Result<Value> {
+        self.with(|db| db.atomic(|db| db.set_choices(v)))
+    }
+
     /// How long a toast with Undo stays, in seconds: 5 unless changed, and 0
     /// for until it's used or dismissed.
     pub fn undo_seconds(&self) -> Result<u32> {
@@ -1194,6 +1203,7 @@ impl Tenants {
             "defaults": self.defaults()?,
             "site": self.site()?,
             "undo_seconds": self.undo_seconds()?,
+            "choices": self.choices()?,
             "accounts": rows,
             "totals": {
                 "active": count("active"), "pending": count("pending"),

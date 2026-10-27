@@ -19,7 +19,7 @@ const SEARCHED = ["q", "mode", ...MORE] as const;
 
 /**
  * `rows` supply the choices (sources, companies, people in use). `lead`
- * starts the row (the board's cycles); `extra` ends it (its Detailed switch).
+ * starts the row (the board's cycles); `extra` ends it (Compact or Detailed, Board or Table).
  * `onChange(filters)` runs after each change; `shown` of `total` pass.
  * Each filter that's on is a chip under the controls, to take off on its
  * own; or all of them at once, with Undo.
@@ -115,7 +115,7 @@ export function FilterBar({ rows, initial, onChange, shown, total, lead = null, 
           aria-label={n ? `Search and filter: ${n} on` : "Search and filter"} title="Search and filter" onClick={() => dialog.current?.showModal()}>
           <SysIcon name="search" />{n ? <span className="al-badge al-badge--count">{n}</span> : null}
         </button>
-        {/* Something of the page's own, at the row's end (the board's Detailed switch). */}
+        {/* Something of the page's own, at the row's end (Compact or Detailed, Board or Table). */}
         {extra ? <span className="filter-extra">{extra}</span> : null}
       </div>
       <dialog ref={dialog} id="filter-search" className="al-dialog al-dialog--md filter-dialog" aria-labelledby="filter-search-title"

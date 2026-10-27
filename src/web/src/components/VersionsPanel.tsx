@@ -10,6 +10,7 @@ import type { Row } from "../lib/types";
 import { confirmDelete } from "./dialogs";
 import { FieldControl } from "./fields";
 import { FileDrop, Preview, uploadVersion } from "./files";
+import { RichView } from "./RichText";
 import { TagChip } from "./tags";
 import { Input } from "./ui";
 
@@ -74,7 +75,7 @@ export function VersionsPanel({ doc, after = () => {}, versionId = null, editing
                   {/* Reading: its tag and note; editing: them as fields, and delete. */}
                   {editing
                     ? <div className="fields">{["tag", "note"].map((n) => <FieldControl key={n} resource="versions" field={f(n)} value={x[n]} save={async (val) => { await patch(`versions/${x.id}`, { [n]: val }); after(); }} />)}</div>
-                    : x.tag || x.note ? <p className="small">{x.tag ? <TagChip name={x.tag} /> : null}{x.note ? ` ${x.note}` : null}</p> : null}
+                    : x.tag || x.note ? <div className="small version-note">{x.tag ? <TagChip name={x.tag} /> : null}{x.note ? <RichView value={x.note} /> : null}</div> : null}
                   <div className="version-foot">
                     {sent.length
                       ? <span className="small muted">Sent with {sent.map((u, i) => <Fragment key={u.id}>{i ? ", " : ""}<a href={`/p/${u.id}`}>{u.label}</a></Fragment>)}</span>

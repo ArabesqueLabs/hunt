@@ -1,5 +1,5 @@
 // The calendar (/calendar): a month grid, a week, a day or an agenda of
-// interviews and deadlines, searched.
+// interviews, next actions and deadlines, searched.
 
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { attempt, get } from "../lib/api";
@@ -11,9 +11,9 @@ import { store, stored } from "../lib/storage";
 import type { Row } from "../lib/types";
 import { EmptyState, Input, LoadingBlock, Logo, SearchBox, SysIcon } from "../components/ui";
 
-/** What the calendar shows: interviews and deadlines, of active processes. */
-const CAL_KINDS = ["step", "closes"];
-const CAL_DEFAULTS: Record<string, string> = { view: "month", weekends: "", q: "" };
+/** What the calendar shows, of active processes: all that's coming up, each kind in its colour, and what each is called beside its checkbox. */
+const CAL_KINDS: [string, string][] = [["step", "Interviews"], ["next", "Next actions"], ["closes", "Deadlines"]];
+const CAL_DEFAULTS: Record<string, string> = { view: "month", weekends: "", hide: "", q: "" };
 /** The calendar's choices, by their names in the address. */
 const CAL_KEYS = Object.keys(CAL_DEFAULTS);
 const CAL_VIEWS = ["month", "week", "day", "agenda"];
@@ -55,14 +55,13 @@ const stepOutcome = (e: Row) => (e.kind === "step" && e.detail && e.detail !== "
 /** An event's classes: its kind, overdue, and an interview step's outcome. */
 const eventClass = (e: Row, late: boolean) => `kind-${e.kind}${late ? " late" : ""}${e.kind === "step" && e.detail ? ` step-${e.detail}` : ""}`;
 
-/** What the calendar's colours and marks mean, under it. */
+/** What the calendar's marks mean, under it (each kind's colour is its checkbox's). */
 function Legend() {
   const item = (cls: string, text: string) => <li key={cls}><span className={`cal-key ${cls}`} aria-hidden="true" />{text}</li>;
   return (
     <ul className="cal-legend" aria-label="Key">
-      {item("kind-step", "Interview")}
       {item("kind-step step-done", "Interview held")}
-      {item("kind-closes", "Application deadline")}
+      {item("kind-next late", "Overdue")}
       {S.PREFS.work_hours ? item("cal-key-off", "Outside working hours") : null}
       {item("cal-key-now", "Now")}
     </ul>
@@ -96,6 +95,10 @@ export function CalendarPage() {
   // agenda show what there is.
   const hasWeekends = f.view === "month" || f.view === "week";
   const weekends = !hasWeekends || f.weekends !== "hide";
+  // The kinds hidden, by their names in the address (hide=next,closes).
+  const hidden = f.hide.split(",").filter(Boolean);
+  const toggle = (kind: string, on: boolean) =>
+    change({ hide: CAL_KINDS.map(([k]) => k).filter((k) => (k === kind ? !on : hidden.includes(k))).join(",") });
 
   const ws = weekStart();
   const month = new Date(at.getFullYear(), at.getMonth(), 1);
@@ -123,7 +126,7 @@ export function CalendarPage() {
   const range = `${isoDay(from)}|${isoDay(to)}`;
   useEffect(() => {
     let alive = true;
-    const query = new URLSearchParams({ from: isoDay(from), to: isoDay(to), kinds: CAL_KINDS.join(","), status: "active" });
+    const query = new URLSearchParams({ from: isoDay(from), to: isoDay(to), kinds: CAL_KINDS.map(([k]) => k).join(","), status: "active" });
     if (f.q) query.set("q", f.q);
     attempt(() => get(`calendar?${query}`)).then((list) => { if (alive && list) setEvents(list); });
     return () => { alive = false; };
@@ -136,8 +139,8 @@ export function CalendarPage() {
     else { moveTo(new Date(at.getFullYear(), at.getMonth() + n, 1)); return; }
     moveTo(d);
   };
-  // Weekends hidden (in the month or the week): their days leave the grid.
-  const shown = events ? (weekends ? events : events.filter((e) => !isWeekend(parseLocal(e.at.slice(0, 10))))) : null;
+  // Kinds unticked leave it; weekends hidden (in the month or the week), their days too.
+  const shown = events ? events.filter((e) => !hidden.includes(e.kind) && (weekends || !isWeekend(parseLocal(e.at.slice(0, 10))))) : null;
   return (
     <div className="page calendar">
       <div className="al-page-head page-head">
@@ -159,6 +162,13 @@ export function CalendarPage() {
           <h2 className="cal-month">{label}</h2>
         </div>
         <div className="cal-filters">
+          <div className="cal-kinds" role="group" aria-label="Show">
+            {CAL_KINDS.map(([k, l]) => (
+              <label key={k} className={`cal-kind al-choice kind-${k}`}>
+                <Input type="checkbox" checked={!hidden.includes(k)} onChange={(e) => toggle(k, e.target.checked)} />{l}
+              </label>
+            ))}
+          </div>
           <label className="cal-kind al-choice" hidden={!hasWeekends}>
             <Input type="checkbox" checked={weekends} onChange={(e) => change({ weekends: e.target.checked ? "" : "hide" })} />Weekends
           </label>

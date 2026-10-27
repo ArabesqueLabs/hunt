@@ -10,7 +10,7 @@ import { S, changed, createStore, useShared, useStore } from "../lib/state";
 import { TAG_SHADES, tagColor, tagHueShade, tagNames, tagPaint } from "../lib/tags";
 import type { Row, Tag } from "../lib/types";
 import { Combo } from "./Combo";
-import { Select } from "./ui";
+import { Icon, Select } from "./ui";
 
 /** A tag: the design system's, in its colour (repainted wherever it shows when that changes). */
 export function TagChip({ name, children }: { name: string; children?: ReactNode }) {
@@ -182,12 +182,16 @@ function TagColours({ p, close }: { p: Pop; close: () => void }) {
 // ---- a record's tags ------------------------------------------------------------------
 
 /**
- * A record's tags, as chips to remove and a box to add (from the existing
- * tags, or a new one). Saves as it goes.
+ * A record's tags, as chips to remove and a + that opens a box to add one
+ * (from the existing tags, or a new one), closed by Escape or leaving it.
+ * Saves as it goes.
  */
 export function TagEditor({ resource, rec, onChange }: { resource: string; rec: Row; onChange?: (tags: string[]) => void }) {
   const [tags, setTags] = useState<string[]>(tagNames(rec.tags));
   const input = useRef<HTMLInputElement>(null);
+  const plus = useRef<HTMLButtonElement>(null);
+  const [adding, setAdding] = useState(false);
+  useEffect(() => { if (adding) input.current?.focus(); }, [adding]);
   const save = async (next: string[]) => {
     const saved = await attempt(() => put(`${resource}/${rec.id}/tags`, { tags: next }));
     if (!saved) return;
@@ -207,13 +211,22 @@ export function TagEditor({ resource, rec, onChange }: { resource: string; rec: 
           </ColourTagChip>
         ))}
       </span>
-      <Combo className="tag-add" placeholder="Add a tag…" label="Add a tag" allowCreate inputRef={input}
+      {adding ? <Combo className="tag-add" placeholder="Add a tag…" label="Add a tag" allowCreate inputRef={input}
+        onBlur={() => setAdding(false)}
         source={async (q) => S.TAGS
           .filter((t) => !tags.some((n) => n.toLowerCase() === t.name.toLowerCase()))
           .filter((t) => t.name.toLowerCase().includes(q.toLowerCase()))
           .map((t) => ({ value: t.name, label: t.name }))}
         onPick={(it) => { if (input.current) input.current.value = ""; save([...tags, it.value]); }}
         onKeyDown={(e) => {
+          // Escape: put the box away, back to the +.
+          if (e.key === "Escape") {
+            e.preventDefault();
+            e.stopPropagation();
+            setAdding(false);
+            setTimeout(() => plus.current?.focus());
+            return;
+          }
           // Enter with nothing highlighted: add what's typed.
           const el = input.current!;
           if (e.key === "Enter" && !e.defaultPrevented && el.value.trim()) {
@@ -223,6 +236,7 @@ export function TagEditor({ resource, rec, onChange }: { resource: string; rec: 
             save([...tags, v]);
           }
         }} />
+        : <button ref={plus} className="al-button al-button--quiet al-button--icon al-button--sm tag-plus" type="button" aria-label="Add a tag" title="Add a tag" onClick={() => setAdding(true)}><Icon name="plus" /></button>}
     </div>
   );
 }

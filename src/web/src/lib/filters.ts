@@ -53,7 +53,7 @@ export function restoreFilters() {
 
 /** A process (or application) as the filters read it. */
 export interface FilterRow {
-  process_id: number | null; application_id: number; company_id: number; company: string; title: string;
+  process_id: number | null; application_id: number; company_id: number; company: string; title: string; reference: string;
   location: string; source: string; work_mode: string; employment: string; closes_on: string;
   pay: number | null; created: string; applied: string | null; updated: string; next_step_at: string | null;
   next: Next | null; status: string; archive_reason: string | null; tags: string[]; people: Row[];
@@ -70,7 +70,7 @@ function payTop(x: Row) {
 
 export function rowFromCard(c: Card): FilterRow {
   return {
-    process_id: c.id, application_id: c.application_id, company_id: c.company_id, company: c.company, title: c.title,
+    process_id: c.id, application_id: c.application_id, company_id: c.company_id, company: c.company, title: c.title, reference: c.reference,
     location: c.location, source: c.source, work_mode: c.work_mode, employment: c.employment, closes_on: c.closes_on,
     pay: payTop(c), created: c.created_at, applied: c.applied_on, updated: c.updated_at, next_step_at: c.next_step_at,
     next: nextOf(c),
@@ -81,7 +81,7 @@ export function rowFromCard(c: Card): FilterRow {
 
 export function rowFromApplication(a: Row, company?: Row | null): FilterRow {
   return {
-    process_id: null, application_id: a.id, company_id: a.company_id, company: company?.name, title: a.title,
+    process_id: null, application_id: a.id, company_id: a.company_id, company: company?.name, title: a.title, reference: a.reference,
     location: a.location, source: a.source, work_mode: a.work_mode, employment: a.employment, closes_on: a.closes_on,
     pay: payTop(a), created: a.created_at, applied: null, updated: a.updated_at, next_step_at: null, next: null,
     status: "none", archive_reason: null, tags: tagNames(a.tags), people: [], emails: 0, files: 0, people_count: 0,
@@ -95,7 +95,7 @@ const daysFrom = (n: number) => { const d = zonedNow(); d.setDate(d.getDate() + 
 export function matchesFilters(r: FilterRow, f: Filters) {
   const lc = (s: string | null | undefined) => (s || "").toLowerCase();
   if (f.q) {
-    const text = lc([r.company, r.title, r.location, r.source, ...r.tags, ...r.people.map((p) => p.name)].join(" "));
+    const text = lc([r.company, r.title, r.reference, r.location, r.source, ...r.tags, ...r.people.map((p) => p.name)].join(" "));
     if (!lc(f.q).split(/\s+/).filter(Boolean).every((w) => text.includes(w))) return false;
   }
   if (f.attn === "next" && !r.next) return false;

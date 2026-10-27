@@ -36,7 +36,7 @@
 //! | `DELETE /api/account` | delete your own account and everything in it (`{confirm: "DELETE"}`); not the only admin's, or the only account |
 //! | `DELETE /api/data` | clear your data: cycles, applications, companies, people, notes, documents, tags (`{confirm: "CLEAR"}`); settings and the board stay |
 //! | `GET /api/account`, `POST /api/account/request` | with several people (`--tenants`): who's asking and their account; ask for one (`{name, reason, provider, agrees}`: agreeing to the terms of use) |
-//! | `PATCH /api/admin/settings` | admins: `{site}`, this hunt's `name`, an `announcement` on every page and a `contact` address for help; `{signups_open}`, whether new people may ask for an account; `{defaults}`, the language, region, time zone and currency new accounts start with; `{undo_seconds}`, how long a toast with Undo stays (5; 0 until dismissed, 60 at most). One person's hunt: its owner, `{site}`'s `name` and `announcement` |
+//! | `PATCH /api/admin/settings` | admins: `{site}`, this hunt's `name`, an `announcement` on every page and a `contact` address for help; `{signups_open}`, whether new people may ask for an account; `{defaults}`, the language, region, time zone and currency new accounts start with; `{undo_seconds}`, how long a toast with Undo stays (5; 0 until dismissed, 60 at most); `{choices}`, the lists admins can change (`{work_mode: [{value?, label}], …}`, null for hunt's own; see `choices.rs`). One person's hunt: its owner, `{site}`'s `name` and `announcement` |
 //! | `POST /api/admin/invites` | admins: `{email, name?}`, an account for someone, open for sign-ups or not |
 //! | `GET /api/admin/usage` | admins: each account's use of hunt (counts and sizes; no names or addresses) |
 //! | `GET /api/admin/overview`, `POST /api/admin/accounts/{id}/decide`, `PATCH, DELETE /api/admin/accounts/{id}?data=` | admins: every account; approve, reject, disable or enable (`{status, note}`); change role, name or CLI token; remove (with `data=1`, everything of theirs) |
@@ -56,6 +56,7 @@
 //! | `GET/POST /api/processes/{id}/emails` | a process's emails; POST an .eml file to add one |
 //! | `GET /api/processes/{id}/mail` | its Gmail search (built, and its own), label, domains and people |
 //! | `GET/DELETE /api/mail/ignores[/{id}]` | senders and domains ignored |
+//! | `POST /api/{notes,steps,emails,links}/{id}/transfer` | `{application_id}`: move it to another application (a link), or to that application's process (its newest open one); an interview's prep goes with it |
 //! | `PUT /api/steps/{id}/people` | `{person_ids: [...]}`: who an interview step is with (steps list them as `people`) |
 //! | `PUT /api/{resource}/{id}/tags` | `{tags: [names]}`: set what a record is tagged (applications, companies, people, documents); lists take `?tag=` |
 //! | `DELETE /api/stages/{id}?move_to=` | delete a stage, moving its processes |
@@ -74,6 +75,7 @@
 //! | `GET /api/take-home`, `POST /api/take-home/salary`, `POST /api/take-home/contract` | the take-home pay experiment (see [`crate::experiments`], [`crate::takehome`]): the tax years and choices; a salary's year, or the salary that leaves a take-home pay (`take_home`); a rate (`per` hour, day, week, month or year) inside and outside IR35, or the rate either side that leaves a take-home pay. Amounts in `currency` are turned to GBP at the day's rate. For anyone who may use hunt and lives in the UK (`uk_resident` in settings); a salary can bring a sign-on bonus, share `grants` (RSUs and options, vesting over the years, in their own `currency`), `benefits` in kind and a projection year by year (`raise`, `share_growth`, `refresher`, `years`) |
 //! | `GET /api/suggest/{resource}/{field}?q=` | earlier values of a field |
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -528,6 +530,7 @@ fn routes(state: AppState) -> Router {
         .route("/api/versions/{id}/file", get(download))
         .route("/api/versions/{id}/uses", get(uses))
         .route("/api/processes/bulk", post(bulk_processes))
+        .route("/api/{resource}/{id}/transfer", post(transfer))
         .route("/api/{resource}/bulk-tags", post(bulk_tags))
         .route("/api/{resource}/bulk-delete", post(bulk_delete))
         .route("/api/{resource}", get(list).post(create))
@@ -1098,16 +1101,21 @@ const LOGO: &str = include_str!("web/img/logo.svg");
 /// left to right, unless another is chosen). The app draws the rest (the
 /// web UI, built into web/dist: see web/vite.config.ts).
 async fn page(v: Viewer) -> impl IntoResponse {
-    static PAGE: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
-        // Each build's script and styles at addresses of their own, so no
-        // cache (the browser's, or Cloudflare's) serves an older one.
+    // Each build's script and styles at addresses of their own, so no
+    // cache (the browser's, or Cloudflare's) serves an older one.
+    fn naming_assets() -> String {
         let v = format!("?v={}", asset_fingerprint());
         let mut page = include_str!("web/index.html").to_string();
         for name in ASSET_NAMES {
             page = page.replace(&format!("\"{name}\""), &format!("\"{name}{v}\""));
         }
         page
-    });
+    }
+    static PAGE: std::sync::LazyLock<String> = std::sync::LazyLock::new(naming_assets);
+    let page = match watched_dist() {
+        Some(_) => Cow::Owned(naming_assets()),
+        None => Cow::Borrowed(PAGE.as_str()),
+    };
     // Someone without an account yet sees it in English.
     let chosen = v.scoped().and_then(|s| {
         with_db(&s, |db| db.setting("locale.language"))
@@ -1121,7 +1129,7 @@ async fn page(v: Viewer) -> impl IntoResponse {
         .unwrap_or(service::LANGUAGES[0]);
     (
         [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
-        PAGE.replacen(
+        page.replacen(
             r#"<html lang="en" dir="ltr">"#,
             &format!(r#"<html lang="{lang}" dir="{dir}">"#),
             1,
@@ -1150,38 +1158,61 @@ async fn icon() -> impl IntoResponse {
 async fn script() -> impl IntoResponse {
     (
         [(header::CONTENT_TYPE, "text/javascript; charset=utf-8")],
-        include_str!("web/dist/app.js"),
+        dist("app.js", include_str!("web/dist/app.js")),
     )
 }
 
-/// The rich text editor (TinyMCE), a script of its own: app.js loads it,
+/// The rich text editor (Lexical), a script of its own: app.js loads it,
 /// at its own fingerprint, the first time an editor opens.
 async fn editor_script() -> impl IntoResponse {
     (
         [(header::CONTENT_TYPE, "text/javascript; charset=utf-8")],
-        include_str!("web/dist/editor.js"),
+        dist("editor.js", include_str!("web/dist/editor.js")),
     )
 }
 
 /// The page's own script and styles, as it names them.
 const ASSET_NAMES: &[&str] = &["/style.css", "/app.js"];
 
+/// Where `make watch` builds the web UI to (HUNT_WEB_DIST), in a debug
+/// build it runs: its scripts and styles are read from there as they are
+/// now, so a change to the UI needs a reload, not a rebuild.
+fn watched_dist() -> Option<std::path::PathBuf> {
+    if cfg!(debug_assertions) {
+        std::env::var_os("HUNT_WEB_DIST").map(Into::into)
+    } else {
+        None
+    }
+}
+
+/// One of the web UI's built files (web/dist): as built into hunt, or
+/// under `make watch`, as it is now.
+fn dist(name: &str, built: &'static str) -> Cow<'static, str> {
+    watched_dist()
+        .and_then(|dir| std::fs::read_to_string(dir.join(name)).ok())
+        .map_or(Cow::Borrowed(built), Cow::Owned)
+}
+
 /// A fingerprint of the page's scripts and styles: the same while they
 /// are, different once any changes.
-fn asset_fingerprint() -> &'static str {
-    static PRINT: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
+fn asset_fingerprint() -> Cow<'static, str> {
+    fn print() -> String {
         use std::hash::{Hash, Hasher};
         let mut h = std::hash::DefaultHasher::new();
         for part in [
-            include_str!("web/dist/app.css"),
-            include_str!("web/dist/app.js"),
-            include_str!("web/dist/editor.js"),
+            dist("app.css", include_str!("web/dist/app.css")),
+            dist("app.js", include_str!("web/dist/app.js")),
+            dist("editor.js", include_str!("web/dist/editor.js")),
         ] {
             part.hash(&mut h);
         }
         format!("{:012x}", h.finish() & 0xffff_ffff_ffff)
-    });
-    &PRINT
+    }
+    static PRINT: std::sync::LazyLock<String> = std::sync::LazyLock::new(print);
+    match watched_dist() {
+        Some(_) => Cow::Owned(print()),
+        None => Cow::Borrowed(PRINT.as_str()),
+    }
 }
 
 /// How long what's served may be kept, unless it says itself. Scripts and
@@ -1231,7 +1262,7 @@ async fn caching(uri: axum::http::Uri, mut res: Response) -> Response {
 async fn style() -> impl IntoResponse {
     (
         [(header::CONTENT_TYPE, "text/css; charset=utf-8")],
-        include_str!("web/dist/app.css"),
+        dist("app.css", include_str!("web/dist/app.css")),
     )
 }
 
@@ -1304,6 +1335,8 @@ async fn meta(v: Viewer, headers: HeaderMap) -> ApiResult {
     });
     // What the admins say of this hunt, to everyone (signed in or not).
     let about = t.site()?;
+    // The lists admins can change: the fields' options, as they've made them.
+    let choices = t.choices()?;
     ok(json!({
         "access": access,
         "tenancy": tenancy,
@@ -1338,7 +1371,8 @@ async fn meta(v: Viewer, headers: HeaderMap) -> ApiResult {
         "languages": service::LANGUAGES.iter().map(|(v, l, d)| json!({"value": v, "label": l, "dir": d})).collect::<Vec<_>>(),
         "numerals": service::NUMERALS.iter().map(|(v, l)| json!({"value": v, "label": l})).collect::<Vec<_>>(),
         "uk_regions": service::UK_REGIONS.iter().map(|(v, l)| json!({"value": v, "label": l})).collect::<Vec<_>>(),
-        "person_roles": resource::PERSON_ROLES.iter().map(|(v, l)| json!({"value": v, "label": l})).collect::<Vec<_>>(),
+        "person_roles": choices["person_role"]["choices"],
+        "choices": choices,
     }))
 }
 
@@ -1511,6 +1545,22 @@ async fn board(s: Scoped, Query(q): Query<BoardQuery>) -> ApiResult {
 
 async fn move_process(s: Scoped, Path(id): Path<i64>, Json(m): Json<Move>) -> ApiResult {
     ok(with_db(&s, |db| db.move_process(id, &m))?)
+}
+
+#[derive(Deserialize)]
+struct Transfer {
+    application_id: i64,
+}
+
+/// Move a note, an interview step, an email or a link to another application.
+async fn transfer(
+    s: Scoped,
+    Path((resource, id)): Path<(String, i64)>,
+    Json(t): Json<Transfer>,
+) -> ApiResult {
+    ok(with_db(&s, |db| {
+        db.transfer(&resource, id, t.application_id)
+    })?)
 }
 
 async fn detail(s: Scoped, Path(id): Path<i64>) -> ApiResult {
@@ -2653,6 +2703,8 @@ struct AdminSettings {
     site: Option<Value>,
     /// How long a toast with Undo stays, in seconds (0: until dismissed).
     undo_seconds: Option<u32>,
+    /// Lists of choices: `{list: [{value?, label}] | null}`.
+    choices: Option<Value>,
 }
 
 /// Hunt-wide settings: its name, notice and address for help; whether new
@@ -2671,11 +2723,15 @@ async fn admin_settings(a: Admin, Json(s): Json<AdminSettings>) -> ApiResult {
         if let Some(n) = s.undo_seconds {
             a.tenants.set_undo_seconds(n)?;
         }
+        if let Some(c) = &s.choices {
+            a.tenants.set_choices(c)?;
+        }
         Ok::<_, Error>(json!({
             "signups_open": a.tenants.signups_open()?,
             "defaults": a.tenants.defaults()?,
             "site": a.tenants.site()?,
             "undo_seconds": a.tenants.undo_seconds()?,
+            "choices": a.tenants.choices()?,
         }))
     })
     .await

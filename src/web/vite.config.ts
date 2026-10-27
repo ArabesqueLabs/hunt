@@ -1,7 +1,7 @@
 // hunt's web UI, built into dist/ as one script (app.js) and one stylesheet
 // (app.css), at fixed names: the Rust service compiles them in and serves
 // them as /app.js and /style.css, fingerprinted (?v=) so no cache keeps an
-// older one. The rich text editor (TinyMCE) is a script of its own
+// older one. The rich text editor (Lexical) is a script of its own
 // (editor.js), loaded the first time an editor opens, at app.js's
 // fingerprint, built on its own (vite.editor.config.ts). `npm run build`
 // before `cargo build`.

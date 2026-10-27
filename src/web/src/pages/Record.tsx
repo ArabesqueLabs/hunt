@@ -12,6 +12,7 @@ import { R, closedWhy, optionLabel, reloadTags } from "../lib/meta";
 import { go, route, setLeaveGuard, settle } from "../lib/router";
 import { baseTitle } from "../lib/shell";
 import { store, stored } from "../lib/storage";
+import { toPlain } from "../lib/rich";
 import { tagNames } from "../lib/tags";
 import { toast } from "../lib/toast";
 import type { ResourceDef, Row } from "../lib/types";
@@ -209,7 +210,7 @@ function Record({ page, id, r, loaded, editing, versionId }: { page: string; id:
                     <button className="doc-version" type="button" aria-current={x.id === v?.id ? "true" : undefined} onClick={() => show(x)}>
                       <span className="doc-version-head"><b>{`v${x.number}`}</b><span className="doc-version-name" translate="no">{x.filename}</span></span>
                       <span className="muted small">{`${fmtSize(x.size)} · ${fmtDay(x.created_at.slice(0, 10))}`}</span>
-                      {x.tag || x.note ? <span className="small doc-version-note">{x.tag ? <TagChip name={x.tag} /> : null}{x.note ? <span translate="no">{` ${x.note}`}</span> : null}</span> : null}
+                      {x.tag || x.note ? <span className="small doc-version-note">{x.tag ? <TagChip name={x.tag} /> : null}{x.note ? <span translate="no">{` ${toPlain(x.note)}`}</span> : null}</span> : null}
                     </button>
                     <span className="small muted doc-version-sent">{sent.length
                       ? <>Sent with {sent.map((u, i) => <Fragment key={u.id}>{i ? ", " : ""}<a href={`/p/${u.id}`}>{u.label}</a></Fragment>)}</>

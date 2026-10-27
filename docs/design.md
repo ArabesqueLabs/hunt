@@ -247,9 +247,9 @@ compared in a canonical form (`posting::canonical`):
   what the whole app shares (the settings, tags, cycles, the board last
   loaded) is in `src/lib/state.ts`. Records' forms and views are built from
   `/api/meta` (`src/components/fields.tsx`).
-- Prose people write themselves (notes, About, stories) uses TinyMCE
-  (`src/components/RichText.tsx`), loaded on first use as `/editor.js`,
-  writing in the page's direction. It's kept as HTML and cleaned
+- Prose people write themselves (notes, About, stories) uses Lexical
+  (`src/editor.ts`, under the toolbar `src/components/RichText.tsx` draws),
+  loaded on first use as `/editor.js`, writing in the page's direction. It's kept as HTML and cleaned
   (DOMPurify) before it's shown; plain text from before shows as written
   (`src/lib/rich.ts`).
 - A sidebar holds the sections, with Settings at its foot. On narrow

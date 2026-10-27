@@ -1,10 +1,12 @@
 // Dialogs, the design system's: the one modal a page opens (a new
 // application, starting a cycle …), and small questions asked over whatever
-// is open, each in a dialog of its own.
+// is open, each in a dialog of its own. Closing the modal with something
+// written in it and not saved (Cancel, Escape, a click outside) asks first.
 
 import { Fragment, useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
 import { onLeave } from "../lib/router";
 import { createStore, useStore } from "../lib/state";
+import { mayDiscard } from "../lib/unsaved";
 
 // ---- the modal ------------------------------------------------------------------------
 
@@ -18,10 +20,15 @@ export function openModal(content: ReactNode, { wide = false, onClose }: { wide?
   modal.set({ content, wide, onClose, key: ++modalKey });
 }
 
-/** Close the modal. */
+/** Close the modal, what's in it done with (saved, or nothing to save). */
 export function closeModal() {
   if (modalEl?.open) modalEl.close();
   else if (modal.get()) { const m = modal.get(); modal.set(null); m?.onClose?.(); }
+}
+
+/** Close the modal without what's in it: asking first, if something's written there. */
+export function dismissModal() {
+  if (mayDiscard(modalEl)) closeModal();
 }
 
 /** Whether the modal is open. */
@@ -48,9 +55,10 @@ export function ModalHost() {
     }
   }, [m]);
   return (
-    <dialog id="modal" ref={ref} className={m?.wide ? "al-dialog wide" : "al-dialog al-dialog--md"} aria-labelledby="modal-title"
+    <dialog id="modal" ref={ref} className={m?.wide ? "al-dialog wide" : "al-dialog al-dialog--md"} aria-labelledby="modal-title" data-unsaved=""
       onClose={() => { const cur = modal.get(); modal.set(null); cur?.onClose?.(); }}
-      onClick={(e) => { if (e.target === e.currentTarget) e.currentTarget.close(); }}>
+      onCancel={(e) => { if (!mayDiscard(e.currentTarget)) e.preventDefault(); }}
+      onClick={(e) => { if (e.target === e.currentTarget && mayDiscard(e.currentTarget)) e.currentTarget.close(); }}>
       {m ? <Fragment key={m.key}>{m.content}</Fragment> : null}
     </dialog>
   );

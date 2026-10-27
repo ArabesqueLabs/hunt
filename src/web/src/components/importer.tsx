@@ -17,7 +17,7 @@ import { Field, Input, Label, Logo, Notice, Photo, Table } from "./ui";
 export const IMPORTED = ["logo", "name", "website", "linkedin", "industry", "size", "headquarters", "founded", "description"];
 export const POSTING_FIELDS = [
   "title", "url", "location", "work_mode", "employment", "salary_min", "salary_max", "currency",
-  "pay_period", "posted_on", "closes_on", "description",
+  "pay_period", "posted_on", "closes_on", "reference", "description",
 ];
 
 export interface ImportKind {

@@ -649,8 +649,8 @@ The names "hunt" and "Arabesque Labs", and their logos (`docs/logo/`,
 name or brand your copy without Arabesque Labs' written permission. The
 bundled fonts (Jost, Newsreader, IBM Plex Sans Arabic and Amiri) are under
 the SIL Open Font License 1.1: each one's licence and copyright are in
-`src/web/fonts/` (see its README). The rich text editor, TinyMCE, is
-bundled under the GNU GPL, version 2 or later.
+`src/web/fonts/` (see its README). The rich text editor, Lexical, is
+bundled under the MIT License.
 
 ---
 
