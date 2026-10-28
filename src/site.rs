@@ -79,7 +79,7 @@ impl Site {
     /// The docs: on the website, or the README on GitHub.
     pub fn docs(&self) -> String {
         self.page("/docs/")
-            .unwrap_or_else(|| format!("https://careerhunt.app/docs/"))
+            .unwrap_or_else(|| format!("{}#readme", self.source))
     }
 
     /// The footer under the app's pages: who made hunt, the docs and the
