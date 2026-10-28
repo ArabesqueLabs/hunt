@@ -1,6 +1,6 @@
 [package]
 name = "hunt"
-version = "0.20.1"
+version = "0.20.2"
 edition = "2024"
 authors = ["Arabesque Labs <https://arabesquelabs.com>"]
 homepage = "https://arabesquelabs.com"
