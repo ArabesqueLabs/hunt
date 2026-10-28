@@ -5,7 +5,7 @@
 import { useEffect, useState } from "react";
 import { loadBoard } from "../lib/board";
 import { runningCycles } from "../lib/cycles";
-import { matchesFilters, readFilters, restoreFilters, rowFromCard, type FilterRow, type Filters } from "../lib/filters";
+import { matchesFilters, placeOf, readFilters, restoreFilters, rowFromCard, type FilterRow, type Filters } from "../lib/filters";
 import { fmtDay, fmtMoney, HOME, homePay } from "../lib/format";
 import { fieldOf, optionLabel } from "../lib/meta";
 import { store, stored } from "../lib/storage";
@@ -68,10 +68,11 @@ function ApplicationsTable({ board, reload }: { board: Board; reload: () => void
     ...COLUMNS.slice(1).map((c) => ({ name: c.key, label: c.label }))]);
   const ro = !!board.read_only;
   const stages = board.stages;
+  const place = placeOf(board);
   const stageAt = new Map(stages.map((st, i) => [st.id, { name: st.name, n: i }]));
   const modes = fieldOf("applications", "work_mode").options;
   const rows: TableRow[] = stages.flatMap((st) => st.cards).map((card) => ({
-    ...rowFromCard(card), card,
+    ...rowFromCard(card, place), card,
     stage: stageAt.get(card.stage_id)!,
     payText: (() => {
       const p = homePay(card);
