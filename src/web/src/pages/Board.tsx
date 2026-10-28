@@ -6,7 +6,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type DragEvent, type Reac
 import { attempt, post } from "../lib/api";
 import {
   BOARD_SEL, boardStages, boardSwimlanes, cardDetail, cardsCount, hiddenStages, isTerminal, loadBoard, nextOf,
-  packOpen, setBoardRedraw, setPacksOpen, setStageHidden, showBoard, stageFolded, swimlaneChoices, swimlaneOpen, type Next,
+  packOpen, setBoardRedraw, setPacksOpen, setStageHidden, showBoard, stageFolded, stageNamer, swimlaneChoices, swimlaneOpen, type Next,
 } from "../lib/board";
 import { boardCycle, cycleById, cycleWeek, cycleWeeks, currentCycle, endedCycles, pickCycle, runningCycles, viewedCycle } from "../lib/cycles";
 import { activeFilters, matchesFilters, placeOf, readFilters, restoreFilters, rowFromCard, type FilterRow, type Filters } from "../lib/filters";
@@ -247,11 +247,11 @@ export function BoardPage() {
   for (const id of [...BOARD_SEL]) if (!known.has(id)) BOARD_SEL.delete(id);
   const toggleCard = (id: number) => { if (BOARD_SEL.has(id)) BOARD_SEL.delete(id); else BOARD_SEL.add(id); redraw(); };
   const ctx: Ctx = { b, ro: !!b.read_only, detailed: detail === "detailed", shown, filtering: !!activeFilters(f), drag, setDrag, over, setOver, redraw, toggleCard };
-  // How many columns fit across the page: 4, or 3 when no swimlane has more
-  // than 2, or 5 when one has more than 5.
+  // How many columns fit across the page: 5, or 3 when no swimlane has more
+  // than 2.
   const lanes = boardSwimlanes(b);
   const most = Math.max(0, ...lanes.map((g) => g.stages.length));
-  const across = most < 3 ? 3 : most > 5 ? 5 : 4;
+  const across = most < 3 ? 3 : 5;
   // Compact or Detailed cards, beside Board or Table.
   const views = (
     <>
@@ -275,7 +275,7 @@ export function BoardPage() {
       {b.read_only ? null : (
         // Selected cards (Ctrl/⌘-click): what to do with them, after them.
         <BulkBar count={BOARD_SEL.size} clear={() => { BOARD_SEL.clear(); redraw(); }}
-          actions={<ProcessActions ids={() => [...BOARD_SEL]} stages={b.stages} after={() => { BOARD_SEL.clear(); showBoard(); }} />} />
+          actions={<ProcessActions ids={() => [...BOARD_SEL]} stages={b.stages} named={stageNamer(b)} after={() => { BOARD_SEL.clear(); showBoard(); }} />} />
       )}
     </div>
   );
