@@ -12,7 +12,7 @@ import type { Row } from "../lib/types";
 import { Field, Input, Label, SearchBox, Select, SysIcon } from "./ui";
 
 /** The filters in the search dialog, after the search itself. */
-const MORE = ["watch", "pay", "source", "company", "person", "added", "applied", "closing", "loc", "emp", "reason", "has", "status", "tag"] as const;
+const MORE = ["watch", "pay", "source", "company", "person", "added", "applied", "closing", "loc", "emp", "reason", "has", "status", "stage", "lane", "tag"] as const;
 
 /** Everything the search dialog sets: what its button counts. */
 const SEARCHED = ["q", "mode", ...MORE] as const;
@@ -36,9 +36,18 @@ export function FilterBar({ rows, initial, onChange, shown, total, lead = null, 
   const uniq = <T,>(xs: T[], key: (x: T) => unknown) => [...new Map(xs.filter((x) => key(x)).map((x) => [key(x), x])).values()];
   const sources = [...new Set(rows.map((r) => (r.source || "").trim()).filter(Boolean).map((s) => s.toLowerCase()))].sort();
   const companies = uniq(rows, (r) => r.company_id).map((r) => [String(r.company_id), r.company] as [string, string]).sort((a, b) => a[1].localeCompare(b[1]));
+  // Stages and sub stages in use, as on the board; a stage's own sub stages once one's chosen.
+  const stages = uniq(rows, (r) => r.stage_name && r.stage_id).sort((a, b) => a.stage_n - b.stage_n)
+    .map((r) => [String(r.stage_id), r.stage_name] as [string, string]);
+  const inStage = uniq(rows, (r) => r.lane_name && r.lane_id).sort((a, b) => a.stage_n - b.stage_n || a.lane_n - b.lane_n);
+  const laneStage = new Map(inStage.map((r) => [String(r.lane_id), String(r.stage_id)]));
+  const lanes = inStage.filter((r) => !f.stage || String(r.stage_id) === f.stage)
+    .map((r) => [String(r.lane_id), f.stage ? r.lane_name : `${r.stage_name} › ${r.lane_name}`] as [string, string]);
   const people = uniq(rows.flatMap((r) => r.people), (p: Row) => p.id).map((p) => [String(p.id), p.name] as [string, string]).sort((a, b) => a[1].localeCompare(b[1]));
   const change = (k: keyof Filters, v: string, push = true) => {
     const next = { ...f, [k]: v };
+    // Another stage: a sub stage of the one before goes.
+    if (k === "stage" && v && next.lane && laneStage.get(next.lane) !== v) next.lane = "";
     setF(next);
     setFilters(next, { push });
     onChange(next);
@@ -69,6 +78,8 @@ export function FilterBar({ rows, initial, onChange, shown, total, lead = null, 
     reason: ["Closed", S.META.archive_reasons.map((r) => [r.value, r.label])],
     has: ["Has", [["emails", "emails"], ["files", "files sent"], ["people", "people"], ["nothing", "nothing recorded"]]],
     status: ["Status", [["active", "active"], ["archived", "closed"], ["none", "not on the board"]]],
+    stage: ["Stage", stages],
+    lane: ["Sub stage", lanes],
     tag: ["Tag", S.TAGS.map((t) => [t.name, t.name])],
   };
   /** A filter in the dialog: its name, and its choices, Any first. */
@@ -123,7 +134,7 @@ export function FilterBar({ rows, initial, onChange, shown, total, lead = null, 
         <div className="al-dialog__inner">
           <h2 className="al-dialog__title" id="filter-search-title">Search and filter</h2>
           <div className="al-dialog__body">
-            <SearchBox aria-label="Search" placeholder="Search company, role or person" autoFocus className={q ? "set" : undefined} value={q} onValue={(v) => typed("q", v)} />
+            <SearchBox aria-label="Search" placeholder="Search company, role, stage or person" autoFocus className={q ? "set" : undefined} value={q} onValue={(v) => typed("q", v)} />
             <div className="filter-fields">
               <Field><Label htmlFor="filter-mode">Work mode</Label>
                 <Select id="filter-mode" className={f.mode ? "set" : undefined} value={f.mode} onChange={(e) => change("mode", e.target.value)}>
@@ -151,6 +162,8 @@ export function FilterBar({ rows, initial, onChange, shown, total, lead = null, 
               {select("reason")}
               {select("has")}
               {select("status")}
+              {select("stage")}
+              {lanes.length || f.lane ? select("lane") : null}
               {S.TAGS.length ? select("tag") : null}
             </div>
           </div>

@@ -9,7 +9,7 @@ import {
   packOpen, setBoardRedraw, setPacksOpen, setStageHidden, showBoard, stageFolded, swimlaneChoices, swimlaneOpen, type Next,
 } from "../lib/board";
 import { boardCycle, cycleById, cycleWeek, cycleWeeks, currentCycle, endedCycles, pickCycle, runningCycles, viewedCycle } from "../lib/cycles";
-import { activeFilters, matchesFilters, readFilters, restoreFilters, rowFromCard, type FilterRow, type Filters } from "../lib/filters";
+import { activeFilters, matchesFilters, placeOf, readFilters, restoreFilters, rowFromCard, type FilterRow, type Filters } from "../lib/filters";
 import { fmtDay, longDate, nf } from "../lib/format";
 import { closedWhy, fieldOf, optionLabel } from "../lib/meta";
 import { go } from "../lib/router";
@@ -238,7 +238,8 @@ export function BoardPage() {
   const detail = cardDetail();
   // Filters hide cards (in place, so dragging still lands where it should).
   const all = [...b.stages.flatMap((st) => st.cards), ...b.archived];
-  const rows = new Map<number, FilterRow>(all.map((c) => [c.id, rowFromCard(c)]));
+  const place = placeOf(b);
+  const rows = new Map<number, FilterRow>(all.map((c) => [c.id, rowFromCard(c, place)]));
   const shown = (c: Card) => { const r = rows.get(c.id); return !r || matchesFilters(r, f); };
   const visible = boardStages(b).flatMap((st) => st.cards).filter(shown).length;
   // Selected cards stay to those on the board.
