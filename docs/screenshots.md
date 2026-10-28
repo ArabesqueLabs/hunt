@@ -67,13 +67,13 @@ Its board, read-only, as it was when it ended.
   <img src="screenshots/past-cycle-light.png" alt="A cycle that ended">
 </picture>
 
-## Prep
+## Tasks
 
 What to read, practise and rehearse, around the interviews coming up.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="screenshots/prep-dark.png">
-  <img src="screenshots/prep-light.png" alt="Prep">
+  <img src="screenshots/prep-light.png" alt="Tasks">
 </picture>
 
 ## Calendar

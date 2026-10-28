@@ -47,15 +47,22 @@
 //! | `PUT /api/owner` | one person's hunt: `{email, password}`, its owner (who signs in, and runs it), made by the launcher; then, signed in, `{email?, password?, current}` changes them, this browser staying signed in |
 //! | `POST /api/setup/done` | a new hunt's launcher is done: `GET /api/meta`'s `setup` is false from now on |
 //! | `GET/PATCH /api/settings` | one account's: `{theme: light\|dark\|auto, language, locale, numerals, clock, currency, timezone, week_start, work_hours, calendar_zones, uk_resident, uk_region, desired_take_home, desired_take_home_per, calendar_feed, bookmarklet_url, same_name: ask\|merge\|new}` |
-//! | `GET/PUT/DELETE /api/mail` | the Gmail account (`{address, password, interval}`; signs in to check), the last sync, how much waits in triage |
+//! | `GET /api/stash?status=new\|done\|dismissed`, `GET /api/stash/count` | the stash (to sort, by default), each item with `suggestion` `{to, why, target}` and, sorted, `result`; how many wait |
+//! | `POST /api/stash` | `{url?, title?, body? (or text), source?}`: keep a link or some text to sort later; text that's only a link is kept as the link |
+//! | `POST /api/stash/file?filename=&source=` | a file as the body, kept to sort later; `GET /api/stash/{id}/file[?download]` gives it back |
+//! | `POST /api/stash/{id}/convert` | `{to: memo\|note\|prep\|reminder\|link\|document, fields}`: make it into that (a note or reminder needs `process_id`, a link `application_id`), and mark it sorted |
+//! | `POST /api/stash/{id}/made` | `{entity: application\|company\|person\|…, id}`: mark it sorted, as made into a record made with its own form |
+//! | `POST /api/stash/{id}/dismiss`, `POST /api/stash/{id}/reopen` `{undo?}` | dismiss it; put it back to sort (`undo`: deleting what it was made into) |
+//! | `GET /api/stash/me` | whose stash this is: `{email, name, language, token: {name, scope}}` (for the browser extension and other apps) |
+//! | `GET/POST /api/tokens`, `DELETE /api/tokens/{id}` | your personal access tokens (never the tokens themselves); a new one (`{name, scope: stash\|full}`, its token in `secret`, shown this once); revoke one. Signed in only: never with a token |
+//! | `GET/PUT/DELETE /api/mail` | the Gmail account (`{address, password, interval}`; signs in to check), the last sync |
 //! | `PUT/DELETE /api/mail/google/client` | your Google OAuth client (the JSON file from Google Cloud), for signing in with Google |
 //! | `GET /api/mail/google/start` | where to sign in with Google: `{url, redirect}`; Google returns to `/api/mail/google/callback` |
 //! | `POST /api/mail/sync` | fetch new mail and match it to processes |
-//! | `GET /api/emails?status=triage`, `GET /api/emails/{id}` | emails, with suggested processes; one with its text |
-//! | `POST /api/emails/{id}/link` `{process_id}`, `…/unlink`, `…/ignore` `{rule?: sender\|domain}` | triage |
+//! | `GET /api/emails?status=linked\|ignored`, `GET /api/emails/{id}` | emails; one with its text |
+//! | `POST /api/emails/{id}/link` `{process_id}` | an email, linked to a process |
 //! | `GET/POST /api/processes/{id}/emails` | a process's emails; POST an .eml file to add one |
 //! | `GET /api/processes/{id}/mail` | its Gmail search (built, and its own), label, domains and people |
-//! | `GET/DELETE /api/mail/ignores[/{id}]` | senders and domains ignored |
 //! | `POST /api/{notes,steps,emails,links}/{id}/transfer` | `{application_id}`: move it to another application (a link), or to that application's process (its newest open one); an interview's prep goes with it |
 //! | `PUT /api/steps/{id}/people` | `{person_ids: [...]}`: who an interview step is with (steps list them as `people`) |
 //! | `PUT /api/{resource}/{id}/tags` | `{tags: [names]}`: set what a record is tagged (applications, companies, people, documents); lists take `?tag=` |
@@ -69,7 +76,7 @@
 //! | `POST /api/people/from-page` | what the “Send to hunt” bookmark collected from a profile: who it's about; saves nothing |
 //! | `GET, PUT, DELETE /api/people/{id}/photo`, `POST …/photo/fetch` | a person's photo, as for a company's logo |
 //! | `POST /api/companies/lookup` | `{url}`: what a company's website or LinkedIn page says about it; saves nothing |
-//! | `GET /api/calendar?from=&to=&q=&kinds=&status=` | dated things in time order: interview steps, next actions, deadlines, applied and posted dates |
+//! | `GET /api/calendar?from=&to=&q=&kinds=&status=` | dated things in time order: interview steps, next actions, tasks, deadlines, applied and posted dates |
 //! | `GET /api/calendar.ics?kinds=` | the same as iCalendar, for calendar apps to subscribe to |
 //! | `GET /api/activity?entity=&entity_id=&limit=` | the change log |
 //! | `GET /api/take-home`, `POST /api/take-home/salary`, `POST /api/take-home/contract` | the take-home pay experiment (see [`crate::experiments`], [`crate::takehome`]): the tax years and choices; a salary's year, or the salary that leaves a take-home pay (`take_home`); a rate (`per` hour, day, week, month or year) inside and outside IR35, or the rate either side that leaves a take-home pay. Amounts in `currency` are turned to GBP at the day's rate. For anyone who may use hunt and lives in the UK (`uk_resident` in settings); a salary can bring a sign-on bonus, share `grants` (RSUs and options, vesting over the years, in their own `currency`), `benefits` in kind and a projection year by year (`raise`, `share_growth`, `refresher`, `years`) |
@@ -509,16 +516,9 @@ fn routes(state: AppState) -> Router {
                 .post(restore)
                 .layer(DefaultBodyLimit::max(1024 * 1024 * 1024)),
         )
-        .route("/api/mail/ignores", get(mail_ignores))
-        .route(
-            "/api/mail/ignores/{id}",
-            axum::routing::delete(remove_mail_ignore),
-        )
         .route("/api/emails", get(list_emails))
         .route("/api/emails/{id}", get(get_email).delete(delete_email))
         .route("/api/emails/{id}/link", post(link_email))
-        .route("/api/emails/{id}/unlink", post(unlink_email))
-        .route("/api/emails/{id}/ignore", post(ignore_email))
         .route(
             "/api/processes/{id}/files/{version}",
             axum::routing::delete(detach),
@@ -528,6 +528,22 @@ fn routes(state: AppState) -> Router {
             post(upload).layer(DefaultBodyLimit::max(MAX_FILE + 64 * 1024)),
         )
         .route("/api/versions/{id}/file", get(download))
+        .route("/api/stash", get(stash).post(capture))
+        .route("/api/stash/count", get(stash_count))
+        .route("/api/stash/me", get(stash_me))
+        // Personal access tokens: made, seen and revoked signed in, never
+        // with a token.
+        .route("/api/tokens", get(tokens).post(make_token))
+        .route("/api/tokens/{id}", axum::routing::delete(revoke_token))
+        .route(
+            "/api/stash/file",
+            post(capture_file).layer(DefaultBodyLimit::max(MAX_FILE + 64 * 1024)),
+        )
+        .route("/api/stash/{id}/file", get(stash_file))
+        .route("/api/stash/{id}/convert", post(convert_stash))
+        .route("/api/stash/{id}/made", post(stash_made))
+        .route("/api/stash/{id}/dismiss", post(dismiss_stash))
+        .route("/api/stash/{id}/reopen", post(reopen_stash))
         .route("/api/versions/{id}/uses", get(uses))
         .route("/api/processes/bulk", post(bulk_processes))
         .route("/api/{resource}/{id}/transfer", post(transfer))
@@ -768,6 +784,24 @@ async fn signed_in(
     next: axum::middleware::Next,
 ) -> Response {
     let path = req.uri().path().to_string();
+    if let Some(secret) = crate::tenants::bearer(req.headers()) {
+        let t = app.tenants.clone();
+        let token = tokio::task::spawn_blocking(move || t.token(&secret))
+            .await
+            .ok()
+            .and_then(|r| r.ok().flatten());
+        let Some(token) = token else {
+            return (
+                StatusCode::UNAUTHORIZED,
+                Json(json!({ "error": "that token isn't good: it was revoked, or never was one", "account": "signed-out" })),
+            )
+                .into_response();
+        };
+        if let Some(why) = token_refuses(&token.scope, req.method(), &path) {
+            return (StatusCode::FORBIDDEN, Json(json!({ "error": why }))).into_response();
+        }
+        return next.run(req).await;
+    }
     if !app.tenants.built_in() || !is_page(&path) {
         return next.run(req).await;
     }
@@ -787,6 +821,30 @@ async fn signed_in(
         .map(|p| p.as_str())
         .unwrap_or("/");
     axum::response::Redirect::to(&format!("/login?next={}", percent(here))).into_response()
+}
+
+/// Why a personal access token with `scope` may not make this request, if
+/// it may not. No token manages tokens, signs in, or reaches the admin
+/// centre; a `stash` one only adds to the stash (and says whose it is).
+fn token_refuses(scope: &str, method: &axum::http::Method, path: &str) -> Option<&'static str> {
+    const NEVER: &[&str] = &[
+        "/api/tokens",
+        "/api/admin",
+        "/api/account",
+        "/api/data",
+        "/api/owner",
+        "/api/setup",
+    ];
+    let under = |p: &str| path == p || path.starts_with(&format!("{p}/"));
+    if !path.starts_with("/api/") || NEVER.iter().any(|p| under(p)) {
+        return Some("a token can't do that: sign in to hunt instead");
+    }
+    let stash = matches!(
+        (method.as_str(), path),
+        ("POST", "/api/stash") | ("POST", "/api/stash/file") | ("GET", "/api/stash/me")
+    );
+    (scope == "stash" && !stash)
+        .then_some("this token can only add to your stash: make one with full access for that")
 }
 
 /// A query string's value, made safe to put in an address.
@@ -1717,11 +1775,12 @@ async fn download(
     Query(q): Query<DownloadQuery>,
 ) -> Result<Response, ApiError> {
     let file = with_db(&s, |db| db.file(id))?;
-    let disposition = if q.download.is_some() {
-        "attachment"
-    } else {
-        "inline"
-    };
+    Ok(send_file(file, q.download.is_some()))
+}
+
+/// A stored file, to show (or, `download`, to save).
+fn send_file(file: crate::files::File, download: bool) -> Response {
+    let disposition = if download { "attachment" } else { "inline" };
     // A plain ASCII name for old clients, and the real one for the rest.
     let ascii: String = file
         .filename
@@ -1769,7 +1828,151 @@ async fn download(
             header::HeaderValue::from_static("sandbox"),
         );
     }
-    Ok(res)
+    res
+}
+
+// --- the stash ---------------------------------------------------------------------
+
+#[derive(Deserialize)]
+struct StashQuery {
+    status: Option<String>,
+}
+
+async fn stash(s: Scoped, Query(q): Query<StashQuery>) -> ApiResult {
+    ok(with_db(&s, |db| {
+        db.stash(q.status.as_deref().unwrap_or("new"))
+    })?)
+}
+
+async fn stash_count(s: Scoped) -> ApiResult {
+    ok(json!({ "new": with_db(&s, |db| db.stash_count())? }))
+}
+
+/// Whose stash this is: for the browser extension and other apps, to show
+/// who they send to, in their language, and with which token.
+async fn stash_me(s: Scoped, v: Viewer, headers: HeaderMap) -> ApiResult {
+    let Some(a) = v.account.as_ref() else {
+        return Err(ApiError(Error::Invalid("sign in first".into())));
+    };
+    let language = with_db(&s, |db| db.setting("locale.language"))?.unwrap_or_else(|| "en".into());
+    let t = v.app.tenants.clone();
+    let token = tokio::task::spawn_blocking(move || {
+        t.token(&crate::tenants::bearer(&headers)?).ok().flatten()
+    })
+    .await
+    .ok()
+    .flatten();
+    ok(json!({
+        "email": a.email,
+        "name": a.name,
+        "language": language,
+        "token": token,
+    }))
+}
+
+/// The one signed in (with their session, not a token: see [`token_refuses`]).
+fn me(v: &Viewer) -> Result<Account, ApiError> {
+    match &v.account {
+        Some(a) if a.status == "active" => Ok(a.clone()),
+        _ => Err(ApiError(Error::Invalid("sign in first".into()))),
+    }
+}
+
+async fn tokens(v: Viewer) -> ApiResult {
+    let a = me(&v)?;
+    ok(v.app.tenants.tokens(a.id)?)
+}
+
+#[derive(Deserialize)]
+struct NewToken {
+    name: String,
+    scope: Option<String>,
+}
+
+/// A new token: shown this once, in `secret`.
+async fn make_token(v: Viewer, Json(b): Json<NewToken>) -> ApiResult {
+    let a = me(&v)?;
+    let (token, secret) =
+        v.app
+            .tenants
+            .make_token(a.id, &b.name, b.scope.as_deref().unwrap_or("stash"))?;
+    ok(json!({ "token": token, "secret": secret }))
+}
+
+async fn revoke_token(v: Viewer, Path(id): Path<i64>) -> ApiResult {
+    let a = me(&v)?;
+    v.app.tenants.revoke_token(a.id, id)?;
+    ok(json!({ "revoked": id }))
+}
+
+async fn capture(s: Scoped, Json(c): Json<crate::stash::Capture>) -> ApiResult {
+    ok(with_db(&s, |db| db.capture(&c))?)
+}
+
+#[derive(Deserialize)]
+struct CaptureFile {
+    filename: String,
+    source: Option<String>,
+}
+
+/// A file, as the request body, kept in the stash.
+async fn capture_file(
+    s: Scoped,
+    Query(q): Query<CaptureFile>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> ApiResult {
+    let content_type = headers
+        .get(header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok());
+    ok(with_db(&s, |db| {
+        db.capture_file(&q.filename, content_type, &body, q.source.as_deref())
+    })?)
+}
+
+async fn stash_file(
+    s: Scoped,
+    Path(id): Path<i64>,
+    Query(q): Query<DownloadQuery>,
+) -> Result<Response, ApiError> {
+    let file = with_db(&s, |db| db.stash_file(id))?;
+    Ok(send_file(file, q.download.is_some()))
+}
+
+#[derive(Deserialize)]
+struct Convert {
+    to: String,
+    #[serde(default)]
+    fields: Record,
+}
+
+async fn convert_stash(s: Scoped, Path(id): Path<i64>, Json(c): Json<Convert>) -> ApiResult {
+    ok(with_db(&s, |db| db.convert_stash(id, &c.to, &c.fields))?)
+}
+
+#[derive(Deserialize)]
+struct Made {
+    entity: String,
+    id: i64,
+}
+
+async fn stash_made(s: Scoped, Path(id): Path<i64>, Json(m): Json<Made>) -> ApiResult {
+    ok(with_db(&s, |db| db.stash_made(id, &m.entity, m.id))?)
+}
+
+async fn dismiss_stash(s: Scoped, Path(id): Path<i64>) -> ApiResult {
+    ok(with_db(&s, |db| db.dismiss_stash(id))?)
+}
+
+#[derive(Deserialize)]
+struct Reopen {
+    #[serde(default)]
+    undo: bool,
+}
+
+async fn reopen_stash(s: Scoped, Path(id): Path<i64>, body: Option<Json<Reopen>>) -> ApiResult {
+    let undo = body.is_some_and(|Json(r)| r.undo);
+    ok(with_db(&s, |db| db.reopen_stash(id, undo))?)
 }
 
 async fn uses(s: Scoped, Path(id): Path<i64>) -> ApiResult {
@@ -2265,35 +2468,10 @@ async fn link_email(s: Scoped, Path(id): Path<i64>, Json(l): Json<LinkTo>) -> Ap
     ok(with_db(&s, |db| db.link_email(id, l.process_id))?)
 }
 
-async fn unlink_email(s: Scoped, Path(id): Path<i64>) -> ApiResult {
-    ok(with_db(&s, |db| db.unlink_email(id))?)
-}
-
-#[derive(Deserialize)]
-struct IgnoreRule {
-    /// "sender" or "domain": everything from them, from now on.
-    rule: Option<String>,
-}
-
-async fn ignore_email(s: Scoped, Path(id): Path<i64>, body: Option<Json<IgnoreRule>>) -> ApiResult {
-    let rule = body.and_then(|Json(r)| r.rule);
-    let n = with_db(&s, |db| db.ignore_email(id, rule.as_deref()))?;
-    ok(json!({ "ignored": n }))
-}
-
 /// Whether one person's hunt hasn't been through the launcher yet.
 fn setup_pending(app: &AppState) -> bool {
     let db = app.db.lock().unwrap_or_else(|e| e.into_inner());
     db.needs_setup().unwrap_or(false)
-}
-
-async fn mail_ignores(s: Scoped) -> ApiResult {
-    ok(with_db(&s, |db| db.mail_ignores())?)
-}
-
-async fn remove_mail_ignore(s: Scoped, Path(id): Path<i64>) -> ApiResult {
-    with_db(&s, |db| db.remove_mail_ignore(id))?;
-    ok(json!({ "removed": id }))
 }
 
 async fn settings(s: Scoped) -> ApiResult {

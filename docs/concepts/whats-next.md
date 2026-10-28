@@ -29,12 +29,13 @@ private link puts them, and your reminders, in your calendar app
 (Settings → Calendar): anyone with the link can see it, so it can be
 turned off, or replaced with a new one.
 
-## Prep
+## Tasks
 
-Prep is what to read, practise and rehearse: for a process, for one of
+Tasks are what to read, practise and rehearse: for a process, for one of
 its interview steps, or in general. A daily one (a coding exercise, say)
-keeps a streak. The Prep page puts the interviews coming up first, with
-how much of each one's prep is done.
+keeps a streak. The Tasks page can show one application's (search for it
+under **For**), and the ones not done yet are on the calendar, on their
+own date or their interview's day.
 
 **Stories** are for behavioural questions: things that happened at work,
 as situation, task, action and result, written once and told in any

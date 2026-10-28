@@ -27,9 +27,9 @@ import { Home } from "./pages/Board";
 import { CalendarPage } from "./pages/Calendar";
 import { CelebratePage } from "./pages/Celebrate";
 import { CyclesPage } from "./pages/Cycles";
+import { StashPage, SentToStash, quickCapture } from "./pages/Stash";
 import { Launcher } from "./pages/Launcher";
 import { ContactsPage, ListPage, NewRecord } from "./pages/Lists";
-import { GMAIL, InboxPage } from "./pages/Mail";
 import { NotesPage } from "./pages/Notes";
 import { PrepPage } from "./pages/Prep";
 import { RecordPage } from "./pages/Record";
@@ -75,6 +75,7 @@ function Page({ page, arg }: { page: string; arg?: string }) {
   if (page === "") return <Home />;
   if (page === "applications" && !arg) return <TablePage />;
   if (page === "p" && arg) return <ProcessLink id={arg} />;
+  if (page === "stash" && arg === "new") return <SentToStash />;
   if (page === "applications" && arg) return <ApplicationPage id={Number(arg)} processId={Number(query.get("process")) || null} editing={opensEditing(query)} />;
   if (LISTS[page]) {
     if (arg === "new") return <NewRecord page={page} />;
@@ -84,7 +85,10 @@ function Page({ page, arg }: { page: string; arg?: string }) {
   const pages: Record<string, () => ReactNode> = {
     contacts: () => <Contacts />,
     cycles: () => <CyclesPage />,
-    prep: () => <PrepPage />,
+    stash: () => <StashPage />,
+    tasks: () => <PrepPage />,
+    // Tasks were called Prep: its old address leads there.
+    prep: () => <Moved to={`/tasks${location.search}`} />,
     calendar: () => <CalendarPage />,
     settings: () => <SettingsPage />,
     notes: () => <NotesPage />,
@@ -93,7 +97,6 @@ function Page({ page, arg }: { page: string; arg?: string }) {
     celebrate: () => <CelebratePage />,
     admin: () => <AdminPage />,
     "take-home": () => <TakeHomePage />,
-    ...(GMAIL ? { inbox: () => <InboxPage /> } : {}),
   };
   if (pages[page]) return <>{pages[page]()}</>;
   return <Elsewhere />;
@@ -115,6 +118,12 @@ function Announcement() {
         onClick={() => { store("announcementClosed", text); setClosed(text); }}><SysIcon name="close" className="al-icon al-icon--sm" /></button>
     </div>
   );
+}
+
+/** A page that has a new address: it, in this one's place. */
+function Moved({ to }: { to: string }) {
+  useEffect(() => { go(to, { replace: true }); }, [to]);
+  return null;
 }
 
 /** An address that isn't one of hunt's pages: the board. */
@@ -139,12 +148,15 @@ export function App() {
     // Pages that put their own title first set it as they draw.
     if (!(LISTS[page] && arg && arg !== "new")) document.title = baseTitle();
   }, [visit]);
-  // N, anywhere but in a field or a dialog: add an application.
+  // N, anywhere but in a field or a dialog: add an application. I: keep
+  // something in the stash.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "n" || e.metaKey || e.ctrlKey || e.altKey || e.defaultPrevented) return;
+      if (!["n", "i"].includes(e.key) || e.metaKey || e.ctrlKey || e.altKey || e.defaultPrevented) return;
       if ((e.target as Element).closest?.("input, textarea, select, [contenteditable], dialog[open]") || document.querySelector("dialog[open]")) return;
-      if (account || launching || !runningCycles().length || viewedCycle()) return;
+      if (account || launching) return;
+      if (e.key === "i") { e.preventDefault(); quickCapture(); return; }
+      if (!runningCycles().length || viewedCycle()) return;
       e.preventDefault();
       newApplication();
     };

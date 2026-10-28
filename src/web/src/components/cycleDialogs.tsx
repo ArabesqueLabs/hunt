@@ -121,7 +121,7 @@ function ResumeCycle({ c }: { c: Cycle }) {
       <h2 className="al-dialog__title" id="modal-title">{`Resume ${c.name}?`}</h2>
       <div className="al-dialog__body">
         <p>It runs again, from where it ended: its board can change once more, and it counts as active.</p>
-        <p className="muted small">Reminders and prep put away when it ended stay that way. It can be ended again any time.</p>
+        <p className="muted small">Reminders and tasks put away when it ended stay that way. It can be ended again any time.</p>
       </div>
       <div className="al-dialog__actions">
         <button className="al-button" type="button" onClick={dismissModal}>Cancel</button>
@@ -204,7 +204,7 @@ function EndCycle({ c, b, own }: { c: Cycle; b: Board; own: string[] }) {
             <li>{open === 1 ? "1 open application is kept as it is: stage, sub stage, timeline, notes and files." : `${open} open applications are kept as they are: stage, sub stage, timeline, notes and files.`}</li>
             <li>{b.archived_total === 1 ? "1 closed application stays closed, inside the cycle." : `${b.archived_total} closed applications stay closed, inside the cycle.`}</li>
             {off ? <li translate="no">{`${off.company} moves to ${b.stages[b.stages.length - 1]?.name}.`}</li> : null}
-            <li>Open reminders and prep for these applications are closed. General prep stays.</li>
+            <li>Open reminders and tasks for these applications are closed. General tasks stay.</li>
             {others ? <li>Your other running cycles are not affected.</li> : null}
             <li>You can look at its board any time under Cycles.</li>
           </ul>

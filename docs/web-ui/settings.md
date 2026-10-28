@@ -33,8 +33,16 @@ long as Admin → General says); adding something is said, without Undo.
 - **Pay calculator:** whether you live in the UK, and which part (for
   the Pay calculator), and the take-home pay you want, a week, month or year.
 - **Backup and import.**
-- **LinkedIn bookmarklet** (folded at first): the bookmark, the address it
-  opens, and what to do about a name already here.
+- **Connected apps:** ways to send things to your stash from outside hunt.
+  - **Browser extension:** how to connect it (see
+    [`extension/`](../../extension/README.md)).
+  - **Access tokens:** for the extension, an iOS Shortcut or your own
+    scripts. Each has a name, and can either only add to your stash or
+    have full access (everything you can do, except tokens, your sign-in
+    and Admin). A new token is shown once. The list says when each was
+    made and last used, and **Revoke** stops one at once.
+  - **“Send to hunt” bookmark:** the bookmarklet, the address it opens,
+    and what to do about a name already here.
 - **Signing in** (at the bottom of General): change your email address
   or password (with the one now; a new password ends your other
   sessions), and Log out. Behind Cloudflare Access or a sign-in proxy, you

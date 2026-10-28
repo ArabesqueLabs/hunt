@@ -338,7 +338,7 @@ impl Db {
 }
 
 /// A file from a row of (name, content type, contents).
-fn file_of(row: crate::store::Row, name: impl Fn(&str) -> String) -> File {
+pub(crate) fn file_of(row: crate::store::Row, name: impl Fn(&str) -> String) -> File {
     let mut values = row.into_iter().map(|(_, v)| v);
     let text = |v: Option<Sql>| match v {
         Some(Sql::Text(t)) => t,
@@ -388,7 +388,7 @@ pub fn size(n: i64) -> String {
     }
 }
 
-fn guess_type(filename: &str) -> &'static str {
+pub(crate) fn guess_type(filename: &str) -> &'static str {
     let ext = filename
         .rsplit_once('.')
         .map(|(_, e)| e.to_lowercase())

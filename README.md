@@ -331,7 +331,14 @@ docker run -e HUNT_ADMIN_EMAIL=you@example.com -e HUNT_ADMIN_PASSWORD='a long pa
   backup. A new one ends that account's other sessions. They need 8
   characters or more; a wrong one costs a second.
 - **The CLI** signs in as an account: set `HUNT_EMAIL` and `HUNT_PASSWORD`
-  where you run `hunt`.
+  where you run `hunt`, or `HUNT_TOKEN` to an access token.
+- **Access tokens** (Settings → Connected apps) let apps act as you: the
+  [browser extension](extension/README.md), an iOS Shortcut, a script.
+  They're sent as `Authorization: Bearer hunt_…`. Each one either only adds
+  to your stash, or has full access to what you can do, except tokens, your
+  sign-in and the admin centre. Only a token's SHA-256 is kept, so it's
+  shown once. Revoking one stops it at once, and a disabled account's
+  tokens stop with it.
 - **Forgotten it?** Start hunt with `HUNT_ADMIN_EMAIL` and
   `HUNT_ADMIN_PASSWORD` again: the password replaces that admin's.
 - **`HUNT_PASSWORD`**, which once kept a hunt to whoever knew it, is now
@@ -414,6 +421,21 @@ token: set `HUNT_ACCESS_CLIENT_ID` and `HUNT_ACCESS_CLIENT_SECRET` to its
 id and secret, and `HUNT_URL` to the public address, and set its Client ID
 as the account's CLI token in the admin centre. The "Send to hunt"
 bookmarklet opens hunt in a tab, so it signs in like any other visit.
+
+Apps that send to your stash with an access token have to get past Access
+first:
+
+- **The browser extension** sends your browser's Access cookie, so it gets
+  in when you're signed in to hunt in that browser. When the sign-in has
+  expired, it says so and opens hunt for you to sign in again.
+- **Anything without a browser** (an iOS Shortcut, `curl`) needs an Access
+  service token with a Service Auth policy. It sends
+  `CF-Access-Client-Id` and `CF-Access-Client-Secret` alongside the hunt
+  token. The extension's settings take a service token too.
+- **Or** add a Bypass policy for just `/api/stash` (as for the calendar's
+  `/api/calendar/`), so hunt's token is the only check there. This is
+  simpler but weaker: anyone can reach that path, though they can't do
+  anything there without a token.
 
 ## Several people (multi-user)
 

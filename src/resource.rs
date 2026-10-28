@@ -943,6 +943,50 @@ pub static RESOURCES: &[Resource] = &[
         process_sql: None,
         taggable: false,
     },
+    // Anything kept to sort later (src/stash.rs): a link, some text, a
+    // file. Sorted, it becomes something else in hunt, or is dismissed.
+    Resource {
+        name: "stash",
+        entity: "stash item",
+        title: "Stash",
+        table: "stash_item",
+        fields: &[
+            defaulted(readonly(field(
+                "kind",
+                "Kind",
+                Enum {
+                    options: STASH_KINDS,
+                },
+            ))),
+            hint(field("url", "Link", Url), "https://…"),
+            field("title", "Title", Text),
+            hint(
+                field("body", "Text", LongText),
+                "A note, or what was selected",
+            ),
+            readonly(field("filename", "File", Text)),
+            defaulted(readonly(field(
+                "source",
+                "From",
+                Enum {
+                    options: STASH_SOURCES,
+                },
+            ))),
+            defaulted(field(
+                "status",
+                "Status",
+                Enum {
+                    options: STASH_STATUSES,
+                },
+            )),
+        ],
+        label_sql: "coalesce(nullif(t.title, ''), t.filename, t.url, substr(t.body, 1, 120), 'Item')",
+        joins: "",
+        search_sql: "coalesce(t.title, '') || ' ' || coalesce(t.url, '') || ' ' || coalesce(t.body, '') || ' ' || coalesce(t.filename, '')",
+        order_sql: "t.created_at DESC, t.id DESC",
+        process_sql: None,
+        taggable: false,
+    },
 ];
 
 /// How a cycle ended.
@@ -956,6 +1000,31 @@ pub const CYCLE_OUTCOMES: &[(&str, &str)] = &[
 /// When a step reminds you of itself.
 pub const STEP_REMINDERS: &[(&str, &str)] =
     &[("hour", "An hour before"), ("day", "The day before")];
+
+pub const STASH_KINDS: &[(&str, &str)] = &[
+    ("link", "Link"),
+    ("text", "Text"),
+    ("file", "File"),
+    ("email", "Email"),
+];
+
+/// Where a stash item came from.
+pub const STASH_SOURCES: &[(&str, &str)] = &[
+    ("app", "hunt"),
+    ("bookmarklet", "The bookmarklet"),
+    ("share", "Shared from a phone"),
+    ("shortcut", "An Apple Shortcut"),
+    ("email", "Email"),
+    ("extension", "The browser extension"),
+    ("cli", "The command line"),
+    ("api", "The API"),
+];
+
+pub const STASH_STATUSES: &[(&str, &str)] = &[
+    ("new", "To sort"),
+    ("done", "Sorted"),
+    ("dismissed", "Dismissed"),
+];
 
 pub const LINK_KINDS: &[(&str, &str)] = &[
     ("portal", "Candidate portal"),

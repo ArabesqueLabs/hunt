@@ -16,6 +16,9 @@ const ACCESS_SECRET_VAR: &str = "HUNT_ACCESS_CLIENT_SECRET";
 /// password, as they sign in at /login.
 const EMAIL_VAR: &str = "HUNT_EMAIL";
 const PASSWORD_VAR: &str = "HUNT_PASSWORD";
+/// Or a personal access token of theirs, made in Settings → Connected apps
+/// (used in place of the address and password).
+const TOKEN_VAR: &str = "HUNT_TOKEN";
 /// Behind a sign-in proxy, from an address hunt trusts as the proxy's (the
 /// same machine, say): its header (HUNT_AUTH_HEADER), saying who's asking
 /// (HUNT_USER).
@@ -27,6 +30,7 @@ pub struct Client {
     agent: Agent,
     access: Option<(String, String)>,
     owner: Option<(String, String)>,
+    token: Option<String>,
     user: Option<(String, String)>,
 }
 
@@ -51,6 +55,7 @@ impl Client {
                 (Ok(e), Ok(p)) if !e.is_empty() && !p.is_empty() => Some((e, p)),
                 _ => None,
             },
+            token: std::env::var(TOKEN_VAR).ok().filter(|t| !t.is_empty()),
             user: match (std::env::var(AUTH_HEADER_VAR), std::env::var(USER_VAR)) {
                 (Ok(h), Ok(u)) if !h.is_empty() && !u.is_empty() => Some((h, u)),
                 _ => None,
@@ -59,12 +64,15 @@ impl Client {
     }
 
     /// A request to the API, with the service token if there is one, the
-    /// owner's address and password if there are those, and who's asking,
-    /// behind a sign-in proxy.
+    /// account's token, or its address and password, if there are those,
+    /// and who's asking, behind a sign-in proxy.
     fn with_access<B>(&self, req: ureq::RequestBuilder<B>) -> ureq::RequestBuilder<B> {
-        let req = match &self.owner {
-            Some((email, password)) => req.header("Authorization", hunt_basic(email, password)),
-            None => req,
+        let req = match (&self.token, &self.owner) {
+            (Some(token), _) => req.header("Authorization", format!("Bearer {token}")),
+            (None, Some((email, password))) => {
+                req.header("Authorization", hunt_basic(email, password))
+            }
+            (None, None) => req,
         };
         let req = match &self.user {
             Some((header, user)) => req.header(header.as_str(), user.as_str()),

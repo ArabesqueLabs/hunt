@@ -16,7 +16,6 @@ import { LOC, fmtDay, fmtSize, fmtStamp, HOME, isOverdue, isoToday, parseLocal, 
 import { R, closedWhy, listOf, optionLabel } from "../lib/meta";
 import { go, route, setLeaveGuard } from "../lib/router";
 import { baseTitle } from "../lib/shell";
-import { store } from "../lib/storage";
 import { t } from "../lib/i18n";
 import { toast } from "../lib/toast";
 import type { Row } from "../lib/types";
@@ -35,7 +34,7 @@ import { isRich, toPlain } from "../lib/rich";
 import { TagEditor } from "../components/tags";
 import { Field, Icon, Input, Label, LoadingPage, Logo, Notice, Optional, Photo, Select, Table, TextArea, dotted } from "../components/ui";
 import { acceptOffer, atOffer, isAcceptedLane } from "./Celebrate";
-import { PRIORITY_ORDER, isDone, openPrepAdding, prepState } from "./Prep";
+import { PRIORITY_ORDER, isDone, openPrepAdding } from "./Prep";
 import { PayPanel } from "./TakeHome";
 
 // ---- formatting text that was pasted in ---------------------------------------
@@ -1593,15 +1592,14 @@ function Application({ id, s, editing, readLink }: { id: number; s: Loaded; edit
     );
   }
 
-  /** Its prep: how far along, and what's next. */
+  /** Its tasks: how far along, and what's next. */
   function prepPanel() {
     const p = s.process;
     if (!p) return null;
     const mine = s.prep.filter((x) => x.status !== "closed");
     const done = mine.filter(isDone).length;
     const open = mine.filter((x) => !isDone(x)).sort((a, b) => PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority]).slice(0, 3);
-    const toPrep = () => store("prep", JSON.stringify({ ...prepState(), tab: "tasks", for: String(p.id), step: "" }));
-    return panel("prep", "Prep", { action: <a className="al-link small" href="/prep" onClick={(e) => { e.preventDefault(); toPrep(); go("/prep"); }}>Open in Prep</a> },
+    return panel("prep", "Tasks", { action: <a className="al-link small" href={`/tasks?for=${p.id}`}>Open in Tasks</a> },
       ...(mine.length ? [
         <span key="bar" className="prep-bar" aria-hidden="true"><span style={{ inlineSize: `${(done / mine.length) * 100}%` }} /></span>,
         <span key="count" className="muted small">{`${done} of ${mine.length} done`}</span>,
@@ -1617,10 +1615,10 @@ function Application({ id, s, editing, readLink }: { id: number; s: Loaded; edit
             ))}
           </ul>
         ) : null,
-      ] : [<p key="none" className="muted small">Nothing to prepare yet.</p>]),
+      ] : [<p key="none" className="muted small">No tasks yet.</p>]),
       ended() ? null : (
         <button key="add" className="al-button al-button--quiet al-button--sm app-panel-add" type="button" aria-haspopup="dialog" onClick={() => openPrepAdding(p.id, () => reload())}>
-          <Icon name="plus" /><span>{`Add prep for ${s.company.name}`}</span></button>
+          <Icon name="plus" /><span>{`Add a task for ${s.company.name}`}</span></button>
       ));
   }
 

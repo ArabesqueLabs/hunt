@@ -361,11 +361,14 @@ export async function importSentProfile(data: string | null, go: (path: string) 
  * The “Send to hunt” bookmarklet. On a LinkedIn profile it collects the
  * page's text (hunt reads it) and opens hunt with it, in a new tab: opening
  * a page isn't something LinkedIn's security rules stop, as sending data
- * from its page would be.
+ * from its page would be. On any other page, it keeps the page (its link,
+ * title and what's selected) in the stash, the same way.
  */
 export function profileBookmarklet(origin = location.origin) {
   const code = `(()=>{const H=${JSON.stringify(origin)};
-if(!/(^|\\.)linkedin\\.com$/.test(location.hostname)||!/^\\/in\\//.test(location.pathname)){alert("Open someone's LinkedIn profile first, then click “Send to hunt”.");return}
+const E=encodeURIComponent;
+if(!/(^|\\.)linkedin\\.com$/.test(location.hostname)||!/^\\/in\\//.test(location.pathname)){const s=String(getSelection()||"").trim().slice(0,4000);
+window.open(H+"/stash/new?url="+E(location.href)+"&title="+E(document.title)+(s?"&text="+E(s):""),"_blank");return}
 const t=e=>(e&&e.innerText||"").trim();
 const n=document.querySelector("main h1")||document.querySelector("h1");
 const top=n&&(n.closest("section")||n.parentElement);
@@ -377,6 +380,6 @@ const c=document.querySelector('[aria-label^="Current company"]');
 const d={url:location.href.split("?")[0],title:document.title,name:t(n),top:t(top).slice(0,3000),
 about:t(sec("about")).slice(0,4000),experience:t(sec("experience")).slice(0,2500),
 company:c?c.getAttribute("aria-label")||"":"",photo:ph.s};
-window.open(H+"/linkedin?d="+encodeURIComponent(JSON.stringify(d)),"_blank")})()`;
+window.open(H+"/linkedin?d="+E(JSON.stringify(d)),"_blank")})()`;
   return `javascript:${encodeURIComponent(code.replace(/\n/g, ""))}`;
 }

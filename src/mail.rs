@@ -14,8 +14,8 @@
 //! 5. a process's own Gmail search, when it has one.
 //!
 //! When several processes fit and the role title doesn't pick one, or a
-//! message only mentions a company, it waits in triage with suggestions:
-//! nothing ambiguous is linked by guessing.
+//! message only mentions a company, it isn't kept: nothing ambiguous is
+//! linked by guessing, and the next sync looks at it again.
 //!
 //! The database is never held while the network is used: a sync plans
 //! (database), fetches (network), then applies (database).
@@ -663,15 +663,15 @@ pub struct Plan {
     pub recent_threads: Vec<String>,
     /// Gmail message ids already stored.
     pub known: HashSet<String>,
-    /// Ignore rules: (kind, value).
-    pub ignored: Vec<(String, String)>,
 }
 
 /// Where a message goes.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Verdict {
     Link(i64, &'static str),
-    Triage(Vec<i64>, &'static str),
+    /// Could be about any of these: not kept, so a later sync, knowing more
+    /// (a thread linked, a person added), can decide.
+    Unsure(Vec<i64>, &'static str),
     Ignore(&'static str),
 }
 
@@ -686,7 +686,7 @@ fn norm(s: &str) -> String {
     format!(" {} ", words.join(" "))
 }
 
-fn mentions(text: &str, name: &str) -> bool {
+pub(crate) fn mentions(text: &str, name: &str) -> bool {
     let name = norm(name);
     name.trim() != "" && norm(text).contains(&name)
 }
@@ -740,15 +740,6 @@ impl Plan {
         }
     }
 
-    fn is_ignored(&self, m: &Message) -> bool {
-        self.ignored
-            .iter()
-            .any(|(kind, value)| match kind.as_str() {
-                "sender" => m.from_addr.eq_ignore_ascii_case(value),
-                _ => at_domain(&m.from_addr, &value.to_lowercase()),
-            })
-    }
-
     /// Of several processes, the one a message is about: active ones first,
     /// then by the role named in the subject, then in the text.
     fn narrow(&self, mut ids: Vec<i64>, m: &Message) -> Vec<i64> {
@@ -776,7 +767,7 @@ impl Plan {
         let ids = self.narrow(ids, m);
         match ids.as_slice() {
             [one] => Verdict::Link(*one, by),
-            _ => Verdict::Triage(ids, by),
+            _ => Verdict::Unsure(ids, by),
         }
     }
 
@@ -822,9 +813,6 @@ impl Plan {
         // 2. Its thread.
         if let Some(id) = m.gm_thrid.as_ref().and_then(|t| self.threads.get(t)) {
             return Verdict::Link(*id, "thread");
-        }
-        if self.is_ignored(m) {
-            return Verdict::Ignore("ignored sender");
         }
         let addrs: Vec<&String> = std::iter::once(&m.from_addr)
             .chain(&m.to)
@@ -890,7 +878,7 @@ impl Plan {
         }
         named.sort_unstable();
         named.dedup();
-        Verdict::Triage(self.narrow(named, m), "mention")
+        Verdict::Unsure(self.narrow(named, m), "mention")
     }
 }
 
@@ -943,7 +931,6 @@ fn search_of(t: &Target) -> Option<String> {
 pub struct Report {
     pub fetched: usize,
     pub linked: usize,
-    pub triage: usize,
     pub labels_made: usize,
 }
 
@@ -1095,23 +1082,14 @@ fn fetch_and_match(db: &Mutex<Db>) -> Result<Report> {
         report.fetched = matched.len();
         let mut linked: HashMap<i64, usize> = HashMap::new();
         for (m, verdict) in &matched {
-            if let Verdict::Link(id, _) = verdict {
-                *linked.entry(*id).or_default() += 1;
+            match verdict {
+                Verdict::Link(id, _) => *linked.entry(*id).or_default() += 1,
+                Verdict::Unsure(..) => continue,
+                Verdict::Ignore(_) => {}
             }
             d.store_email(m, verdict, &plan.account)?;
         }
-        // Mail waiting in triage may fit now: a thread linked, a person added.
-        for (id, n) in d.rematch_triage(&plan)? {
-            *linked.entry(id).or_default() += n;
-        }
         report.linked = linked.values().sum();
-        for (m, _) in &matched {
-            let waiting = d.int(
-                "SELECT count(*) FROM email WHERE gm_msgid = ?1 AND status = 'triage'",
-                args![m.gm_msgid],
-            )?;
-            report.triage += (waiting > 0) as usize;
-        }
         let at = d.stamp();
         for (id, n) in linked {
             let p = d.get(res("processes"), id)?;
@@ -1158,7 +1136,7 @@ fn fetch_new(
 
 /// Columns of an email, without its body.
 const EMAIL_COLUMNS: &str = "e.id, e.process_id, e.status, e.message_id, e.gm_thrid, e.from_addr, e.from_name, \
-    e.to_addrs, e.cc_addrs, e.subject, e.snippet, e.sent_at, e.outgoing, e.labels, e.matched_by, e.suggestions, \
+    e.to_addrs, e.cc_addrs, e.subject, e.snippet, e.sent_at, e.outgoing, e.labels, e.matched_by, \
     e.created_at, e.updated_at";
 
 impl Db {
@@ -1242,9 +1220,8 @@ impl Db {
         self.set_setting("mail.password", stored.as_deref())
     }
 
-    /// The connection, the last sync, what waits in triage.
+    /// The connection and the last sync.
     pub fn mail_status(&self) -> Result<Value> {
-        let triage = self.int("SELECT count(*) FROM email WHERE status = 'triage'", &[])?;
         let report = self
             .setting("mail.last_report")?
             .and_then(|r| serde_json::from_str::<Value>(&r).ok());
@@ -1262,7 +1239,6 @@ impl Db {
             "last_sync": self.setting("mail.last_sync")?,
             "last_report": report,
             "last_error": self.setting("mail.last_error")?,
-            "triage": triage,
         }))
     }
 
@@ -1374,12 +1350,6 @@ impl Db {
                 plan.known.insert(id.to_string());
             }
         }
-        for r in self.query("SELECT kind, value FROM mail_ignore", &[])? {
-            plan.ignored.push((
-                r["kind"].as_str().unwrap_or_default().into(),
-                r["value"].as_str().unwrap_or_default().into(),
-            ));
-        }
         Ok(plan)
     }
 
@@ -1402,10 +1372,9 @@ impl Db {
     /// Keep a message, as the verdict says. One already kept (the same
     /// Message-ID, from a dropped file) gets the Gmail ids instead.
     fn store_email(&self, m: &Message, verdict: &Verdict, account: &str) -> Result<i64> {
-        let (status, process_id, by, suggestions) = match verdict {
-            Verdict::Link(id, by) => ("linked", Some(*id), *by, None),
-            Verdict::Triage(ids, by) => ("triage", None, *by, Some(json!(ids).to_string())),
-            Verdict::Ignore(by) => ("ignored", None, *by, None),
+        let (status, process_id, by) = match verdict {
+            Verdict::Link(id, by) => ("linked", Some(*id), *by),
+            Verdict::Unsure(_, by) | Verdict::Ignore(by) => ("ignored", None, *by),
         };
         if let Some(mid) = &m.message_id {
             let existing = self.int("SELECT id FROM email WHERE message_id = ?1", args![mid])?;
@@ -1427,9 +1396,9 @@ impl Db {
         let outgoing = !account.is_empty() && m.from_addr.eq_ignore_ascii_case(account);
         self.insert(
             "INSERT INTO email (process_id, status, message_id, gm_msgid, gm_thrid, from_addr, from_name, \
-               to_addrs, cc_addrs, subject, snippet, body, sent_at, outgoing, labels, matched_by, suggestions, \
+               to_addrs, cc_addrs, subject, snippet, body, sent_at, outgoing, labels, matched_by, \
                created_at, updated_at) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?18)",
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?17)",
             args![
                 process_id,
                 status,
@@ -1447,81 +1416,12 @@ impl Db {
                 outgoing,
                 json!(m.labels).to_string(),
                 by,
-                suggestions,
                 at
             ],
         )
     }
 
-    /// A stored email as a message again, to match it once more.
-    fn message_of(r: &Record) -> Message {
-        let s = |k: &str| r.get(k).and_then(Value::as_str).unwrap_or("").to_string();
-        let list = |k: &str| -> Vec<String> {
-            s(k).split(',')
-                .map(|x| x.trim().to_string())
-                .filter(|x| !x.is_empty())
-                .collect()
-        };
-        Message {
-            gm_msgid: None,
-            gm_thrid: r.get("gm_thrid").and_then(Value::as_str).map(String::from),
-            labels: serde_json::from_str(&s("labels")).unwrap_or_default(),
-            message_id: None,
-            from_addr: s("from_addr"),
-            from_name: s("from_name"),
-            to: list("to_addrs"),
-            cc: list("cc_addrs"),
-            subject: s("subject"),
-            sent_at: s("sent_at"),
-            body: s("body"),
-        }
-    }
-
-    /// Match what's in triage again; links what now fits. How many were
-    /// linked, by process.
-    fn rematch_triage(&self, plan: &Plan) -> Result<HashMap<i64, usize>> {
-        let mut linked = HashMap::new();
-        let at = self.stamp();
-        for r in self.query(
-            "SELECT * FROM email WHERE status = 'triage' ORDER BY sent_at",
-            &[],
-        )? {
-            let id = r["id"].as_i64().unwrap_or(0);
-            let before: HashSet<i64> = r["suggestions"]
-                .as_str()
-                .and_then(|s| serde_json::from_str::<Vec<i64>>(s).ok())
-                .unwrap_or_default()
-                .into_iter()
-                .collect();
-            match plan.classify(&Db::message_of(&r), &before) {
-                Verdict::Link(pid, by) => {
-                    self.exec(
-                        "UPDATE email SET status = 'linked', process_id = ?1, matched_by = ?2, \
-                         suggestions = NULL, updated_at = ?3 WHERE id = ?4",
-                        args![pid, by, at, id],
-                    )?;
-                    *linked.entry(pid).or_default() += 1;
-                }
-                Verdict::Ignore("ignored sender") => {
-                    self.exec(
-                        "UPDATE email SET status = 'ignored', updated_at = ?1 WHERE id = ?2",
-                        args![at, id],
-                    )?;
-                }
-                Verdict::Triage(ids, _) => {
-                    self.exec(
-                        "UPDATE email SET suggestions = ?1 WHERE id = ?2",
-                        args![json!(ids).to_string(), id],
-                    )?;
-                }
-                Verdict::Ignore(_) => {}
-            }
-        }
-        Ok(linked)
-    }
-
-    /// Emails: in triage, or a process's. With each, a link to it in Gmail
-    /// and, in triage, the processes suggested.
+    /// Emails: by status, or a process's. With each, a link to it in Gmail.
     pub fn emails(&self, status: Option<&str>, process_id: Option<i64>) -> Result<Vec<Record>> {
         let mut rows = self.query(
             &format!(
@@ -1564,22 +1464,6 @@ impl Db {
                     )),
                 );
             }
-            if let Some(ids) = r
-                .get("suggestions")
-                .and_then(Value::as_str)
-                .and_then(|s| serde_json::from_str::<Vec<i64>>(s).ok())
-            {
-                let named: Vec<Value> = ids
-                    .iter()
-                    .filter_map(|id| self.card(*id).ok())
-                    .map(|c| {
-                        json!({ "id": c["id"], "company": c["company"], "company_id": c["company_id"],
-                                "company_logo": c["company_logo"], "title": c["title"], "status": c["status"],
-                                "stage": c["stage"] })
-                    })
-                    .collect();
-                r.insert("suggested".into(), Value::Array(named));
-            }
             r.insert(
                 "labels".into(),
                 r.get("labels")
@@ -1591,18 +1475,16 @@ impl Db {
         Ok(())
     }
 
-    /// Link an email (and the rest of its thread waiting in triage) to a
-    /// process.
+    /// Link an email to a process.
     pub fn link_email(&self, id: i64, process_id: i64) -> Result<Record> {
         self.atomic(|db| {
             let e = db.email(id)?;
             let p = db.get(res("processes"), process_id)?;
             let at = db.stamp();
             db.exec(
-                "UPDATE email SET status = 'linked', process_id = ?1, matched_by = 'you', suggestions = NULL, \
-                 updated_at = ?2 WHERE id = ?3 \
-                 OR (status = 'triage' AND gm_thrid IS NOT NULL AND gm_thrid = ?4)",
-                args![process_id, at, id, e["gm_thrid"].as_str()],
+                "UPDATE email SET status = 'linked', process_id = ?1, matched_by = 'you', \
+                 updated_at = ?2 WHERE id = ?3",
+                args![process_id, at, id],
             )?;
             let subject = e["subject"].as_str().unwrap_or("");
             db.log(
@@ -1614,75 +1496,6 @@ impl Db {
                 None,
             )?;
             db.email(id)
-        })
-    }
-
-    /// Take an email off its process; it waits in triage, suggesting it.
-    pub fn unlink_email(&self, id: i64) -> Result<Record> {
-        self.atomic(|db| {
-            let e = db.email(id)?;
-            let at = db.stamp();
-            if let Some(pid) = e["process_id"].as_i64() {
-                let p = db.get(res("processes"), pid)?;
-                db.log(
-                    &at,
-                    res("processes"),
-                    &p,
-                    "updated",
-                    &format!(
-                        "Took email “{}” off process {}",
-                        e["subject"].as_str().unwrap_or(""),
-                        label(&p)
-                    ),
-                    None,
-                )?;
-            }
-            db.exec(
-                "UPDATE email SET status = 'triage', process_id = NULL, matched_by = 'you', \
-                 suggestions = ?1, updated_at = ?2 WHERE id = ?3",
-                args![
-                    e["process_id"].as_i64().map(|p| json!([p]).to_string()),
-                    at,
-                    id
-                ],
-            )?;
-            db.email(id)
-        })
-    }
-
-    /// Ignore an email; with `rule` ("sender" or "domain"), everything else
-    /// from them waiting in triage too, and from now on. How many were ignored.
-    pub fn ignore_email(&self, id: i64, rule: Option<&str>) -> Result<usize> {
-        self.atomic(|db| {
-            let e = db.email(id)?;
-            let at = db.stamp();
-            let from = e["from_addr"].as_str().unwrap_or("").to_lowercase();
-            let mut n = db.exec(
-                "UPDATE email SET status = 'ignored', process_id = NULL, updated_at = ?1 WHERE id = ?2",
-                args![at, id],
-            )?;
-            let value = match rule {
-                None => return Ok(n),
-                Some("sender") => from.clone(),
-                Some("domain") => domain_of(&from).to_string(),
-                Some(other) => return Err(invalid(format!("ignore by sender or domain, not {other:?}"))),
-            };
-            if value.is_empty() {
-                return Err(invalid("that email has no sender"));
-            }
-            let kind = rule.unwrap_or_default();
-            db.exec(
-                "INSERT OR IGNORE INTO mail_ignore (kind, value, created_at) VALUES (?1, ?2, ?3)",
-                args![kind, value, at],
-            )?;
-            let pattern = if kind == "sender" { value.clone() } else { format!("%@{value}") };
-            let sub = format!("%.{value}");
-            n += db.exec(
-                "UPDATE email SET status = 'ignored', updated_at = ?1 WHERE status = 'triage' \
-                 AND (from_addr LIKE ?2 OR (?3 = 'domain' AND from_addr LIKE ?4))",
-                args![at, pattern, kind, sub],
-            )?;
-            Ok(n)
         })
     }
 
@@ -1708,17 +1521,6 @@ impl Db {
             db.exec("DELETE FROM email WHERE id = ?1", args![id])?;
             Ok(e)
         })
-    }
-
-    pub fn mail_ignores(&self) -> Result<Vec<Record>> {
-        self.query("SELECT * FROM mail_ignore ORDER BY kind, value", &[])
-    }
-
-    pub fn remove_mail_ignore(&self, id: i64) -> Result<()> {
-        if self.exec("DELETE FROM mail_ignore WHERE id = ?1", args![id])? == 0 {
-            return Err(Error::NotFound(format!("no ignore rule #{id}")));
-        }
-        Ok(())
     }
 
     /// Keep a message from a file (.eml) with a process. One already kept
@@ -1840,14 +1642,14 @@ mod tests {
         );
         assert_eq!(
             v(&msg("jobs@acme.com", "Thanks")),
-            Verdict::Triage(vec![1, 2], "company")
+            Verdict::Unsure(vec![1, 2], "company")
         );
         let mut tool = msg("no-reply@us.greenhouse-mail.io", "Thank you for applying");
         tool.from_name = "Acme Hiring".into();
-        assert_eq!(v(&tool), Verdict::Triage(vec![1, 2], "hiring tool"));
+        assert_eq!(v(&tool), Verdict::Unsure(vec![1, 2], "hiring tool"));
         assert_eq!(
             v(&msg("news@techcrunch.com", "Acme raises")),
-            Verdict::Triage(vec![1, 2], "mention")
+            Verdict::Unsure(vec![1, 2], "mention")
         );
         assert_eq!(
             v(&msg("news@techcrunch.com", "Other news")),
@@ -1862,7 +1664,7 @@ mod tests {
         labelled.labels = vec!["hunt/Acme/Platform engineer".into()];
         assert_eq!(v(&labelled), Verdict::Link(2, "label"));
         labelled.labels = vec!["hunt/Acme".into()];
-        assert_eq!(v(&labelled), Verdict::Triage(vec![1, 2], "label"));
+        assert_eq!(v(&labelled), Verdict::Unsure(vec![1, 2], "label"));
         labelled.labels = vec!["hunt/whatever #3".into()];
         assert_eq!(v(&labelled), Verdict::Link(3, "label"));
         // Your own address doesn't count as a match.

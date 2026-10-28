@@ -25,6 +25,7 @@ pub mod scope;
 pub mod service;
 pub mod setup;
 pub mod site;
+pub mod stash;
 pub mod stats;
 pub mod store;
 pub mod system;

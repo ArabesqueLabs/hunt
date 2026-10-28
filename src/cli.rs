@@ -317,6 +317,38 @@ enum Command {
         #[command(subcommand)]
         command: MailCommand,
     },
+    /// The stash: keep a link, some text or a file to sort later, and see
+    /// what's waiting
+    Stash {
+        #[command(subcommand)]
+        command: StashCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum StashCommand {
+    /// Keep something to sort later: a link, some words, or (with --file)
+    /// a file; `-` reads the text from stdin (e.g. `pbpaste | hunt stash
+    /// add -`)
+    Add {
+        /// A link or some text
+        #[arg(required_unless_present = "file")]
+        what: Option<String>,
+        /// Its title
+        #[arg(long)]
+        title: Option<String>,
+        /// A file instead
+        #[arg(long, conflicts_with = "what")]
+        file: Option<PathBuf>,
+    },
+    /// What waits to be sorted, and what each looks like it should become
+    List {
+        /// Those sorted (`done`) or dismissed instead
+        #[arg(long, default_value = "new")]
+        status: String,
+    },
+    /// Dismiss an item
+    Dismiss { item: i64 },
 }
 
 #[derive(Subcommand)]
@@ -334,34 +366,19 @@ enum MailCommand {
     /// Forget the account (what was fetched stays)
     #[command(hide = true)]
     Disconnect,
-    /// The connection, the last sync, and what waits in triage
+    /// The connection and the last sync
     #[command(hide = true)]
     Status,
     /// Fetch new mail and match it to processes
     #[command(hide = true)]
     Sync,
-    /// Emails waiting for a process, with suggestions
-    #[command(hide = true)]
-    Triage,
     /// A process's emails
     List { process: String },
     /// Read an email
     Show { email: i64 },
-    /// Link an email (and the rest of its thread) to a process
+    /// Link an email to a process
     #[command(hide = true)]
     Link { email: i64, process: String },
-    /// Take an email off its process, back to triage
-    #[command(hide = true)]
-    Unlink { email: i64 },
-    /// Ignore an email; --sender or --domain: everything from them, from now on
-    #[command(hide = true)]
-    Ignore {
-        email: i64,
-        #[arg(long, conflicts_with = "domain")]
-        sender: bool,
-        #[arg(long)]
-        domain: bool,
-    },
     /// Remove an email from its process
     Rm { email: i64 },
     /// Add an email to a process: a file (.eml), or `-` for its text on
@@ -1094,6 +1111,7 @@ pub fn run() -> Result<()> {
             );
         }
         Command::Mail { command } => mail(&api, command)?,
+        Command::Stash { command } => stash(&api, command)?,
         Command::Backup { out } => {
             let (data, name) = api.get_bytes("backup")?;
             let path = out.unwrap_or_else(|| {
@@ -1262,6 +1280,67 @@ fn when(s: &str) -> Result<time::When> {
 }
 
 /// A record's id from an id (`12`, `#12`) or a search that matches one.
+fn stash(api: &Client, command: StashCommand) -> Result<()> {
+    let line = |i: &Value| {
+        let what = match &i["suggestion"] {
+            Value::Null => String::new(),
+            sg => format!(
+                "  → {}{}",
+                s(&sg["to"]),
+                match sg["target"]["label"].as_str() {
+                    Some(l) => format!(" ({l})"),
+                    None => String::new(),
+                }
+            ),
+        };
+        format!("#{:<5} {}{what}", id(&i["id"]), s(&i["label"]))
+    };
+    match command {
+        StashCommand::Add { what, title, file } => {
+            let item = if let Some(file) = file {
+                let data =
+                    std::fs::read(&file).with_context(|| format!("reading {}", file.display()))?;
+                let name = file
+                    .file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_default();
+                api.post_bytes(
+                    "stash/file",
+                    &[("filename", &name), ("source", "cli")],
+                    "application/octet-stream",
+                    &data,
+                )?
+            } else {
+                let mut text = what.unwrap_or_default();
+                if text == "-" {
+                    text.clear();
+                    std::io::Read::read_to_string(&mut std::io::stdin(), &mut text)?;
+                }
+                api.post(
+                    "stash",
+                    &json!({ "text": text, "title": title, "source": "cli" }),
+                )?
+            };
+            println!("kept {}", line(&item));
+        }
+        StashCommand::List { status } => {
+            let all = api.get("stash", &[("status", &status)])?;
+            let all = all.as_array().cloned().unwrap_or_default();
+            if all.is_empty() {
+                println!("nothing here");
+            }
+            for i in all {
+                println!("{}", line(&i));
+            }
+        }
+        StashCommand::Dismiss { item } => {
+            let i = api.post(&format!("stash/{item}/dismiss"), &json!({}))?;
+            println!("dismissed {}", s(&i["label"]));
+        }
+    }
+    Ok(())
+}
+
 fn mail(api: &Client, command: MailCommand) -> Result<()> {
     let line = |e: &Value| {
         format!(
@@ -1318,48 +1397,27 @@ fn mail(api: &Client, command: MailCommand) -> Result<()> {
                     s(&st["last_sync"]).replace('T', " "),
                     if st["last_error"].is_null() {
                         format!(
-                            ": {} fetched, {} linked, {} to triage",
+                            ": {} fetched, {} linked",
                             id(&r["fetched"]),
-                            id(&r["linked"]),
-                            id(&r["triage"])
+                            id(&r["linked"])
                         )
                     } else {
                         format!(": failed: {}", s(&st["last_error"]))
                     }
                 );
             }
-            println!("triage    {}", id(&st["triage"]));
         }
         MailCommand::Sync => {
             let r = api.post("mail/sync", &json!({}))?;
             println!(
-                "{} fetched, {} linked, {} to triage{}",
+                "{} fetched, {} linked{}",
                 id(&r["fetched"]),
                 id(&r["linked"]),
-                id(&r["triage"]),
                 match id(&r["labels_made"]) {
                     0 => String::new(),
                     n => format!(", {n} labels made"),
                 }
             );
-        }
-        MailCommand::Triage => {
-            let all = api.get("emails", &[("status", "triage")])?;
-            let all = all.as_array().cloned().unwrap_or_default();
-            if all.is_empty() {
-                println!("nothing waiting");
-            }
-            for e in all {
-                println!("{}", line(&e));
-                for p in e["suggested"].as_array().into_iter().flatten() {
-                    println!(
-                        "         → #{} {} — {}",
-                        id(&p["id"]),
-                        s(&p["company"]),
-                        s(&p["title"])
-                    );
-                }
-            }
         }
         MailCommand::List { process } => {
             let pid = find(api, "processes", &process)?;
@@ -1394,25 +1452,6 @@ fn mail(api: &Client, command: MailCommand) -> Result<()> {
         MailCommand::Rm { email } => {
             let e = api.delete(&format!("emails/{email}"), &[])?;
             println!("removed “{}”", s(&e["subject"]));
-        }
-        MailCommand::Unlink { email } => {
-            let e = api.post(&format!("emails/{email}/unlink"), &json!({}))?;
-            println!("“{}” is back in triage", s(&e["subject"]));
-        }
-        MailCommand::Ignore {
-            email,
-            sender,
-            domain,
-        } => {
-            let rule = if sender {
-                json!("sender")
-            } else if domain {
-                json!("domain")
-            } else {
-                Value::Null
-            };
-            let r = api.post(&format!("emails/{email}/ignore"), &json!({ "rule": rule }))?;
-            println!("ignored {}", id(&r["ignored"]));
         }
         MailCommand::Import { process, file } => {
             let pid = find(api, "processes", &process)?;

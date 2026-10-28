@@ -129,7 +129,8 @@ async fn a_new_database_has_the_usual_stages() {
             "reminders",
             "links",
             "prep",
-            "stories"
+            "stories",
+            "stash"
         ]
     );
 }
@@ -1713,6 +1714,66 @@ async fn the_calendar_gathers_what_is_dated() {
     let (status, _) = call(&app, "GET", "/api/calendar?kinds=birthdays", None).await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
 
+    // Tasks not done: on their own date, or their interview's day; general
+    // ones too, without a company. Undated ones and done ones aren't there.
+    let step = ok(&app, "GET", "/api/steps", None).await[0].clone();
+    ok(
+        &app,
+        "POST",
+        "/api/prep",
+        Some(json!({ "title": "Read the RFC", "process_id": a["id"], "due_on": "2026-10-06" })),
+    )
+    .await;
+    ok(
+        &app,
+        "POST",
+        "/api/prep",
+        Some(json!({ "title": "Sketch a design", "step_id": step["id"] })),
+    )
+    .await;
+    ok(
+        &app,
+        "POST",
+        "/api/prep",
+        Some(json!({ "title": "Mock interview", "due_on": "2026-10-05" })),
+    )
+    .await;
+    ok(
+        &app,
+        "POST",
+        "/api/prep",
+        Some(json!({ "title": "Someday" })),
+    )
+    .await;
+    let done = ok(
+        &app,
+        "POST",
+        "/api/prep",
+        Some(json!({ "title": "Done already", "due_on": "2026-10-05" })),
+    )
+    .await;
+    ok(
+        &app,
+        "POST",
+        &format!("/api/prep/{}/tick", done["id"]),
+        Some(json!({ "done": true })),
+    )
+    .await;
+    let tasks = ok(&app, "GET", "/api/calendar?kinds=task", None).await;
+    assert_eq!(
+        kinds(&tasks),
+        [
+            ("task".into(), "2026-10-05".into()),
+            ("task".into(), "2026-10-06".into()),
+            ("task".into(), "2026-10-09".into())
+        ]
+    );
+    assert_eq!(tasks[0]["title"], "Mock interview");
+    assert_eq!(tasks[0]["company"], Value::Null);
+    assert_eq!(tasks[2]["company"], "Acme");
+    let found = ok(&app, "GET", "/api/calendar?q=mock&kinds=task", None).await;
+    assert_eq!(found.as_array().unwrap().len(), 1);
+
     // And as iCalendar, for calendar apps.
     let res = app
         .clone()
@@ -2580,7 +2641,7 @@ async fn gmail_is_matched_to_processes() {
     let report = ok(&app, "POST", "/api/mail/sync", None).await;
     assert_eq!(
         report,
-        json!({ "fetched": 7, "linked": 5, "triage": 2, "labels_made": 3 }),
+        json!({ "fetched": 7, "linked": 5, "labels_made": 3 }),
         "the unrelated one isn't fetched"
     );
     let labels = fake.state.lock().unwrap().labels.clone();
@@ -2655,37 +2716,18 @@ async fn gmail_is_matched_to_processes() {
     );
     assert_eq!(log["emails"].as_array().unwrap().len(), 3);
 
-    // Triage: the hiring tool's mail fits both Acme roles; the news only names Acme.
-    let triage = ok(&app, "GET", "/api/emails?status=triage", None).await;
+    // Not kept: the hiring tool's mail fits both Acme roles; the news only names Acme.
     assert_eq!(
-        subjects(&triage),
-        ["Acme raises a Series C", "Thank you for applying"]
+        ok(&app, "GET", "/api/emails", None)
+            .await
+            .as_array()
+            .unwrap()
+            .len(),
+        5
     );
-    assert_eq!(triage[1]["suggested"].as_array().unwrap().len(), 2);
-    assert_eq!(ok(&app, "GET", "/api/mail", None).await["triage"], 2);
-    let tool = triage[1]["id"].clone();
-    ok(
-        &app,
-        "POST",
-        &format!("/api/emails/{tool}/link"),
-        Some(json!({ "process_id": platform })),
-    )
-    .await;
-    let ignored = ok(
-        &app,
-        "POST",
-        &format!("/api/emails/{}/ignore", triage[0]["id"]),
-        Some(json!({ "rule": "domain" })),
-    )
-    .await;
-    assert_eq!(ignored["ignored"], 1);
-    assert_eq!(
-        ok(&app, "GET", "/api/mail/ignores", None).await[0]["value"],
-        "techcrunch.com"
-    );
-    assert_eq!(ok(&app, "GET", "/api/mail", None).await["triage"], 0);
 
-    // Next sync: nothing new is fetched; a reply to the linked thread follows it.
+    // Next sync: what was linked isn't fetched again; what wasn't decided
+    // is looked at again, with what's new.
     fake.state.lock().unwrap().messages.push(mail(
         "999999999",
         "t4",
@@ -2705,22 +2747,10 @@ async fn gmail_is_matched_to_processes() {
     let report = ok(&app, "POST", "/api/mail/sync", None).await;
     assert_eq!(
         report,
-        json!({ "fetched": 2, "linked": 1, "triage": 0, "labels_made": 0 })
-    );
-    assert_eq!(
-        subjects(
-            &ok(
-                &app,
-                "GET",
-                &format!("/api/processes/{platform}/emails"),
-                None
-            )
-            .await
-        )[0],
-        "Interview invitation"
+        json!({ "fetched": 4, "linked": 0, "labels_made": 0 })
     );
 
-    // Renaming the role renames its label; unlinking sends mail back to triage.
+    // Renaming the role renames its label.
     let app_id =
         ok(&app, "GET", &format!("/api/processes/{sre}"), None).await["application_id"].clone();
     ok(
@@ -2741,12 +2771,6 @@ async fn gmail_is_matched_to_processes() {
     assert_eq!(
         ok(&app, "GET", &format!("/api/processes/{sre}/mail"), None).await["label"],
         "hunt/Globex/Senior SRE"
-    );
-    let first = sre_mail[2]["id"].clone();
-    let back = ok(&app, "POST", &format!("/api/emails/{first}/unlink"), None).await;
-    assert_eq!(
-        (back["status"].clone(), back["suggested"][0]["id"].clone()),
-        (json!("triage"), json!(sre))
     );
 
     // An .eml file dropped on a process.
@@ -2899,7 +2923,7 @@ async fn mock_google() -> (String, std::sync::Arc<std::sync::Mutex<Vec<String>>>
             let raw = raw.clone();
             async move {
                 assert_eq!(id, "1a");
-                Json(json!({ "id": "1a", "threadId": "2b", "labelIds": ["INBOX"], "raw": raw }))
+                Json(json!({ "id": "1a", "threadId": "2b", "labelIds": ["STASH"], "raw": raw }))
             }
         }))
         .route("/gmail/v1/users/me/threads/{id}", get(|P(id): P<String>| async move {
@@ -6437,4 +6461,303 @@ async fn stages_in_different_swimlanes_can_share_a_name() {
         Some(json!({ "name": "Offer" })),
     )
     .await;
+}
+
+#[tokio::test]
+async fn the_stash_keeps_anything_and_sorts_it_into_hunt() {
+    let app = app();
+    let p = ok(
+        &app,
+        "POST",
+        "/api/processes",
+        Some(json!({ "company": "Quillnote", "title": "Staff Engineer", "url": "https://boards.greenhouse.io/quillnote/jobs/42" })),
+    )
+    .await;
+    let process = ok(&app, "GET", &format!("/api/processes/{}", p["id"]), None).await;
+    let company = ok(
+        &app,
+        "GET",
+        &format!("/api/applications/{}", process["application_id"]),
+        None,
+    )
+    .await["company_id"]
+        .clone();
+    ok(
+        &app,
+        "PATCH",
+        &format!("/api/companies/{company}"),
+        Some(json!({ "website": "https://quillnote.io" })),
+    )
+    .await;
+
+    // Text that's only a link is kept as the link; each says what it looks like.
+    let add = |body: Value| {
+        let app = app.clone();
+        async move { ok(&app, "POST", "/api/stash", Some(body)).await }
+    };
+    let posting = add(json!({ "text": "https://jobs.lever.co/fernwise/abc-123" })).await;
+    assert_eq!(
+        (
+            posting["kind"].as_str(),
+            posting["suggestion"]["to"].as_str()
+        ),
+        (Some("link"), Some("application"))
+    );
+    let tracked =
+        add(json!({ "url": "https://boards.greenhouse.io/quillnote/jobs/42?gh_src=x" })).await;
+    assert_eq!(tracked["suggestion"]["to"], "open");
+    assert_eq!(tracked["suggestion"]["target"]["entity"], "application");
+    let profile =
+        add(json!({ "url": "https://www.linkedin.com/in/dana-lee/", "source": "bookmarklet" }))
+            .await;
+    assert_eq!(
+        (
+            profile["suggestion"]["to"].as_str(),
+            profile["source"].as_str()
+        ),
+        (Some("person"), Some("bookmarklet"))
+    );
+    let site =
+        add(json!({ "url": "https://quillnote.io/blog/how-we-hire", "title": "How we hire" }))
+            .await;
+    assert_eq!(
+        (
+            site["suggestion"]["to"].as_str(),
+            site["suggestion"]["target"]["id"].clone()
+        ),
+        (Some("link"), process["application_id"].clone())
+    );
+    let article = add(json!({ "url": "https://example.com/rate-limiters" })).await;
+    assert_eq!(article["suggestion"]["to"], "prep");
+    let text = add(json!({ "body": "Quillnote's recruiter said the panel is next week" })).await;
+    assert_eq!(
+        (text["kind"].as_str(), text["suggestion"]["to"].as_str()),
+        (Some("text"), Some("note"))
+    );
+    assert_eq!(text["suggestion"]["target"]["id"], p["id"]);
+    let memo = add(json!({ "body": "Ask for four days a week" })).await;
+    assert_eq!(memo["suggestion"]["to"], "memo");
+    let (status, _) = call(&app, "POST", "/api/stash", Some(json!({ "body": "  " }))).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    let (status, _) = call(
+        &app,
+        "POST",
+        "/api/stash",
+        Some(json!({ "body": "x", "source": "pigeon" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+
+    // A file, kept as it is.
+    let req = Request::post("/api/stash/file?filename=Dana%20Lee%20CV.pdf&source=share")
+        .header("content-type", "application/pdf")
+        .body(Body::from("%PDF-1.4 cv"))
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let file: Value =
+        serde_json::from_slice(&res.into_body().collect().await.unwrap().to_bytes()).unwrap();
+    assert_eq!(
+        (
+            file["kind"].as_str(),
+            file["suggestion"]["to"].as_str(),
+            file["suggestion"]["kind"].as_str()
+        ),
+        (Some("file"), Some("document"), Some("resume"))
+    );
+    assert!(file.get("file_sha256").is_none());
+    let req = Request::get(format!("/api/stash/{}/file", file["id"]))
+        .body(Body::empty())
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(res.headers()["content-type"], "application/pdf");
+    assert_eq!(
+        res.into_body().collect().await.unwrap().to_bytes(),
+        "%PDF-1.4 cv"
+    );
+
+    assert_eq!(ok(&app, "GET", "/api/stash/count", None).await["new"], 8);
+    assert_eq!(
+        ok(&app, "GET", "/api/stash", None)
+            .await
+            .as_array()
+            .unwrap()
+            .len(),
+        8
+    );
+
+    // Sorting: made into something, and out of the stash.
+    let convert = |id: &Value, body: Value| {
+        let app = app.clone();
+        let path = format!("/api/stash/{id}/convert");
+        async move { ok(&app, "POST", &path, Some(body)).await }
+    };
+    let done = convert(
+        &text["id"],
+        json!({ "to": "note", "fields": { "process_id": p["id"] } }),
+    )
+    .await;
+    assert_eq!(
+        (done["status"].as_str(), done["result"]["entity"].as_str()),
+        (Some("done"), Some("note"))
+    );
+    assert!(done["suggestion"].is_null());
+    let notes = ok(
+        &app,
+        "GET",
+        &format!("/api/notes?process_id={}", p["id"]),
+        None,
+    )
+    .await;
+    assert_eq!(
+        notes[0]["body"],
+        "Quillnote's recruiter said the panel is next week"
+    );
+    convert(&memo["id"], json!({ "to": "memo" })).await;
+    assert_eq!(
+        ok(&app, "GET", "/api/memos", None).await[0]["body"],
+        "Ask for four days a week"
+    );
+    convert(&article["id"], json!({ "to": "prep" })).await;
+    assert_eq!(
+        ok(&app, "GET", "/api/prep", None).await[0]["url"],
+        "https://example.com/rate-limiters"
+    );
+    let link = convert(&site["id"], json!({ "to": "link", "fields": { "application_id": process["application_id"], "kind": "prep" } })).await;
+    let links = ok(
+        &app,
+        "GET",
+        &format!("/api/links?application_id={}", process["application_id"]),
+        None,
+    )
+    .await;
+    assert_eq!(
+        (links[0]["label"].as_str(), links[0]["kind"].as_str()),
+        (Some("How we hire"), Some("prep"))
+    );
+    let cv = convert(
+        &file["id"],
+        json!({ "to": "document", "fields": { "process_id": p["id"] } }),
+    )
+    .await;
+    let doc = ok(
+        &app,
+        "GET",
+        &format!("/api/documents/{}", cv["result_id"]),
+        None,
+    )
+    .await;
+    assert_eq!(
+        (doc["name"].as_str(), doc["kind"].as_str()),
+        (Some("Dana Lee CV"), Some("resume"))
+    );
+    assert_eq!(
+        ok(
+            &app,
+            "GET",
+            &format!("/api/processes/{}/files", p["id"]),
+            None
+        )
+        .await
+        .as_array()
+        .unwrap()
+        .len(),
+        1
+    );
+    // A note needs its process; sorted is sorted.
+    let (status, _) = call(
+        &app,
+        "POST",
+        &format!("/api/stash/{}/convert", posting["id"]),
+        Some(json!({ "to": "note" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    let (status, _) = call(
+        &app,
+        "POST",
+        &format!("/api/stash/{}/convert", memo["id"]),
+        Some(json!({ "to": "memo" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+
+    // An application made with its own form, then marked.
+    let made = ok(
+        &app,
+        "POST",
+        "/api/processes",
+        Some(json!({ "company": "Fernwise", "url": "https://jobs.lever.co/fernwise/abc-123" })),
+    )
+    .await;
+    let marked = ok(
+        &app,
+        "POST",
+        &format!("/api/stash/{}/made", posting["id"]),
+        Some(json!({ "entity": "application", "id": made["application_id"] })),
+    )
+    .await;
+    assert_eq!(marked["result"]["label"], "Fernwise");
+
+    // Dismissed, and back; undone, what it became goes.
+    ok(
+        &app,
+        "POST",
+        &format!("/api/stash/{}/dismiss", profile["id"]),
+        None,
+    )
+    .await;
+    assert_eq!(
+        ok(&app, "GET", "/api/stash?status=dismissed", None).await[0]["id"],
+        profile["id"]
+    );
+    let back = ok(
+        &app,
+        "POST",
+        &format!("/api/stash/{}/reopen", profile["id"]),
+        None,
+    )
+    .await;
+    assert_eq!(
+        (back["status"].as_str(), back["suggestion"]["to"].as_str()),
+        (Some("new"), Some("person"))
+    );
+    ok(
+        &app,
+        "POST",
+        &format!("/api/stash/{}/reopen", link["id"]),
+        Some(json!({ "undo": true })),
+    )
+    .await;
+    assert!(
+        ok(
+            &app,
+            "GET",
+            &format!("/api/links?application_id={}", process["application_id"]),
+            None
+        )
+        .await
+        .as_array()
+        .unwrap()
+        .is_empty()
+    );
+
+    assert_eq!(ok(&app, "GET", "/api/stash/count", None).await["new"], 3);
+    assert_eq!(
+        ok(&app, "GET", "/api/stash?status=done", None)
+            .await
+            .as_array()
+            .unwrap()
+            .len(),
+        5
+    );
+    // Deleted like anything else; its file, no longer kept, goes with it.
+    ok(
+        &app,
+        "DELETE",
+        &format!("/api/stash/{}", tracked["id"]),
+        None,
+    )
+    .await;
+    assert_eq!(ok(&app, "GET", "/api/stash/count", None).await["new"], 2);
 }

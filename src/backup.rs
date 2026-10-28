@@ -48,16 +48,17 @@ pub(crate) const TABLES: &[&str] = &[
     "tag",
     "tagging",
     "email",
-    "mail_ignore",
     "setting",
     "memo",
+    "stash_item",
     "activity",
 ];
 
 /// Tables older backups have that this hunt doesn't: their rows are read,
 /// not kept as they are. `archive_reason` (to schema 18): the reasons for
-/// closing, lanes of an inactive stage since.
-const LEGACY: &[&str] = &["archive_reason"];
+/// closing, lanes of an inactive stage since. `mail_ignore` (to schema 30):
+/// senders ignored in email triage, which is gone.
+const LEGACY: &[&str] = &["archive_reason", "mail_ignore"];
 
 /// Columns holding file contents, kept as base64.
 const FILE_COLUMNS: &[(&str, &str)] = &[("stored_file", "data")];
@@ -203,11 +204,10 @@ impl Db {
     }
 
     /// Clear everything tracked, for good: what [`Self::restore`] replaces,
-    /// but the settings, the board's stages, swimlanes and lanes, the Gmail
-    /// connection's ignores, and what's shared (file contents no longer
-    /// referred to go). How many rows went.
+    /// but the settings, the board's stages, swimlanes and lanes, and what's
+    /// shared (file contents no longer referred to go). How many rows went.
     pub fn clear_data(&self) -> Result<Value> {
-        const KEEP: &[&str] = &["swimlane", "stage", "lane", "setting", "mail_ignore"];
+        const KEEP: &[&str] = &["swimlane", "stage", "lane", "setting"];
         self.atomic(|db| {
             let mut rows = 0;
             db.exec("UPDATE application SET via_id = NULL", &[])?;
@@ -358,6 +358,19 @@ impl Db {
                                 (None, true) => {}
                                 (None, false) => continue,
                             }
+                        }
+                        // What a stash item became, likewise; gone, it's
+                        // still done.
+                        if *table == "stash_item"
+                            && let Some(to) = row
+                                .get("result_entity")
+                                .and_then(Value::as_str)
+                                .and_then(table_of)
+                        {
+                            let old = row.get("result_id").and_then(Value::as_i64);
+                            let new =
+                                old.and_then(|o| new_ids.get(to).and_then(|m| m.get(&o)).copied());
+                            row.insert("result_id".into(), new.map_or(Value::Null, Value::from));
                         }
                     }
                     let cols: Vec<&String> = row.keys().collect();

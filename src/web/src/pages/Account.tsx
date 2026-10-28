@@ -530,7 +530,7 @@ function AdminUsers() {
       {one ? (
         <section className="viz-tiles admin-tiles" aria-label={`Account #${one.id}`}>
           <Tile label="Applications" value={nf(one.applications)} note={`${nf(one.active)} on the board, ${nf(one.closed)} closed`} />
-          <Tile label="Cycles" value={nf(one.cycles)} note={`${nf(one.steps)} interview steps · ${nf(one.prep)} prep`} />
+          <Tile label="Cycles" value={nf(one.cycles)} note={`${nf(one.steps)} interview steps · ${nf(one.prep)} tasks`} />
           <Tile label="Contacts" value={nf(one.companies + one.people)} note={`${nf(one.companies)} companies, ${nf(one.people)} people`} />
           <Tile label="Changes" value={nf(one.changes)} note={one.last_active ? `most recent: ${fmtDay(one.last_active)}` : "none yet"} />
           <Tile label="Files" value={nf(one.documents)} note={fmtBytes(one.file_bytes)} />
@@ -541,7 +541,7 @@ function AdminUsers() {
           <Tile label="Accounts" value={nf(accounts.filter((a) => a.status === "active").length)} note={`${nf(accounts.filter((a) => a.status === "pending").length)} waiting`} />
           <Tile label="Seen this week" value={nf(recent)} note={`of ${nf(accounts.length)}`} />
           <Tile label="Applications" value={nf(sum("applications"))} note={`${nf(sum("active"))} on boards`} />
-          <Tile label="Interview steps" value={nf(sum("steps"))} note={`${nf(sum("prep"))} prep`} />
+          <Tile label="Interview steps" value={nf(sum("steps"))} note={`${nf(sum("prep"))} tasks`} />
           <Tile label="Changes" value={nf(sum("changes"))} note="in all" />
         </section>
       )}

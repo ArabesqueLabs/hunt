@@ -940,7 +940,7 @@ impl Db {
             }
             if table == "email" {
                 db.exec(
-                    "UPDATE email SET status = 'linked', matched_by = 'you', suggestions = NULL WHERE id = ?1",
+                    "UPDATE email SET status = 'linked', matched_by = 'you' WHERE id = ?1",
                     args![id],
                 )?;
             }
@@ -1087,6 +1087,7 @@ impl Db {
 pub const CALENDAR_KINDS: &[(&str, &str)] = &[
     ("step", "Interview steps"),
     ("next", "Next actions"),
+    ("task", "Tasks"),
     ("closes", "Applications close"),
     ("applied", "Applied"),
     ("posted", "Posted"),
@@ -1133,6 +1134,16 @@ const EVENTS_SQL: &str = "
     FROM reminder r JOIN process p ON p.id = r.process_id JOIN application a ON a.id = p.application_id
     JOIN company c ON c.id = a.company_id JOIN stage s ON s.id = coalesce(p.reached_stage_id, p.stage_id)
     WHERE r.due_at IS NOT NULL AND r.done_at IS NULL
+  UNION ALL
+    /* Tasks not done yet: on their own date, or else their interview's day.
+       General ones have no process, so no company. */
+    SELECT 'task', t.id, coalesce(t.due_on, substr(st.at, 1, 10)), t.title, t.status,
+           p.id, a.id, c.id, c.name, c.logo, a.title, s.name, p.status,
+           (SELECT cy.ended_on FROM cycle cy WHERE cy.id = p.cycle_id)
+    FROM prep_item t LEFT JOIN step st ON st.id = t.step_id AND st.status = 'scheduled'
+    LEFT JOIN process p ON p.id = t.process_id LEFT JOIN application a ON a.id = p.application_id
+    LEFT JOIN company c ON c.id = a.company_id LEFT JOIN stage s ON s.id = coalesce(p.reached_stage_id, p.stage_id)
+    WHERE t.status IN ('todo', 'doing') AND coalesce(t.due_on, st.at) IS NOT NULL
   UNION ALL
     SELECT 'applied', p.id, p.applied_on, 'Applied', NULL,
            p.id, a.id, c.id, c.name, c.logo, a.title, s.name, p.status,
@@ -1251,7 +1262,7 @@ impl Db {
         }
         // Words in its company, role or title (not its step's outcome).
         for word in q.q.as_deref().unwrap_or("").split_whitespace() {
-            sql += " AND (e.company || ' ' || coalesce(e.role, '') || ' ' || e.title) LIKE ?";
+            sql += " AND (coalesce(e.company, '') || ' ' || coalesce(e.role, '') || ' ' || e.title) LIKE ?";
             params.push(Sql::Text(format!("%{word}%")));
         }
         sql += " ORDER BY e.at, e.kind, e.company";
@@ -1288,16 +1299,18 @@ impl Db {
             let what = match kind {
                 "step" => format!("Interview: {}", e["title"].as_str().unwrap_or_default()),
                 "next" => format!("To do: {}", e["title"].as_str().unwrap_or_default()),
+                "task" => format!("Task: {}", e["title"].as_str().unwrap_or_default()),
                 _ => e["title"].as_str().unwrap_or_default().to_string(),
             };
             let role = e["role"]
                 .as_str()
                 .map(|r| format!(", {r}"))
                 .unwrap_or_default();
-            let summary = format!(
-                "{what} — {}{role}",
-                e["company"].as_str().unwrap_or_default()
-            );
+            // A general task has no company.
+            let summary = match e["company"].as_str() {
+                Some(company) => format!("{what} — {company}{role}"),
+                None => what,
+            };
             let day = at.get(..10).unwrap_or(at).replace('-', "");
             let time = at
                 .get(11..16)

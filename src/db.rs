@@ -21,7 +21,7 @@ const SCHEMA_POSTGRES: &str = include_str!("schema_postgres.sql");
 const SCHEMA_MYSQL: &str = include_str!("schema_mysql.sql");
 /// "hunt" in ASCII: marks a database as ours.
 const APP_ID: i64 = 0x6875_6e74;
-pub const SCHEMA_VERSION: i64 = 30;
+pub const SCHEMA_VERSION: i64 = 32;
 /// The version schema*.sql describe: a new database is made at it, then
 /// brought up to [`SCHEMA_VERSION`] by the migrations after it.
 const SCHEMA_BASE: i64 = 14;
@@ -58,6 +58,8 @@ const MIGRATIONS: &[&str] = &[
     include_str!("migrate_v28.sql"),
     include_str!("migrate_v29.sql"),
     include_str!("migrate_v30.sql"),
+    include_str!("migrate_v31.sql"),
+    include_str!("migrate_v32.sql"),
 ];
 /// Upgrades PostgreSQL and MySQL databases can take: (version reached, its
 /// SQL for PostgreSQL, for MySQL). They start at version 8.
@@ -171,6 +173,16 @@ const SERVER_MIGRATIONS: &[(i64, &str, &str)] = &[
         30,
         include_str!("migrate_v30_postgres.sql"),
         include_str!("migrate_v30_mysql.sql"),
+    ),
+    (
+        31,
+        include_str!("migrate_v31_postgres.sql"),
+        include_str!("migrate_v31_mysql.sql"),
+    ),
+    (
+        32,
+        include_str!("migrate_v32_postgres.sql"),
+        include_str!("migrate_v32_mysql.sql"),
     ),
 ];
 
@@ -917,7 +929,8 @@ impl Db {
             // Everyone's references count: file contents are shared.
             "DELETE FROM stored_file /* all owners */ WHERE sha256 NOT IN (SELECT sha256 FROM version) \
              AND sha256 NOT IN (SELECT logo FROM company WHERE logo IS NOT NULL) \
-             AND sha256 NOT IN (SELECT photo FROM person WHERE photo IS NOT NULL)",
+             AND sha256 NOT IN (SELECT photo FROM person WHERE photo IS NOT NULL) \
+             AND sha256 NOT IN (SELECT file_sha256 FROM stash_item WHERE file_sha256 IS NOT NULL)",
             &[],
         )?;
         Ok(())

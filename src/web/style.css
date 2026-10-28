@@ -36,7 +36,7 @@ body.al-shell { grid-template-rows: 1fr auto; }
 .brand { display: flex; align-items: center; gap: 0.6rem; font-size: 1.2rem; color: var(--al-color-text); text-decoration: none; padding: 0 0.5rem; letter-spacing: 0; }
 .brand svg { width: 1.6rem; height: 1.6rem; flex: none; color: var(--al-color-accent); }
 .brand:hover { color: var(--al-color-text); }
-/* A link's count (Inbox) or badge (Experimental), at its end. */
+/* A link's count (Stash) or badge (Experimental), at its end. */
 .al-sidebar__nav .al-sidebar__label { display: flex; align-items: center; gap: 0.5rem; flex: 1; min-inline-size: 0; }
 .sidebar .app-version { margin: 0; padding: 0 var(--al-space-2); font-size: var(--al-text-xs); color: var(--al-color-text-muted); font-variant-numeric: tabular-nums; }
 /* Collapsed (wider screens; a phone has the bar along the top): the
@@ -103,7 +103,7 @@ input.al-input, select.al-select:not([multiple]) { block-size: var(--al-field-he
    (.al-page-head, .al-panel, .al-card); hunt keeps their insides' layout. */
 .page > .al-page-head { margin-block-end: 0; }
 /* A section's page, as Cycles and Prep are: its title and a line about it, then what's in it. */
-.cycles-page, .prep-page, .list-page, .notes-page, .stats-page, .page.celebrate { gap: var(--al-space-6); }
+.cycles-page, .prep-page, .list-page, .notes-page, .stash-page, .stats-page, .page.celebrate { gap: var(--al-space-6); }
 .page-head h1 { margin-inline-end: auto; }
 .page-head .al-search { width: min(20rem, 100%); }
 .page-head select { width: auto; max-width: min(14rem, 100%); }
@@ -469,6 +469,7 @@ fieldset.group > legend { padding: 0; padding-inline-end: 0.5rem; font-size: 0.8
 .kind-step { --kind: var(--al-color-accent); }
 .kind-next { --kind: var(--al-color-chart-3); }
 .kind-closes { --kind: var(--al-color-chart-2); }
+.kind-task { --kind: var(--al-color-chart-4); }
 .kind-applied { --kind: var(--al-color-text-muted); }
 .kind-posted { --kind: var(--al-color-line-strong); }
 .cal-grid { display: grid; grid-template-columns: repeat(var(--cols, 7), minmax(0, 1fr)); border-top: 1px solid var(--al-color-line-strong); border-inline-start: 1px solid var(--al-color-line); }
@@ -679,6 +680,35 @@ fieldset.group > legend { padding: 0; padding-inline-end: 0.5rem; font-size: 0.8
 .tag-swatches .al-menu__separator { margin-block: 0; }
 .tag-swatches .al-menu__item { margin-inline: calc(-1 * var(--al-space-2)); inline-size: calc(100% + 2 * var(--al-space-2)); }
 
+/* ---- the stash ------------------------------------------------------------------------- */
+
+.stash-page.file-over .stash-capture { border-color: var(--al-color-accent); background: var(--al-color-accent-wash); }
+.stash-capture { display: flex; flex-direction: column; gap: var(--al-space-2); padding: var(--al-space-3); }
+.stash-capture textarea { resize: vertical; }
+.stash-capture-actions { display: flex; justify-content: flex-end; align-items: center; gap: var(--al-space-2); }
+.stash-tabs .nav-count { margin-inline-start: var(--al-space-2); }
+.stash-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.stash-item {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--al-space-3); align-items: start;
+  padding: var(--al-space-3) var(--al-space-2); border-block-start: var(--al-border-hairline) solid var(--al-color-line);
+}
+.stash-item:first-child { border-block-start: 0; }
+.stash-item:focus { outline: none; }
+.stash-item[aria-current="true"]:focus-visible, .stash-item:focus-visible { background: var(--al-color-surface-sunk); }
+.stash-item.is-old .stash-meta { color: var(--al-color-warning); }
+.stash-what { display: flex; flex-direction: column; gap: var(--al-space-1); min-inline-size: 0; }
+.stash-preview { display: contents; }
+.stash-title { font-weight: 500; overflow-wrap: anywhere; }
+.stash-host { overflow-wrap: anywhere; }
+.stash-body { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.stash-page :is(.stash-meta, .stash-why, .stash-keys) { margin: 0; font-family: var(--al-font-sans); font-size: 0.8125rem; }
+.stash-why { color: var(--al-color-accent); }
+.stash-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--al-space-2); }
+@media (max-width: 40rem) {
+  .stash-item { grid-template-columns: minmax(0, 1fr); }
+  .stash-actions { justify-content: flex-start; }
+}
+
 /* ---- email ----------------------------------------------------------------------------- */
 
 .nav-count {
@@ -710,20 +740,13 @@ fieldset.group > legend { padding: 0; padding-inline-end: 0.5rem; font-size: 0.8
 .mail-how summary { cursor: pointer; font-size: 0.85rem; color: var(--al-color-text-muted); }
 .mail-how code { font-size: 0.82rem; padding: 0 0.3rem; border: 1px solid var(--al-color-line); border-radius: var(--al-radius-sm); }
 
-.inbox .page-head { align-items: center; }
-.inbox-status { margin: 0; flex: 1; }
-.inbox .bad, .gmail .bad { color: var(--al-color-danger); }
-.email-list.triage .email { padding: 0.9rem 0; }
-.suggest { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; margin-top: 0.55rem; }
-.suggest > button { display: inline-flex; align-items: center; gap: 0.35rem; }
-.suggest .combo { width: 16rem; }
+.gmail .bad { color: var(--al-color-danger); }
 .empty { padding: 2rem 0; color: var(--al-color-text-muted); }
 
 .steps-help { padding-inline-start: 1.2rem; line-height: 1.7; }
 .gmail-connect { max-width: 28rem; }
 .gmail .actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.75rem; }
 .gmail h3 { margin-top: 1.25rem; font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--al-color-text-muted); }
-.ignores li { display: flex; justify-content: space-between; align-items: center; padding: 0.25rem 0; }
 .emails h2 .count { margin-inline-start: 0.5rem; }
 .mail-query { white-space: pre-wrap; word-break: break-word; font-size: 0.78rem; padding: 0.5rem 0.65rem; border: 1px solid var(--al-color-line); border-radius: var(--al-radius-sm); background: var(--al-color-surface); color: var(--al-color-text-muted); max-height: 9rem; overflow: auto; }
 .bookmarklet { cursor: grab; border-style: dashed; }

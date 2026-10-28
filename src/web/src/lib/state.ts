@@ -14,8 +14,10 @@ export const S = {
   /** Every cycle, running ones first, with their counts (GET cycles/overview). */
   CYCLES: [] as Cycle[],
   BOARD: null as Board | null,
-  /** The Gmail connection and how much waits in triage. */
+  /** The Gmail connection and its last sync. */
   MAIL: null as Row | null,
+  /** How many stash items wait to be sorted. */
+  STASH: 0,
 };
 
 let version = 0;
