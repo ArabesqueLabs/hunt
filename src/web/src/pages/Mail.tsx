@@ -1,130 +1,23 @@
-// Email: the Inbox (mail waiting for a process) and Settings → Gmail.
+// Email: Settings → Gmail.
 //
-// Gmail sign-in and sync (the Inbox, Settings → Gmail, a process's label and
-// search) are switched off for now: emails come in as .eml files or pasted.
-// Set GMAIL to bring them back; the service still has it all.
+// Gmail sign-in and sync (Settings → Gmail, a process's label and search)
+// are switched off for now: emails come in as .eml files or pasted. Set
+// GMAIL to bring them back; the service still has it all.
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { api, attempt, del, get, post } from "../lib/api";
 import { fmtStamp } from "../lib/format";
 import { S, changed } from "../lib/state";
 import { toast } from "../lib/toast";
-import type { Row } from "../lib/types";
-import { Combo } from "../components/Combo";
 import { confirmDelete } from "../components/dialogs";
-import { refSource } from "../components/fields";
 import { useFilePicker } from "../components/files";
-import { EmptyState, Facts, Field, Input, Label, LoadingPage, Logo, Select } from "../components/ui";
+import { Facts, Field, Input, Label, Select } from "../components/ui";
 
 export const GMAIL = false;
 
-/** The Gmail connection and how much waits in triage; shown by Inbox in the sidebar. */
-export async function updateInboxCount() {
+/** The Gmail connection and its last sync. */
+export async function loadMail() {
   try { S.MAIL = await get("mail"); changed(); } catch { /* not connected */ }
-}
-
-const whoSent = (e: Row) => (e.outgoing ? "You" : e.from_name || e.from_addr || "Unknown sender");
-const MATCHED: Record<string, string> = {
-  label: "by its Gmail label", thread: "by its thread", person: "by a person on the process",
-  company: "by the company's domain", "hiring tool": "a hiring tool's mail naming the company",
-  search: "by the process's search", mention: "it mentions the company", you: "by you", file: "added by you",
-};
-
-/** An email: who, when, subject and the start of it; opens to the whole text. */
-function EmailItem({ e, actions, children }: { e: Row; actions?: ReactNode; children?: ReactNode }) {
-  const [open, setOpen] = useState(false);
-  const [full, setFull] = useState<Row | null>(null);
-  return (
-    <li className={`email${e.outgoing ? " outgoing" : ""}`}>
-      <button className="email-toggle" type="button" aria-expanded={String(open) as "true" | "false"} onClick={async () => {
-        setOpen(!open);
-        if (!open && !full) { const f = await attempt(() => get(`emails/${e.id}`)); if (f) setFull(f); }
-      }}>
-        <span className="email-line"><b className="email-who">{whoSent(e)}</b>
-          <time className="muted" dateTime={e.sent_at} title={e.sent_at.replace("T", " ")}>{fmtStamp(e.sent_at)}</time></span>
-        <span className="email-subject">{e.subject || "(no subject)"}</span>
-        {e.snippet ? <span className="email-snippet muted">{e.snippet}</span> : null}
-      </button>
-      <div className="email-actions">
-        {GMAIL && e.matched_by ? <span className="muted small" title="How it was matched">{MATCHED[e.matched_by] || e.matched_by}</span> : null}
-        <span className="spacer" />
-        {e.gmail_url ? <a className="small-button button" href={e.gmail_url} target="_blank" rel="noreferrer">Open in Gmail ↗</a> : null}
-        {actions}
-      </div>
-      <div className="email-body" hidden={!open}>
-        {full ? <>
-          <p className="muted small">{`From ${full.from_name ? `${full.from_name} <${full.from_addr}>` : full.from_addr}`}{full.to_addrs ? ` · to ${full.to_addrs}` : ""}{full.cc_addrs ? ` · cc ${full.cc_addrs}` : ""}</p>
-          <div className="email-text">{full.body || "(no text)"}</div>
-        </> : "Loading…"}
-      </div>
-      {children}
-    </li>
-  );
-}
-
-/** Mail waiting for a process: link it, or ignore it (and its sender). */
-export function InboxPage() {
-  const [waiting, setWaiting] = useState<Row[] | null>(null);
-  const [syncing, setSyncing] = useState(false);
-  const load = async () => {
-    await updateInboxCount();
-    setWaiting(S.MAIL?.connected ? await get("emails?status=triage") : []);
-  };
-  useEffect(() => { load().catch((e) => toast(e.message, "error")); }, []);
-  const MAIL = S.MAIL;
-  const done = (id: number, msg: string) => { toast(msg); updateInboxCount(); setWaiting((w) => (w || []).filter((x) => x.id !== id)); };
-  if (waiting == null) return <LoadingPage kind="table" />;
-  return (
-    <div className="page inbox">
-      <div className="al-page-head page-head"><h1>Inbox</h1>
-        <p className="muted inbox-status">{MAIL?.connected ? (MAIL.last_sync
-          ? <>{`Last synced ${fmtStamp(MAIL.last_sync)}`}{MAIL.last_error ? <span className="bad">{` — failed: ${MAIL.last_error}`}</span> : ""}</>
-          : "Not synced yet.") : null}</p>
-        {MAIL?.connected ? <button className="al-button al-button--primary" type="button" aria-busy={syncing ? "true" : undefined} onClick={async () => {
-          if (syncing) return;
-          setSyncing(true);
-          const r = await attempt(() => post("mail/sync", {}));
-          setSyncing(false);
-          if (r) toast(`${r.fetched} fetched: ${r.linked} linked, ${r.triage} to sort`);
-          load();
-        }}>{syncing ? "Syncing…" : "Sync now"}</button> : null}
-      </div>
-      {!MAIL?.connected ? (
-        <section className="al-panel panel"><h2>Bring in email about your applications</h2>
-          <p>Connect Gmail in <a href="/settings">Settings</a>. hunt then finds mail about each process: from its people, the company's domains, hiring tools naming the company, and threads already linked. Mail that could be about more than one process waits here for you.</p>
-          <p className="muted">Without Gmail, drop .eml files on a process.</p></section>
-      ) : !waiting.length ? <EmptyState title="Nothing to sort" text="Mail hunt is sure about goes straight to its process." /> : <>
-        <p className="muted">These could be about more than one process, or only mention a company. Linking one brings the rest of its thread with it.</p>
-        <ol className="email-list triage">
-          {waiting.map((e) => {
-            const link = async (pid: number, name: string) => { if (await attempt(() => post(`emails/${e.id}/link`, { process_id: pid }))) done(e.id, `Linked to ${name}`); };
-            const domain = (e.from_addr || "").split("@")[1];
-            const ignore = (rule: string | null) => async () => {
-              const r = await attempt(() => post(`emails/${e.id}/ignore`, rule ? { rule } : {}));
-              if (r) done(e.id, rule ? `Ignored ${r.ignored} from ${rule === "sender" ? e.from_addr : domain}, from now on` : "Ignored");
-            };
-            return (
-              <EmailItem key={e.id} e={e} actions={<>
-                <button className="al-button al-button--sm" type="button" onClick={ignore(null)}>Ignore</button>
-                {e.from_addr ? <button className="al-button al-button--sm" type="button" title={`Ignore everything from ${e.from_addr}`} onClick={ignore("sender")}>Ignore sender</button> : null}
-                {domain ? <button className="al-button al-button--sm" type="button" title={`Ignore everything from @${domain}`} onClick={ignore("domain")}>{`Ignore @${domain}`}</button> : null}
-              </>}>
-                <div className="suggest">
-                  {(e.suggested || []).map((p: Row) => (
-                    <button key={p.id} className="al-button" type="button" onClick={() => link(p.id, `${p.company} — ${p.title || ""}`)}>
-                      <Logo id={p.company_id} logo={p.company_logo} name={p.company} size={16} />{`${p.company}${p.title ? ` — ${p.title}` : ""}`}
-                      {p.status === "archived" ? <span className="muted"> (archived)</span> : null}
-                    </button>
-                  ))}
-                  <Combo label="Another process" placeholder="Another process…" source={refSource("processes")} onPick={(it) => link(it.value, it.label)} />
-                </div>
-              </EmailItem>
-            );
-          })}
-        </ol>
-      </>}
-    </div>
-  );
 }
 
 /**
@@ -177,22 +70,22 @@ function GoogleSignin({ rerender }: { rerender: () => void }) {
   );
 }
 
-/** Settings: the Gmail account, how often it syncs, and ignored senders. */
+/** Settings: the Gmail account, and how often it syncs. */
 export function GmailSettings() {
   const [version, setVersion] = useState(0);
-  const [ignores, setIgnores] = useState<Row[] | null>(null);
+  const [loaded, setLoaded] = useState(false);
   const [address, setAddress] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const rerender = () => setVersion((n) => n + 1);
   useEffect(() => {
-    updateInboxCount().then(async () => {
+    loadMail().then(() => {
       setAddress(S.MAIL?.address || "");
-      setIgnores(S.MAIL?.connected ? await get("mail/ignores") : []);
+      setLoaded(true);
     });
   }, [version]);
   const MAIL = S.MAIL;
-  if (!MAIL || ignores == null) return <section className="al-panel panel settings-panel gmail"><div className="panel-head"><h2>Gmail</h2></div></section>;
+  if (!MAIL || !loaded) return <section className="al-panel panel settings-panel gmail"><div className="panel-head"><h2>Gmail</h2></div></section>;
   if (!MAIL.connected) {
     return (
       <section className="al-panel panel settings-panel gmail">
@@ -228,7 +121,7 @@ export function GmailSettings() {
       <Facts rows={[
         ["Account", <>{MAIL.address}<span className="muted">{MAIL.auth === "google" ? " · signed in with Google (read and labels only)" : " · app password"}</span></>],
         ["Last sync", MAIL.last_sync
-          ? <>{fmtStamp(MAIL.last_sync)}{MAIL.last_error ? <span className="bad">{` — failed: ${MAIL.last_error}`}</span> : r ? <span className="muted">{` — ${r.fetched} fetched, ${r.linked} linked, ${r.triage} to sort`}</span> : ""}</>
+          ? <>{fmtStamp(MAIL.last_sync)}{MAIL.last_error ? <span className="bad">{` — failed: ${MAIL.last_error}`}</span> : r ? <span className="muted">{` — ${r.fetched} fetched, ${r.linked} linked`}</span> : ""}</>
           : "Not yet"],
       ]} />
       <div className="fields"><Field><Label htmlFor="gmail-every">Sync</Label>
@@ -241,25 +134,14 @@ export function GmailSettings() {
           setBusy("sync");
           const rep = await attempt(() => post("mail/sync", {}));
           setBusy(null);
-          if (rep) toast(`${rep.fetched} fetched: ${rep.linked} linked, ${rep.triage} to sort`);
+          if (rep) toast(`${rep.fetched} fetched: ${rep.linked} linked`);
           rerender();
         }}>{busy === "sync" ? "Syncing…" : "Sync now"}</button>
-        <a className="al-button al-button--sm" href="/inbox">Open the Inbox</a>
         <button className="al-button al-button--quiet al-button--danger" type="button" onClick={async () => {
           if (!(await confirmDelete("the Gmail connection", "Mail already brought in stays."))) return;
           if (await attempt(() => del("mail"))) { toast("Disconnected"); rerender(); }
         }}>Disconnect</button>
       </div>
-      <h3>Ignored</h3>
-      {ignores.length ? (
-        <ul className="plain ignores">
-          {ignores.map((i) => (
-            <li key={i.id}>{i.kind === "domain" ? `Anything from @${i.value}` : i.value}
-              <button className="al-button al-button--icon al-button--sm al-button--danger" type="button" aria-label={`Stop ignoring ${i.value}`} title="Stop ignoring"
-                onClick={async () => { if (await attempt(() => del(`mail/ignores/${i.id}`))) rerender(); }}>×</button></li>
-          ))}
-        </ul>
-      ) : <p className="muted">Nobody. “Ignore sender” in the Inbox adds them here.</p>}
     </section>
   );
 }

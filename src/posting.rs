@@ -193,6 +193,67 @@ pub fn canonical(url: &str) -> String {
     }
 }
 
+/// Hiring tools and job boards whose pages are job postings, besides those
+/// hunt reads itself.
+const JOB_HOSTS: &[&str] = &[
+    "ashbyhq.com",
+    "myworkdayjobs.com",
+    "smartrecruiters.com",
+    "recruitee.com",
+    "teamtailor.com",
+    "personio.de",
+    "personio.com",
+    "bamboohr.com",
+    "jobvite.com",
+    "icims.com",
+    "breezy.hr",
+    "welcometothejungle.com",
+    "otta.com",
+    "wellfound.com",
+    "indeed.com",
+    "glassdoor.com",
+    "glassdoor.co.uk",
+    "reed.co.uk",
+    "totaljobs.com",
+];
+
+/// Whether a link looks like a job posting: one hunt reads, or one on a
+/// hiring tool or a job board (a careers page counts when its path says so).
+pub fn is_posting(url: &str) -> bool {
+    let full = if url.contains("://") {
+        url.trim().to_string()
+    } else {
+        format!("https://{}", url.trim())
+    };
+    if platform(&full) != Platform::Page {
+        return true;
+    }
+    let host = host_of(&full);
+    let path = full
+        .split("://")
+        .nth(1)
+        .and_then(|r| r.split_once('/'))
+        .map(|(_, p)| p.to_lowercase())
+        .unwrap_or_default();
+    if host.ends_with("linkedin.com") {
+        return path.starts_with("jobs/");
+    }
+    JOB_HOSTS
+        .iter()
+        .any(|h| host == *h || host.ends_with(&format!(".{h}")))
+        || [
+            "careers/",
+            "jobs/",
+            "job/",
+            "positions/",
+            "openings/",
+            "vacancies/",
+        ]
+        .iter()
+        .any(|p| path.starts_with(p) || path.contains(&format!("/{p}")))
+            && path.split('/').filter(|s| !s.is_empty()).count() >= 2
+}
+
 /// Which reader a link needs.
 fn platform(url: &str) -> Platform {
     let host = host_of(url);

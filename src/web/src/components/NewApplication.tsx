@@ -17,17 +17,21 @@ import { Field, Input, Label, Notice, Select } from "./ui";
 /**
  * Add an application, onto the board: from a posting's link, read into the
  * fields below (each marked as it was filled), or by hand. Its cycle (when
- * more than one runs) and its stage are chosen here.
+ * more than one runs) and its stage are chosen here. With `url`, that
+ * link is read straight away; with `onAdded`, it's given the new card
+ * instead of the board being shown.
  */
-export async function newApplication({ stageId = null }: { stageId?: number | null } = {}) {
+export async function newApplication({ stageId = null, url, onAdded }: {
+  stageId?: number | null; url?: string; onAdded?: (card: Row) => unknown;
+} = {}) {
   // Its stages, if the board hasn't been drawn yet.
   if (!S.BOARD) S.BOARD = S.BOARD || await get(`board?${boardQuery()}`);
-  openModal(<NewApplication stageId={stageId} />);
+  openModal(<NewApplication stageId={stageId} url={url} onAdded={onAdded} />);
 }
 
 type Key = "company" | "title" | "location" | "work_mode" | "pay" | "employment";
 
-function NewApplication({ stageId }: { stageId: number | null }) {
+function NewApplication({ stageId, url, onAdded }: { stageId: number | null; url?: string; onAdded?: (card: Row) => unknown }) {
   const stages = S.BOARD ? boardStages(S.BOARD) : [];
   const run = runningCycles();
   const found = useRef<Row | null>(null);
@@ -45,6 +49,7 @@ function NewApplication({ stageId }: { stageId: number | null }) {
   useEffect(() => {
     get("companies").then(setCompanies).catch(() => {});
     link.current?.focus();
+    if (url && link.current) { link.current.value = url; readIt(); }
   }, []);
   const modes = fieldOf("applications", "work_mode").options;
   const emps = fieldOf("applications", "employment").options;
@@ -132,6 +137,7 @@ function NewApplication({ stageId }: { stageId: number | null }) {
       const at = stages.find((s) => s.id === card.stage_id);
       toast(`Added ${card.company} to ${at?.name || card.stage}`);
       await loadCycles();
+      if (onAdded) { await onAdded(card); return; }
       const page = location.pathname.split("/")[1] || "";
       if (page === "" || page === "applications") route(); else go("/");
     }}>

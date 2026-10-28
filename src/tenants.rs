@@ -9,7 +9,8 @@
 //!
 //! Who's asking: hunt's own sign-in, always (an email address and a
 //! password, at /login: a session cookie, or the CLI's `Authorization:
-//! Basic`); and, where it's set up, Cloudflare Access in front of hunt (its
+//! Basic`); a personal access token of theirs (`Authorization: Bearer`,
+//! for the browser extension and other apps: see `api_token`); and, where it's set up, Cloudflare Access in front of hunt (its
 //! signed token, checked against the team's keys, so a request that didn't
 //! come through Access can't pass for anyone) or a sign-in proxy's header.
 //! Someone new signs up (or asks, through Access); an admin approves (or
@@ -138,10 +139,10 @@ pub struct Tenants {
 /// An account's rows, children first: what goes when it's removed with its data.
 const REMOVE_ORDER: &[&str] = &[
     "activity",
+    "stash_item",
     "tagging",
     "tag",
     "email",
-    "mail_ignore",
     "setting",
     "memo",
     "story",
@@ -533,8 +534,12 @@ impl Tenants {
     }
 
     /// Who's signed in with hunt's own sign-in: a session cookie still good,
-    /// or (the CLI) an email address and password.
+    /// a personal access token (`Authorization: Bearer`), or (the CLI) an
+    /// email address and password.
     fn signed_in(&self, headers: &axum::http::HeaderMap) -> Option<Account> {
+        if let Some(token) = bearer(headers).and_then(|b| self.token(&b).ok().flatten()) {
+            return self.get(token.account).ok();
+        }
         if let Some((email, password)) = headers
             .get(axum::http::header::AUTHORIZATION)
             .and_then(|v| v.to_str().ok())
@@ -548,6 +553,101 @@ impl Tenants {
         self.password_of(&a)?
             .valid(rest, jiff::Timestamp::now().as_second())
             .then_some(a)
+    }
+
+    // ---- personal access tokens ------------------------------------------------------------
+
+    /// A new token for an account: its row, and the token itself, shown
+    /// this once (only its SHA-256 is kept). `scope` is `stash` (adding to
+    /// the stash, and no more) or `full`.
+    pub fn make_token(&self, account: i64, name: &str, scope: &str) -> Result<(Value, String)> {
+        let name = name.trim();
+        if name.is_empty() || name.chars().count() > 100 {
+            return Err(invalid(
+                "give the token a name, to know it by: “Browser extension”, say",
+            ));
+        }
+        if !TOKEN_SCOPES.contains(&scope) {
+            return Err(invalid(format!(
+                "a token's scope is stash or full, not {scope:?}"
+            )));
+        }
+        let secret = new_token();
+        let hint = format!("…{}", &secret[secret.len() - 4..]);
+        let id = self.with(|db| {
+            let at = db.stamp();
+            db.insert(
+                "INSERT INTO api_token (account_id, name, token_sha256, hint, scope, created_at) \
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                args![account, name, token_sum(&secret), hint, scope, at],
+            )
+        })?;
+        let row = self
+            .tokens(account)?
+            .into_iter()
+            .find(|t| t["id"] == json!(id))
+            .ok_or_else(|| Error::NotFound(format!("token {id}")))?;
+        Ok((row, secret))
+    }
+
+    /// An account's tokens still good, newest first: never the tokens
+    /// themselves, only their last characters.
+    pub fn tokens(&self, account: i64) -> Result<Vec<Value>> {
+        self.with(|db| {
+            Ok(db
+                .query(
+                    "SELECT id, name, hint, scope, created_at, last_used_at FROM api_token \
+                     WHERE account_id = ?1 AND revoked_at IS NULL ORDER BY id DESC",
+                    args![account],
+                )?
+                .into_iter()
+                .map(Value::Object)
+                .collect())
+        })
+    }
+
+    /// One of an account's tokens, no longer good.
+    pub fn revoke_token(&self, account: i64, id: i64) -> Result<()> {
+        let n = self.with(|db| {
+            let at = db.stamp();
+            db.exec(
+                "UPDATE api_token SET revoked_at = ?1 \
+                 WHERE id = ?2 AND account_id = ?3 AND revoked_at IS NULL",
+                args![at, id, account],
+            )
+        })?;
+        if n == 0 {
+            return Err(Error::NotFound(format!("token {id}")));
+        }
+        Ok(())
+    }
+
+    /// The token a request carries, if it's still good (and noted as used,
+    /// now and then).
+    pub fn token(&self, secret: &str) -> Result<Option<Token>> {
+        self.with(|db| {
+            let rows = db.query(
+                "SELECT id, account_id, name, scope, last_used_at FROM api_token \
+                 WHERE token_sha256 = ?1 AND revoked_at IS NULL",
+                args![token_sum(secret)],
+            )?;
+            let Some(r) = rows.first() else {
+                return Ok(None);
+            };
+            let at = db.stamp();
+            // To the minute: a busy script needn't write on every request.
+            if text(&r["last_used_at"]).is_none_or(|t| t.get(..16) != at.get(..16)) {
+                db.exec(
+                    "UPDATE api_token SET last_used_at = ?1 WHERE id = ?2",
+                    args![at, r["id"].as_i64().unwrap_or(0)],
+                )?;
+            }
+            Ok(Some(Token {
+                account: r["account_id"].as_i64().unwrap_or(0),
+                name: text(&r["name"]).unwrap_or_default(),
+                scope: text(&r["scope"]).unwrap_or_default(),
+            }))
+        })
     }
 
     /// Change an account's email address or password (each kept when not
@@ -1161,6 +1261,7 @@ impl Tenants {
                 db.prune_blobs()?;
             }
             db.set_owner(None);
+            db.exec("DELETE FROM api_token WHERE account_id = ?1", args![id])?;
             db.exec("DELETE FROM account WHERE id = ?1", args![id])?;
             Ok(json!({ "removed": id, "rows_removed": rows }))
         });
@@ -1234,6 +1335,51 @@ impl Tenants {
                 .map(account))
         })
     }
+}
+
+/// What a personal access token may do: add to the stash, or anything its
+/// account can (but manage tokens, or the admin centre).
+pub const TOKEN_SCOPES: &[&str] = &["stash", "full"];
+
+/// A personal access token in use: whose, what it's called, and what it may do.
+#[derive(Debug, Clone, Serialize)]
+pub struct Token {
+    #[serde(skip)]
+    pub account: i64,
+    pub name: String,
+    pub scope: String,
+}
+
+/// A request's personal access token (`Authorization: Bearer hunt_…`).
+pub fn bearer(headers: &axum::http::HeaderMap) -> Option<String> {
+    headers
+        .get(axum::http::header::AUTHORIZATION)?
+        .to_str()
+        .ok()?
+        .strip_prefix("Bearer ")
+        .map(|t| t.trim().to_string())
+        .filter(|t| t.starts_with("hunt_"))
+}
+
+/// A new token: `hunt_` and 32 random bytes, in hex.
+fn new_token() -> String {
+    use argon2::password_hash::rand_core::{OsRng, RngCore};
+    let mut bytes = [0u8; 32];
+    OsRng.fill_bytes(&mut bytes);
+    format!(
+        "hunt_{}",
+        bytes.iter().map(|b| format!("{b:02x}")).collect::<String>()
+    )
+}
+
+/// What's kept of a token: its SHA-256, in hex. (It's random enough that
+/// a slow hash, as passwords have, adds nothing.)
+fn token_sum(secret: &str) -> String {
+    use sha2::{Digest, Sha256};
+    Sha256::digest(secret.as_bytes())
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
 }
 
 // ---- Cloudflare Access's tokens -------------------------------------------------------------

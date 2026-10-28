@@ -71,7 +71,7 @@ const SHOTS = [
     act: `document.querySelectorAll('details.email-thread, details[data-section="posting"], details[data-section="company"]').forEach((d) => { d.open = true; })` },
   { name: "cycles", title: "Cycles", about: "Job searches, several at once; one that has ended keeps its board.", path: "/cycles", full: true },
   { name: "past-cycle", title: "A cycle that ended", about: "Its board, read-only, as it was when it ended.", path: (ids) => `/?cycle=${ids.pastCycle}`, detailed: true },
-  { name: "prep", title: "Prep", about: "What to read, practise and rehearse, around the interviews coming up.", path: "/prep", full: true },
+  { name: "prep", title: "Tasks", about: "What to read, practise and rehearse, around the interviews coming up.", path: "/tasks", full: true },
   { name: "calendar", title: "Calendar", about: "Interviews, next actions and deadlines.", path: "/calendar" },
   { name: "calendar-week", title: "Calendar: a week", about: "Each event at its time, around what is coming up this week.", path: "/calendar?view=week" },
   { name: "companies", title: "Contacts: companies", path: "/companies" },

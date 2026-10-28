@@ -1687,3 +1687,208 @@ async fn admins_name_the_hunt_and_everyone_sees_what_it_says() {
     assert!(set["site"]["announcement"].is_null());
     assert_eq!(set["site"]["name"], "Acme careers");
 }
+
+/// A request with a personal access token, and nothing else to say who's asking.
+async fn with_token(
+    app: &Router,
+    token: &str,
+    method: &str,
+    path: &str,
+    body: Option<Value>,
+) -> (StatusCode, Value) {
+    let req = Request::builder()
+        .method(method)
+        .uri(path)
+        .header("authorization", format!("Bearer {token}"));
+    let req = match body {
+        Some(b) => req
+            .header("content-type", "application/json")
+            .body(Body::from(b.to_string())),
+        None => req.body(Body::empty()),
+    }
+    .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    let status = res.status();
+    let bytes = res.into_body().collect().await.unwrap().to_bytes();
+    (
+        status,
+        serde_json::from_slice(&bytes).unwrap_or(Value::Null),
+    )
+}
+
+#[tokio::test]
+async fn apps_send_to_the_stash_with_a_token_of_their_own() {
+    let app = shared_hunt();
+    ok(
+        &app,
+        BOB,
+        "POST",
+        "/api/account/request",
+        Some(json!({ "agrees": true, "name": "Bob" })),
+    )
+    .await;
+    let bob_id = ok(&app, ADMIN, "GET", "/api/admin/overview", None).await["accounts"][0]["id"]
+        .as_i64()
+        .unwrap();
+    ok(
+        &app,
+        ADMIN,
+        "POST",
+        &format!("/api/admin/accounts/{bob_id}/decide"),
+        Some(json!({ "status": "active" })),
+    )
+    .await;
+
+    // A token is shown once, when it's made; after, only its last characters.
+    let made = ok(
+        &app,
+        ADMIN,
+        "POST",
+        "/api/tokens",
+        Some(json!({ "name": "Browser extension" })),
+    )
+    .await;
+    let stash = made["secret"].as_str().unwrap().to_string();
+    assert!(stash.starts_with("hunt_") && stash.len() == 69, "{stash}");
+    assert_eq!(made["token"]["scope"], "stash");
+    let listed = ok(&app, ADMIN, "GET", "/api/tokens", None).await;
+    assert_eq!(listed.as_array().unwrap().len(), 1);
+    assert!(!listed.to_string().contains(&stash[5..]), "{listed}");
+    assert_eq!(listed[0]["hint"], format!("…{}", &stash[65..]));
+    assert!(listed[0]["last_used_at"].is_null());
+    let (status, _) = as_(
+        &app,
+        Some(ADMIN),
+        "POST",
+        "/api/tokens",
+        Some(json!({ "name": " " })),
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::UNPROCESSABLE_ENTITY,
+        "a name, to know it by"
+    );
+    let (status, _) = as_(
+        &app,
+        Some(ADMIN),
+        "POST",
+        "/api/tokens",
+        Some(json!({ "name": "x", "scope": "admin" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+
+    // A stash token adds to the stash, as its account, and says whose it is.
+    let (status, item) = with_token(
+        &app,
+        &stash,
+        "POST",
+        "/api/stash",
+        Some(json!({ "url": "https://example.com/a-page", "source": "extension" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{item}");
+    let (status, me) = with_token(&app, &stash, "GET", "/api/stash/me", None).await;
+    assert_eq!(status, StatusCode::OK, "{me}");
+    assert_eq!(me["email"], ADMIN);
+    assert_eq!(me["language"], "en");
+    assert_eq!(
+        me["token"],
+        json!({ "name": "Browser extension", "scope": "stash" })
+    );
+    let kept = ok(&app, ADMIN, "GET", "/api/stash", None).await;
+    assert_eq!(ids(&kept), vec![item["id"].as_i64().unwrap()]);
+    assert_eq!(kept[0]["source"], "extension");
+    assert!(ids(&ok(&app, BOB, "GET", "/api/stash", None).await).is_empty());
+    assert!(!ok(&app, ADMIN, "GET", "/api/tokens", None).await[0]["last_used_at"].is_null());
+
+    // And nothing else: not reading the stash, nor the rest of hunt.
+    for (method, path) in [
+        ("GET", "/api/stash"),
+        ("GET", "/api/processes"),
+        ("POST", "/api/stash/1/dismiss"),
+        ("GET", "/api/settings"),
+    ] {
+        let (status, v) = with_token(&app, &stash, method, path, None).await;
+        assert_eq!(status, StatusCode::FORBIDDEN, "{method} {path}: {v}");
+    }
+
+    // A full token reaches what its account can, but never tokens, the
+    // account's sign-in or the admin centre.
+    let full = ok(
+        &app,
+        ADMIN,
+        "POST",
+        "/api/tokens",
+        Some(json!({ "name": "Script", "scope": "full" })),
+    )
+    .await["secret"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let (status, _) = with_token(&app, &full, "GET", "/api/stash", None).await;
+    assert_eq!(status, StatusCode::OK);
+    for (method, path) in [
+        ("GET", "/api/tokens"),
+        ("POST", "/api/tokens"),
+        ("GET", "/api/admin/overview"),
+        ("PUT", "/api/account/credentials"),
+        ("DELETE", "/api/account"),
+        ("GET", "/"),
+    ] {
+        let (status, v) = with_token(&app, &full, method, path, None).await;
+        assert_eq!(status, StatusCode::FORBIDDEN, "{method} {path}: {v}");
+    }
+
+    // Someone else's token isn't theirs to revoke; revoked, a token's no good.
+    let id = listed[0]["id"].as_i64().unwrap();
+    let (status, _) = as_(
+        &app,
+        Some(BOB),
+        "DELETE",
+        &format!("/api/tokens/{id}"),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    ok(&app, ADMIN, "DELETE", &format!("/api/tokens/{id}"), None).await;
+    let (status, _) = with_token(&app, &stash, "GET", "/api/stash/me", None).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    let (status, _) = with_token(&app, "hunt_nonsense", "POST", "/api/stash", None).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        ok(&app, ADMIN, "GET", "/api/tokens", None).await[0]["name"],
+        "Script"
+    );
+
+    // A disabled account's tokens stop with it.
+    let bobs = ok(
+        &app,
+        BOB,
+        "POST",
+        "/api/tokens",
+        Some(json!({ "name": "Phone" })),
+    )
+    .await["secret"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    ok(
+        &app,
+        ADMIN,
+        "POST",
+        &format!("/api/admin/accounts/{bob_id}/decide"),
+        Some(json!({ "status": "disabled" })),
+    )
+    .await;
+    let (status, _) = with_token(
+        &app,
+        &bobs,
+        "POST",
+        "/api/stash",
+        Some(json!({ "body": "x" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+}

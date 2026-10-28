@@ -21,6 +21,7 @@ import { store } from "../lib/storage";
 import { currentTheme, chooseTheme } from "../lib/theme";
 import type { Cycle } from "../lib/types";
 import { DueMenu } from "./Due";
+import { loadStashCount } from "../pages/Stash";
 import { FLAG, Icon, PathIcon, SysIcon } from "./ui";
 
 const LOGO = logoSvg.trim().replace(/stroke="#fff"/g, 'style="stroke: var(--al-color-bg)"');
@@ -38,11 +39,13 @@ function NavLink({ href, nav, d, label, current, hidden, mini, children }: {
   );
 }
 
+const STASH = "M22 12h-6l-2 3h-4l-2-3H2M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z";
+
 const SECTIONS: [string, string, string, string][] = [
   ["/", "board", "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM8 7v7M12 7v4M16 7v9", "Applications"],
   ["/cycles", "cycles", "M4 22V4M4 4h12l-2 4 2 4H4", "Cycles"],
   ["/calendar", "calendar", "M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM16 2v4M8 2v4M3 10h18", "Calendar"],
-  ["/prep", "prep", "M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2zM22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z", "Prep"],
+  ["/tasks", "tasks", "M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2zM22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z", "Tasks"],
   ["/contacts", "contacts", "M12 4a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM4 21a8 8 0 0 1 16 0", "Contacts"],
   ["/files", "files", "M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2z", "Files"],
   ["/notes", "notes", "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M8 13h8M8 17h5", "Notes"],
@@ -66,7 +69,7 @@ export function Sidebar({ page, section, account }: { page: string; section: str
   const offer = useStore(offerNav);
   const sections = useStore(sectionNav);
   const [mini, setMini] = useState(document.body.dataset.sidebar === "collapsed");
-  useEffect(() => { initSidebars(); }, []);
+  useEffect(() => { initSidebars(); loadStashCount(); }, []);
   const toggle = () => {
     const next = !mini;
     if (next) document.body.dataset.sidebar = "collapsed";
@@ -76,7 +79,7 @@ export function Sidebar({ page, section, account }: { page: string; section: str
   };
   const own = (page === "admin" || page === "settings") && sections ? sections : null;
   const here = SECTIONS.find(([, nav]) => nav === section)?.[3]
-    ?? ({ "take-home": "Pay calculator", celebrate: "Your offer", settings: "Settings", admin: "Admin" } as Record<string, string>)[section] ?? "";
+    ?? ({ stash: "Stash", "take-home": "Pay calculator", celebrate: "Your offer", settings: "Settings", admin: "Admin" } as Record<string, string>)[section] ?? "";
   const M = S.META;
   // Drawn into the page's own <aside> (the shell's child, as the design system lays it out).
   return (
@@ -98,6 +101,9 @@ export function Sidebar({ page, section, account }: { page: string; section: str
         {account ? null : <CycleBox page={page} />}
         {account || !S.META ? null : <div className="due-box"><DueMenu mini={mini} /></div>}
         <nav className="al-sidebar__nav app-nav" aria-label="Sections">
+          <NavLink href="/stash" nav="stash" d={STASH} label="Stash" current={section === "stash"} mini={mini}>
+            {S.STASH ? <span className="nav-count" aria-label={`${S.STASH} to sort`}>{S.STASH}</span> : null}
+          </NavLink>
           {SECTIONS.map(([href, nav, d, label]) => <NavLink key={nav} href={href} nav={nav} d={d} label={label} current={nav === section} mini={mini} />)}
           <NavLink href="/take-home" nav="take-home" d={TAKE_HOME} label="Pay calculator " current={section === "take-home"} mini={mini}>
             <svg className="uk-flag" viewBox="0 0 60 30" role="img" aria-label="UK only, for now"><title>UK only, for now</title><clipPath id="uk-flag-t"><path d="M30 15h30v15zv15H0zH0V0zV0h30z" /></clipPath><path d="M0 0v30h60V0z" fill="#012169" /><path d="M0 0l60 30m0-30L0 30" stroke="#fff" strokeWidth="6" /><path d="M0 0l60 30m0-30L0 30" clipPath="url(#uk-flag-t)" stroke="#c8102e" strokeWidth="4" /><path d="M30 0v30M0 15h60" stroke="#fff" strokeWidth="10" /><path d="M30 0v30M0 15h60" stroke="#c8102e" strokeWidth="6" /></svg>

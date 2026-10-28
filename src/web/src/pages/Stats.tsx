@@ -342,7 +342,7 @@ export const TABLE_NAMES: Record<string, string> = {
   note: "Notes on processes", memo: "General notes", document: "Documents", version: "File versions", email: "Emails",
   activity: "Audit log entries", tagging: "Tags given", tag: "Tags", process_person: "People on processes",
   step_person: "People at steps", process_file: "Files sent", stored_file: "Stored files", stage: "Stages",
-  fx_rate: "Exchange rates", mail_ignore: "Ignored senders", setting: "Settings",
+  fx_rate: "Exchange rates", setting: "Settings",
 };
 
 /** The Resources section: kept up to date while the page is open. */

@@ -17,11 +17,11 @@ import { chooseTheme, currentTheme } from "../lib/theme";
 import { toast } from "../lib/toast";
 import type { Row, Tag } from "../lib/types";
 import { mayDiscard } from "../lib/unsaved";
-import { ask, confirmDelete } from "../components/dialogs";
+import { ask, confirmDelete, pushDialog } from "../components/dialogs";
 import { useFilePicker } from "../components/files";
 import { profileBookmarklet } from "../components/importer";
 import { openTagColours } from "../components/tags";
-import { Facts, Field, Icon, Input, Label, LoadingBlock, STAGE_ICONS, Select } from "../components/ui";
+import { Facts, Field, Icon, Input, Label, LoadingBlock, STAGE_ICONS, Select, Table } from "../components/ui";
 import { MenuButton, MenuItem } from "../components/Menu";
 import { GMAIL, GmailSettings } from "./Mail";
 import { takeHomeNumber } from "./TakeHome";
@@ -73,8 +73,7 @@ const SETTINGS_TABS: [string, string, string, string][] = [
   ["board", "Board", "Swimlanes, stages, sub stages", "board"],
   ["calendar", "Calendar", "Hours, time zones, sharing", "cal"],
   ["data", "Data", "Backup, audit log", "database"],
-  // Connections (LinkedIn, Gmail) is hidden for now; its parts are kept below.
-  // ["connections", "Connections", GMAIL ? "LinkedIn, Gmail" : "LinkedIn", "link"],
+  ["connections", "Connected apps", "Browser extension, tokens, bookmark", "link"],
   ["pay", "Pay calculator", "Where you live, take-home", "calc"],
   ["tags", "Tags", "", "tag"],
 ];
@@ -110,7 +109,7 @@ export function SettingsPage() {
     board: () => <BoardSettings />,
     tags: () => <TagsSettings />,
     calendar: () => <><CalendarSettings /><CalendarFeedSettings /></>,
-    connections: () => <><LinkedinSettings />{GMAIL ? <GmailSettings /> : null}</>,
+    connections: () => <><ExtensionSettings /><TokenSettings /><LinkedinSettings />{GMAIL ? <GmailSettings /> : null}</>,
     data: () => <><BackupSettings /><AuditSettings /></>,
   };
   return (
@@ -623,16 +622,16 @@ function LinkedinSettings() {
   const origin = prefs.bookmarklet_url || location.origin;
   const href = profileBookmarklet(origin);
   return (
-    <SettingsPanel title="LinkedIn bookmark" editing={editing} onToggle={setEditing} done="Cancel" className="linkedin"
-      intro="LinkedIn only shows profiles to people signed in, so hunt can't read them itself. This bookmark reads the profile open in your browser instead, and brings it here to choose what to keep.">
+    <SettingsPanel title="“Send to hunt” bookmark" editing={editing} onToggle={setEditing} done="Cancel" className="linkedin"
+      intro="Keep any page you're on in your stash, to sort later, with one click. On a LinkedIn profile (which only people signed in can see, so hunt can't read it itself) it reads the profile open in your browser instead, and brings it here to choose what to keep.">
       <ol className="steps-help">
         <li>Drag{" "}<a className="al-button al-button--sm bookmarklet" title="Drag me to your bookmarks bar"
           // Its javascript: address set on the link itself: React won't put one in an href.
           ref={(el) => { if (el && el.getAttribute("href") !== href) el.setAttribute("href", href); }}
-          onClick={(e) => { e.preventDefault(); toast("Drag it to your bookmarks bar, then click it on a LinkedIn profile"); }}>
+          onClick={(e) => { e.preventDefault(); toast("Drag it to your bookmarks bar, then click it on any page"); }}>
           <img src="/logo.svg" alt="" width={18} height={18} />Send to hunt</a>{" to your bookmarks bar (show it with ⇧⌘B)."}</li>
-        <li>Open someone's profile on LinkedIn, and click the bookmark.</li>
-        <li>hunt opens with what it found: their name, role, company, location, about and photo. Tick what to keep.</li>
+        <li>On any page (a posting, an article, a company's site), click the bookmark: hunt opens with the page kept in your stash, and what's selected on it too.</li>
+        <li>On someone's LinkedIn profile, hunt opens with what it found instead: their name, role, company, location, about and photo. Tick what to keep.</li>
       </ol>
       {!editing ? (
         <Facts rows={[
@@ -665,6 +664,116 @@ function LinkedinSettings() {
     </SettingsPanel>
   );
 }
+
+// ---- connected apps: the browser extension, and personal access tokens ----------------------
+
+/** What a token may do, as Settings says it. */
+const TOKEN_SCOPES: [string, string, string][] = [
+  ["stash", "Adds to your stash", "Only adds links, notes and files to your stash, to sort later. For the browser extension, an iOS Shortcut, or anything you'd rather not trust with more."],
+  ["full", "Full access", "Reads and changes everything in your hunt, as you can (but not tokens, your sign-in, or the admin centre). For your own scripts, and the command line (HUNT_TOKEN)."],
+];
+
+/** Copy some text, and say so. */
+async function copy(text: string, what: string) {
+  try { await navigator.clipboard.writeText(text); toast(`Copied ${what}`); } catch { toast("Couldn't copy; select it instead", "error"); }
+}
+
+/** A token just made: shown this once, with what an app needs beside it. */
+function showSecret(secret: string) {
+  pushDialog({
+    className: "al-dialog al-dialog--md ask token-made",
+    render: (close) => (
+      <div className="al-dialog__inner">
+        <h2 className="al-dialog__title">Your new token</h2>
+        <p>Copy it now: it's shown this once. Paste it into the app, with this hunt's address.</p>
+        <div className="al-stack">
+          <Field><Label htmlFor="token-secret">Token</Label>
+            <div className="settings-copy"><Input id="token-secret" readOnly value={secret} className="settings-mono" translate="no" onFocus={(e) => e.currentTarget.select()} />
+              <button className="al-button" type="button" onClick={() => copy(secret, "the token")}><Icon name="copy" /><span>Copy</span></button></div></Field>
+          <Field><Label htmlFor="token-address">hunt's address</Label>
+            <div className="settings-copy"><Input id="token-address" readOnly value={location.origin} className="settings-mono" translate="no" />
+              <button className="al-button" type="button" onClick={() => copy(location.origin, "the address")}><Icon name="copy" /><span>Copy</span></button></div></Field>
+        </div>
+        <div className="al-dialog__actions"><button className="al-button al-button--primary" type="button" onClick={close}>Done</button></div>
+      </div>
+    ),
+  });
+}
+
+/**
+ * Personal access tokens: for apps that send to hunt from outside the
+ * browser's session (the browser extension, an iOS Shortcut, a script).
+ * Each acts as you, with what it's allowed; revoked, it stops at once.
+ */
+function TokenSettings() {
+  const [tokens, setTokens] = useState<Row[] | null>(null);
+  const [version, setVersion] = useState(0);
+  useEffect(() => { get("tokens").then(setTokens).catch(() => setTokens([])); }, [version]);
+  const make = async () => {
+    const d = await ask({
+      title: "New token", ok: "Make token",
+      body: <div className="fields">
+        <Field><Label htmlFor="token-name">Name</Label>
+          <Input id="token-name" name="name" required maxLength={100} placeholder="Browser extension" autoFocus />
+          <span className="al-hint">To know it by: where it's used.</span></Field>
+        <fieldset className="al-fieldset"><legend>What it can do</legend>
+          <div className="al-choices">{TOKEN_SCOPES.map(([value, label, hint], i) => (
+            <label key={value} className="al-choice"><input type="radio" name="scope" value={value} defaultChecked={i === 0} />
+              <span className="al-choice__text"><span>{label}</span><span className="al-choice__hint">{hint}</span></span></label>
+          ))}</div>
+        </fieldset>
+      </div>,
+    });
+    if (!d) return;
+    const made = await attempt(() => post("tokens", { name: d.get("name"), scope: d.get("scope") }));
+    if (!made) return;
+    setVersion((n) => n + 1);
+    showSecret(made.secret);
+  };
+  const revoke = async (t: Row) => {
+    const sure = await ask({ title: `Revoke “${t.name}”?`, ok: "Revoke", danger: true,
+      body: <p>Whatever uses it stops working at once. This can't be undone: make a new token to connect it again.</p> });
+    if (!sure) return;
+    if (await attempt(() => del(`tokens/${t.id}`))) {
+      toast(`Revoked “${t.name}”`);
+      setVersion((n) => n + 1);
+    }
+  };
+  const scopeLabel = (scope: string) => TOKEN_SCOPES.find(([v]) => v === scope)?.[1] || scope;
+  return (
+    <SettingsPanel title="Access tokens" className="tokens"
+      intro="For apps that send things to hunt: the browser extension, an iOS Shortcut, your own scripts. Each acts as you, with what you allow it.">
+      {!tokens ? <LoadingBlock /> : tokens.length ? (
+        <div className="al-table-wrap" tabIndex={0} aria-label="Access tokens"><Table>
+          <thead><tr><th>Name</th><th>Can</th><th>Made</th><th>Last used</th><th><span className="al-visually-hidden">Revoke</span></th></tr></thead>
+          <tbody>{tokens.map((t) => (
+            <tr key={t.id}>
+              <td><span translate="no">{t.name}</span> <span className="muted small settings-mono" translate="no">{t.hint}</span></td>
+              <td>{scopeLabel(t.scope)}</td>
+              <td>{fmtStamp(t.created_at)}</td>
+              <td>{t.last_used_at ? fmtStamp(t.last_used_at) : <span className="muted">Never</span>}</td>
+              <td className="al-table__num"><button className="al-button al-button--sm al-button--quiet al-button--danger" type="button" aria-label={`Revoke ${t.name}`} onClick={() => revoke(t)}>Revoke</button></td>
+            </tr>
+          ))}</tbody>
+        </Table></div>
+      ) : <p className="muted">No tokens yet.</p>}
+      <div className="actions"><button className="al-button" type="button" onClick={make}>New token…</button></div>
+      {S.META.access ? <p className="muted small">This hunt is behind Cloudflare Access, which turns away anything it hasn't signed in. The browser extension uses your browser's sign-in to Access; other apps need an Access service token as well (its client ID and secret), or a Bypass policy for the path /api/stash.</p> : null}
+    </SettingsPanel>
+  );
+}
+
+/** The browser extension: what it does, and connecting it. */
+const ExtensionSettings = () => (
+  <SettingsPanel title="Browser extension" className="extension"
+    intro="Send the page you're on, a link, an image or what you've selected to your stash, from Chrome, Firefox, Edge or Safari: from its button, the right-click menu, or a keyboard shortcut.">
+    <ol className="steps-help">
+      <li>Install hunt's extension in your browser.</li>
+      <li>Make a token below that adds to your stash.</li>
+      <li>In the extension's settings, paste the token and this hunt's address, <span className="settings-mono" translate="no">{location.origin}</span>.</li>
+    </ol>
+  </SettingsPanel>
+);
 
 // ---- backups ---------------------------------------------------------------------------
 

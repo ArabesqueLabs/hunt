@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Send to hunt settings</title>
+<link rel="icon" href="../icons/32.png">
+<link rel="stylesheet" href="../vendor/arabesque/fonts/fonts.css">
+<link rel="stylesheet" href="../vendor/arabesque/arabesque.css">
+<link rel="stylesheet" href="options.css">
+</head>
+<body>
+
+<!-- Connecting checks the address and token with hunt before keeping them,
+     so it's a button rather than saved as typed; the save state says how
+     it went. -->
+<main class="hx-options">
+
+  <span class="al-lockup hx-options__lockup"><span class="al-mark hx-mark" aria-hidden="true"></span><span class="al-wordmark">hunt</span></span>
+
+  <header class="al-page-head">
+    <h1 data-i18n>Send to hunt settings</h1>
+    <div class="al-page-head__end">
+      <p class="al-save-state" id="state" role="status"></p>
+    </div>
+  </header>
+
+  <form class="al-stack al-stack--loose" id="connection" novalidate>
+
+    <fieldset class="al-fieldset">
+      <legend data-i18n>Your hunt</legend>
+      <div class="al-stack">
+        <div class="al-field">
+          <label class="al-label" for="server" data-i18n>hunt’s address</label>
+          <input class="al-input" id="server" name="server" type="url" inputmode="url" autocomplete="url"
+                 spellcheck="false" placeholder="https://hunt.example.com" aria-describedby="server-hint" dir="ltr">
+          <p class="al-hint" id="server-hint" data-i18n>Where you open hunt: https://hunt.example.com, or http://localhost:4848.</p>
+        </div>
+        <div class="al-field">
+          <label class="al-label" for="token" data-i18n>Token</label>
+          <input class="al-input hx-mono" id="token" name="token" type="password" autocomplete="off"
+                 spellcheck="false" placeholder="hunt_…" aria-describedby="token-hint" dir="ltr">
+          <p class="al-hint" id="token-hint" data-i18n>Make one in hunt: Settings → Connected apps → New token. One that adds to your stash is enough.</p>
+        </div>
+
+        <details class="al-disclosure" id="access">
+          <summary data-i18n>Behind Cloudflare Access</summary>
+          <div class="al-disclosure__body al-stack">
+            <p data-i18n>If your hunt is behind Cloudflare Access, the extension gets in with your sign-in to it in this browser. Or give it a service token (a Service Auth policy lets it in), and it gets in without one.</p>
+            <div class="al-field">
+              <label class="al-label" for="access-id"><span data-i18n>Client ID</span> <span class="al-label__optional" data-i18n>(optional)</span></label>
+              <input class="al-input hx-mono" id="access-id" name="accessId" type="text" autocomplete="off" spellcheck="false" dir="ltr">
+            </div>
+            <div class="al-field">
+              <label class="al-label" for="access-secret"><span data-i18n>Client secret</span> <span class="al-label__optional" data-i18n>(optional)</span></label>
+              <input class="al-input hx-mono" id="access-secret" name="accessSecret" type="password" autocomplete="off" spellcheck="false" dir="ltr">
+            </div>
+          </div>
+        </details>
+
+        <p class="al-error" id="error" role="alert" hidden></p>
+
+        <div class="al-notice al-notice--success" id="connected" hidden>
+          <div class="al-notice__body"><p id="connected-text" translate="no"></p></div>
+        </div>
+
+        <div class="al-cluster">
+          <button class="al-button al-button--primary" id="connect" type="submit" data-i18n>Connect</button>
+          <button class="al-button al-button--quiet" id="disconnect" type="button" data-i18n hidden>Disconnect</button>
+        </div>
+      </div>
+    </fieldset>
+
+    <fieldset class="al-fieldset">
+      <legend data-i18n>In the right-click menu</legend>
+      <p data-i18n>Right-click a page, a link, an image or what you’ve selected: Send to hunt keeps it in your stash.</p>
+    </fieldset>
+
+    <fieldset class="al-fieldset">
+      <legend data-i18n>Keyboard shortcuts</legend>
+      <dl class="hx-shortcuts" id="shortcuts"></dl>
+      <div>
+        <button class="al-button al-button--sm" id="change-shortcuts" type="button" data-i18n>Change them</button>
+      </div>
+    </fieldset>
+
+  </form>
+
+</main>
+
+<script type="module" src="options.js"></script>
+</body>
+</html>

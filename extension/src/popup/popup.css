@@ -1,0 +1,107 @@
+/* Send to hunt's popup: the layout around the Arabesque Labs design
+   system's components. These rules are unlayered, so they win over the
+   system's layers without !important, and every value is a token except
+   the popup's own width, which a browser window can't negotiate. */
+
+:root {
+  /* Wide enough for a page's title on a line or two, and the note; a
+     toolbar popup is sized by its document, so this is the real width. */
+  --hx-popup-width: 22rem;
+}
+
+html, body {
+  inline-size: var(--hx-popup-width);
+}
+
+body {
+  /* A popup paints over the browser's own chrome, which has no surface of
+     its own: take the page background from the system. */
+  background: var(--al-color-bg);
+}
+
+.hx-popup {
+  --al-stack-gap: var(--al-space-3);
+  padding: var(--al-space-4);
+}
+
+/* The mark and the title, settings and the dismiss opposite them, with the
+   hairline a page head would have. */
+.hx-head {
+  --al-cluster-gap: var(--al-space-2);
+  padding-block-end: var(--al-space-3);
+  border-block-end: var(--al-border-hairline) solid var(--al-color-line);
+}
+.hx-brand {
+  --al-cluster-gap: var(--al-space-2);
+}
+.hx-head__end {
+  --al-cluster-gap: var(--al-space-1);
+}
+
+/* Pulled out by its own inner padding, so the cross sits level with the
+   popup's edge rather than the button's box. */
+.hx-dismiss {
+  margin-inline-end: calc(-1 * var(--al-space-2));
+}
+
+/* hunt's mark (icons/mark.svg), one colour: drawn as a mask in the text's
+   colour, so it holds up on the dark theme. */
+.hx-logo {
+  inline-size: var(--al-size-icon);
+  block-size: var(--al-size-icon);
+  flex: none;
+  background: currentColor;
+  -webkit-mask: url("../icons/mark.svg") center / contain no-repeat;
+  mask: url("../icons/mark.svg") center / contain no-repeat;
+}
+
+/* The popup's title, not a page's: the display face at interface size. */
+.hx-title {
+  font-size: var(--al-text-md);
+  font-weight: var(--al-weight-medium);
+  letter-spacing: var(--al-tracking-none);
+}
+
+.hx-form {
+  --al-stack-gap: var(--al-space-3);
+}
+
+/* The page's address, shortened to a line: it's always left to right. */
+.hx-page {
+  margin: 0;
+  direction: ltr;
+  text-align: start;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--al-text-xs);
+  color: var(--al-color-text-muted);
+}
+[dir="rtl"] .hx-page {
+  text-align: end;
+}
+
+.hx-note {
+  resize: vertical;
+}
+
+/* The action and its keys on one line, wrapping to two if they don't fit. */
+.hx-actions {
+  --al-cluster-gap: var(--al-space-2);
+}
+.hx-keys {
+  margin: 0;
+  font-size: var(--al-text-xs);
+  color: var(--al-color-text-muted);
+}
+
+.hx-footer {
+  padding-block-start: var(--al-space-3);
+  border-block-start: var(--al-border-hairline) solid var(--al-color-line);
+  font-size: var(--al-text-xs);
+  color: var(--al-color-text-muted);
+}
+.hx-footer p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}

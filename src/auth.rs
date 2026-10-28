@@ -10,7 +10,10 @@
 //! days: the account, its expiry, signed with a key made from its
 //! password's hash, so a new password ends its sessions. The CLI sends the
 //! address and password itself (`Authorization: Basic`, from `HUNT_EMAIL`
-//! and `HUNT_PASSWORD`). A wrong one costs a second.
+//! and `HUNT_PASSWORD`). A wrong one costs a second. Apps (the browser
+//! extension, an iOS Shortcut) send a personal access token instead
+//! (`Authorization: Bearer hunt_…`), made in Settings: see
+//! [`crate::tenants::Tenants::make_token`].
 //!
 //! **A sign-in proxy** (`HUNT_AUTH_HEADER`): Authelia, Authentik,
 //! oauth2-proxy or Tailscale signs people in, and names them in a header

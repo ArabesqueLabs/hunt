@@ -1,0 +1,54 @@
+{
+  "manifest_version": 3,
+  "name": "Send to hunt",
+  "version": "0.1.0",
+  "description": "Keep pages, links, images and selections in your hunt stash, to sort later: from the toolbar, the right-click menu or a keyboard shortcut.",
+  "icons": {
+    "16": "icons/16.png",
+    "32": "icons/32.png",
+    "48": "icons/48.png",
+    "128": "icons/128.png"
+  },
+  "action": {
+    "default_icon": {
+      "19": "icons/19.png",
+      "38": "icons/38.png"
+    },
+    "default_title": "Send to hunt",
+    "default_popup": "popup/popup.html"
+  },
+  "author": "Mosab Ibrahim",
+  "homepage_url": "https://careerhunt.app/",
+  "options_ui": {
+    "page": "options/options.html",
+    "open_in_tab": true
+  },
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Alt+Shift+H"
+      },
+      "description": "Open Send to hunt"
+    },
+    "send-page": {
+      "suggested_key": {
+        "default": "Alt+Shift+K"
+      },
+      "description": "Keep the page you're on in your stash, at once"
+    }
+  },
+  "permissions": [
+    "activeTab",
+    "contextMenus",
+    "storage",
+    "scripting"
+  ],
+  "optional_host_permissions": [
+    "https://*/*",
+    "http://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  }
+}

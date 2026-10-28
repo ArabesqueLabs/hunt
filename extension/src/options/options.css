@@ -1,0 +1,58 @@
+/* Send to hunt's settings: a tab of its own, so a page's measure rather
+   than the popup's width. As in popup.css, these rules are unlayered, so
+   they win over the system's layers; every value is a token. */
+
+body {
+  background: var(--al-color-bg);
+}
+
+.hx-options {
+  max-inline-size: var(--al-size-measure);
+  margin-inline: auto;
+  padding: var(--al-space-8) var(--al-space-4) var(--al-space-12);
+}
+
+.hx-options__lockup {
+  margin-block-end: var(--al-space-8);
+}
+
+/* Nothing said yet: no state to show, not even its dot. */
+.al-save-state:empty {
+  display: none;
+}
+
+/* hunt's mark (icons/mark.svg) in the lockup: one colour, drawn as a mask
+   in the text's colour so it holds up in dark. */
+.hx-mark {
+  display: inline-block;
+  background: currentColor;
+  -webkit-mask: url("../icons/mark.svg") center / contain no-repeat;
+  mask: url("../icons/mark.svg") center / contain no-repeat;
+}
+
+/* Tokens and IDs: copied in, read character by character. */
+.hx-mono {
+  font-family: var(--al-font-mono);
+  font-size: var(--al-text-sm);
+}
+
+.al-fieldset p {
+  margin: 0;
+}
+
+/* Each shortcut, its keys beside what it does. */
+.hx-shortcuts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--al-space-2) var(--al-space-4);
+  margin: 0 0 var(--al-space-3);
+}
+.hx-shortcuts dt {
+  white-space: nowrap;
+}
+.hx-shortcuts dd {
+  margin: 0;
+}
+.hx-shortcuts .al-kbd + .al-kbd {
+  margin-inline-start: var(--al-space-1);
+}

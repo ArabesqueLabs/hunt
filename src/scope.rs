@@ -40,7 +40,6 @@ pub const OWNED: &[&str] = &[
     "tag",
     "tagging",
     "email",
-    "mail_ignore",
     "setting",
     "memo",
     "cycle",
@@ -48,6 +47,7 @@ pub const OWNED: &[&str] = &[
     "link",
     "prep_item",
     "story",
+    "stash_item",
     "activity",
 ];
 

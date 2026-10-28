@@ -1,1 +1,1 @@
-["serve", "board", "add", "show", "move", "archive", "resume", "next", "note", "step", "person", "upload", "calendar", "lookup", "download", "attach", "detach", "tag", "list", "get", "new", "edit", "rm", "order", "log", "fields", "backup", "restore", "mail"]
+["serve", "board", "add", "show", "move", "archive", "resume", "next", "note", "step", "person", "upload", "calendar", "lookup", "download", "attach", "detach", "tag", "list", "get", "new", "edit", "rm", "order", "log", "fields", "backup", "restore", "mail", "stash"]

@@ -1,5 +1,5 @@
 // The calendar (/calendar): a month grid, a week, a day or an agenda of
-// interviews, next actions and deadlines, searched.
+// interviews, next actions, tasks and deadlines, searched.
 
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { attempt, get } from "../lib/api";
@@ -12,7 +12,7 @@ import type { Row } from "../lib/types";
 import { EmptyState, Input, LoadingBlock, Logo, SearchBox, SysIcon } from "../components/ui";
 
 /** What the calendar shows, of active processes: all that's coming up, each kind in its colour, and what each is called beside its checkbox. */
-const CAL_KINDS: [string, string][] = [["step", "Interviews"], ["next", "Next actions"], ["closes", "Deadlines"]];
+const CAL_KINDS: [string, string][] = [["step", "Interviews"], ["next", "Next actions"], ["task", "Tasks"], ["closes", "Deadlines"]];
 const CAL_DEFAULTS: Record<string, string> = { view: "month", weekends: "", hide: "", q: "" };
 /** The calendar's choices, by their names in the address. */
 const CAL_KEYS = Object.keys(CAL_DEFAULTS);
@@ -191,12 +191,17 @@ export function CalendarPage() {
   );
 }
 
-/** Where an event leads: its process, or else its application. */
-const eventHref = (e: Row) => (e.process_id ? `/p/${e.process_id}` : `/applications/${e.application_id}`);
+/** Where an event leads: a task to Tasks (its application's, if it has one); else its process, or its application. */
+const eventHref = (e: Row) => (e.kind === "task" ? `/tasks${e.process_id ? `?for=${e.process_id}` : ""}`
+  : e.process_id ? `/p/${e.process_id}` : `/applications/${e.application_id}`);
+/** What an event's for, after its title: its company and role (a general task has neither). */
+const eventFor = (e: Row) => (e.company ? ` — ${e.company}${e.role ? `, ${e.role}` : ""}` : "");
+/** Its company's logo, if it has a company. */
+const eventLogo = (e: Row, size: number) => (e.company ? <Logo id={e.company_id} logo={e.company_logo} name={e.company} size={size} /> : null);
 
 function eventLabel(e: Row) {
   const time = e.at && e.at.length > 10 && !e.at.endsWith("T00:00") ? fmtTime(e.at.slice(11, 16)) : null;
-  const late = e.kind === "next" && daysFromToday(parseLocal(e.at)) < 0;
+  const late = (e.kind === "next" || e.kind === "task") && daysFromToday(parseLocal(e.at)) < 0;
   return { time, late };
 }
 
@@ -230,9 +235,9 @@ function MonthGrid({ from, to, month, events, weekends }: { from: Date; to: Date
               const { time, late } = eventLabel(e);
               const outcome = stepOutcome(e);
               return (
-                <a key={i} className={`ev ${eventClass(e, late)}`} href={eventHref(e)} title={`${e.title} — ${e.company}${e.role ? `, ${e.role}` : ""}${outcome ? ` (${outcome})` : ""}`}>
-                  <Logo id={e.company_id} logo={e.company_logo} name={e.company} size={14} />
-                  {time ? <span className="ev-time">{time}</span> : null}<span className="ev-text">{`${e.company} · ${e.title}`}</span>
+                <a key={i} className={`ev ${eventClass(e, late)}`} href={eventHref(e)} title={`${e.title}${eventFor(e)}${outcome ? ` (${outcome})` : ""}`}>
+                  {eventLogo(e, 14)}
+                  {time ? <span className="ev-time">{time}</span> : null}<span className="ev-text">{e.company ? `${e.company} · ${e.title}` : e.title}</span>
                 </a>
               );
             })}
@@ -289,11 +294,11 @@ function TimeGrid({ days, events, name }: { days: Date[]; events: Row[]; name: s
     const { time, late } = eventLabel(e);
     const outcome = stepOutcome(e);
     return (
-      <a key={key} className={`ev ev-block ${eventClass(e, late)}`} href={eventHref(e)} style={style} title={`${e.title} — ${e.company}${e.role ? `, ${e.role}` : ""}${outcome ? ` (${outcome})` : ""}`}>
+      <a key={key} className={`ev ev-block ${eventClass(e, late)}`} href={eventHref(e)} style={style} title={`${e.title}${eventFor(e)}${outcome ? ` (${outcome})` : ""}`}>
         {/* The time and title on one line, so an hour holds the company too. */}
         <span className="ev-line">{time ? <span className="ev-time">{time}</span> : null}
           <span className="ev-title" translate="no">{e.title}{outcome ? <span className="ev-outcome">{` · ${outcome}`}</span> : null}</span></span>
-        <span className="ev-who"><Logo id={e.company_id} logo={e.company_logo} name={e.company} size={14} /><span translate="no">{e.company}</span></span>
+        {e.company ? <span className="ev-who">{eventLogo(e, 14)}<span translate="no">{e.company}</span></span> : null}
       </a>
     );
   };
@@ -380,7 +385,7 @@ function TimeGrid({ days, events, name }: { days: Date[]; events: Row[]; name: s
 
 function Agenda({ events }: { events: Row[] }) {
   if (!events.length) return <EmptyState title="Nothing this month" text="Nothing matches these filters: try another month, or other filters." />;
-  const kindLabel = (k: string) => ({ step: "Interview", next: "Next action", closes: "Deadline", applied: "Applied", posted: "Posted" } as Record<string, string>)[k] || k;
+  const kindLabel = (k: string) => ({ step: "Interview", next: "Next action", task: "Task", closes: "Deadline", applied: "Applied", posted: "Posted" } as Record<string, string>)[k] || k;
   const badge = (e: Row) => {
     const outcome = stepOutcome(e);
     if (!outcome) return null;
@@ -407,7 +412,7 @@ function Agenda({ events }: { events: Row[] }) {
                   <span className="agenda-time">{time || "All day"}</span>
                   <span className="agenda-kind">{kindLabel(e.kind)}</span>
                   <a className="agenda-what" href={eventHref(e)}><b>{e.title}</b>{badge(e)}</a>
-                  <span className="agenda-who"><Logo id={e.company_id} logo={e.company_logo} name={e.company} size={20} />{e.company}{e.role ? <span className="muted">{` — ${e.role}`}</span> : null}
+                  <span className="agenda-who">{e.company ? <>{eventLogo(e, 20)}{e.company}</> : <span className="muted">General</span>}{e.role ? <span className="muted">{` — ${e.role}`}</span> : null}
                     {e.stage ? <span className="muted small">{` · ${e.status === "archived" ? "closed at " : ""}${e.stage}`}</span> : null}</span>
                   {late ? <span className="due late">overdue</span> : null}
                 </li>

@@ -1,7 +1,7 @@
-// Prep (/prep): what to read, practise and rehearse, for a particular
-// interview or in general. The interviews coming up come first, each with
-// how much of its prep is done; then the tasks, in progress, next and done;
-// and the stories to tell, under their own tab.
+// Tasks (/tasks; /prep before): what to read, practise and rehearse, for a
+// particular interview or in general: in progress, next and done; and the
+// stories to tell, under their own tab. /tasks?for=<process> opens on one
+// application's.
 
 import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import { attempt, del, get, patch, post } from "../lib/api";
@@ -12,7 +12,9 @@ import { store, stored } from "../lib/storage";
 import { toPlain } from "../lib/rich";
 import { toast } from "../lib/toast";
 import type { Row } from "../lib/types";
+import { settle } from "../lib/router";
 import { mayDiscard } from "../lib/unsaved";
+import { Combo, type ComboItem } from "../components/Combo";
 import { DatePicker } from "../components/DatePicker";
 import { ask, closeModal, confirmDelete, openModal } from "../components/dialogs";
 import { RichText, RichView } from "../components/RichText";
@@ -34,37 +36,87 @@ export const prepState = (): PrepState => {
   try { return { tab: "tasks", for: "all", step: "", kind: "all", columns: false, ...JSON.parse(stored("prep") || "{}") }; } catch { return { tab: "tasks", for: "all", step: "", kind: "all", columns: false }; }
 };
 
-/** Add prep for a process, in a dialog over its application's page; `added` once it's made. */
-export async function openPrepAdding(forProcess: number, added: () => void) {
+/** The page's state as it opens: what's remembered, but the application the address names (?for=), if it does. */
+const openingState = (): PrepState => {
+  const given = new URLSearchParams(location.search).get("for");
+  return given && /^\d+$/.test(given) ? { ...prepState(), tab: "tasks", for: given, step: "" } : prepState();
+};
+
+/** The processes of running cycles, and the one asked for (even if its cycle isn't running, or it's closed). */
+async function processesFor(forProcess: string) {
   const running = new Set(runningCycles().map((c) => c.id));
-  const loaded = await attempt(() => Promise.all([get("processes?status=active"), get("steps")]));
+  const procs: Row[] = (await get("processes?status=active")).filter((p: Row) => running.has(p.cycle_id) || String(p.id) === forProcess);
+  if (/^\d+$/.test(forProcess) && !procs.some((p) => String(p.id) === forProcess)) {
+    const one = await get(`processes/${forProcess}`).catch(() => null);
+    if (one) procs.push(one);
+  }
+  return procs;
+}
+
+/** Add a task for a process, in a dialog over its application's page; `added` once it's made. */
+export async function openPrepAdding(forProcess: number, added: () => void) {
+  const loaded = await attempt(() => Promise.all([processesFor(String(forProcess)), get("steps")]));
   if (!loaded) return;
   const [procs, sts] = loaded;
   openModal(<AddPrep dialog st={{ ...prepState(), for: String(forProcess), step: "" }}
-    processes={procs.filter((p: Row) => running.has(p.cycle_id) || p.id === forProcess)} steps={new Map(sts.map((s: Row) => [s.id, s]))}
-    close={closeModal} added={() => { closeModal(); toast("Added to prep"); added(); }} />);
+    processes={procs} steps={new Map(sts.map((s: Row) => [s.id, s]))}
+    close={closeModal} added={() => { closeModal(); toast("Added to tasks"); added(); }} />);
+}
+
+/**
+ * What a task's for, searched: an application's process by its company,
+ * role or reference, or general tasks (and, as a filter, everything). Empty
+ * is `empty`; what's typed and not picked goes back to what was.
+ */
+function ForPicker({ id, processes, value, onValue, everything = false, placeholder }: {
+  id: string; processes: Row[]; value: string; onValue: (v: string) => void; everything?: boolean; placeholder: string;
+}) {
+  const input = useRef<HTMLInputElement | null>(null);
+  const empty = everything ? "all" : "";
+  const fixed: ComboItem[] = [...(everything ? [{ value: "all", label: "Everything" }] : []), { value: everything ? "general" : "", label: "General tasks" }];
+  const labelOf = (v: string) => (v === "all" ? "" : fixed.find((x) => x.value === v)?.label ?? processes.find((p) => String(p.id) === v)?.label ?? "");
+  const shown = labelOf(value);
+  const latest = useRef(shown);
+  latest.current = shown;
+  const source = async (q: string): Promise<ComboItem[]> => {
+    // What's in the box already, as it's focused: everything to choose from.
+    const words = q === latest.current ? [] : q.toLowerCase().split(/\s+/).filter(Boolean);
+    const matches = (l: string) => words.every((w) => l.toLowerCase().includes(w));
+    return [...fixed.filter((x) => matches(x.label)), ...processes.filter((p) => matches(p.label)).map((p) => ({ value: String(p.id), label: p.label }))];
+  };
+  return <Combo key={value} id={id} value={shown} placeholder={placeholder} source={source} inputRef={input}
+    onPick={(it) => onValue(String(it.value))}
+    onChange={(v) => {
+      if (!v.trim()) { if (value !== empty) onValue(empty); }
+      else if (v !== latest.current && input.current) input.current.value = latest.current;
+    }} />;
 }
 
 export function PrepPage() {
-  const [st, setSt] = useState<PrepState>(prepState);
+  const [st, setSt] = useState<PrepState>(openingState);
   const [adding, setAdding] = useState(false);
   const [data, setData] = useState<{ items: Row[]; stories: Row[]; processes: Row[]; steps: Map<number, Row> } | null>(null);
   const [storyEditing, setStoryEditing] = useState<number | "new" | null>(null);
   const page = useRef<HTMLDivElement>(null);
-  const keep = (next: PrepState) => { store("prep", JSON.stringify({ tab: next.tab, for: next.for, step: next.step, kind: next.kind, columns: next.columns })); setSt(next); };
+  const keep = (next: PrepState) => {
+    store("prep", JSON.stringify({ tab: next.tab, for: next.for, step: next.step, kind: next.kind, columns: next.columns }));
+    // The address says whose they are: one application's, or not.
+    const url = /^\d+$/.test(next.for) ? `/tasks?for=${next.for}` : "/tasks";
+    if (location.pathname + location.search !== url) { history.replaceState(null, "", url); settle(); }
+    setSt(next);
+  };
   const change = (o: Partial<PrepState>) => keep({ ...st, ...o });
 
   async function load() {
-    const running = new Set(runningCycles().map((c) => c.id));
-    const [all, stories, procs, sts] = await Promise.all([get("prep"), get("stories"), get("processes?status=active"), get("steps")]);
+    const [all, stories, procs, sts] = await Promise.all([get("prep"), get("stories"), processesFor(st.for), get("steps")]);
     setData({
       items: all.filter((x: Row) => x.status !== "closed"),
       stories,
-      processes: procs.filter((p: Row) => running.has(p.cycle_id)),
+      processes: procs,
       steps: new Map(sts.map((s: Row) => [s.id, s])),
     });
   }
-  useEffect(() => { load().catch((e) => toast(e.message, "error")); }, []);
+  useEffect(() => { keep(st); load().catch((e) => toast(e.message, "error")); }, []);
   useEffect(() => { if (adding && data) page.current?.querySelector<HTMLElement>("#pa-title")?.focus(); }, [adding, !!data]);
   if (!data) return <div className="page prep-page" ref={page} />;
   const { items, stories, processes, steps } = data;
@@ -182,10 +234,8 @@ export function PrepPage() {
     return <>
       <div className="prep-filters">
         <Field><Label htmlFor="pf-for">For</Label>
-          <Select id="pf-for" value={st.for} onChange={(e) => change({ for: e.target.value, step: "" })}>
-            <option value="all">Everything</option><option value="general">General prep</option>
-            {processes.map((p) => <option key={p.id} value={String(p.id)}>{p.label}</option>)}
-          </Select></Field>
+          <ForPicker id="pf-for" everything processes={processes} value={st.for} placeholder="Everything: search applications"
+            onValue={(v) => change({ for: v, step: "" })} /></Field>
         <Field><Label htmlFor="pf-kind">Kind</Label>
           <Select id="pf-kind" value={st.kind} onChange={(e) => change({ kind: e.target.value })}>
             <option value="all">All kinds</option>{prepKinds().map(([v, l]) => <option key={v} value={v}>{l}</option>)}
@@ -202,7 +252,7 @@ export function PrepPage() {
         await load();
         const shown = inScope(made);
         if (!shown) change({ for: "all", step: "", kind: "all" });
-        toast(shown ? "Added to prep" : "Added to prep · filters widened to show it");
+        toast(shown ? "Added to tasks" : "Added to tasks · filters widened to show it");
       }} /> : null}
       <div className={`prep-groups${st.columns ? " as-columns" : ""}`}>
         {group("In progress", doing, "", "Nothing started. Pick something from Next.")}
@@ -232,8 +282,8 @@ export function PrepPage() {
               <div className="cycle-actions">
                 <button className="al-button al-button--quiet al-button--sm" type="button" onClick={() => setStoryEditing(s.id)}>Edit</button>
                 <button className="al-button al-button--quiet al-button--sm" type="button" onClick={async () => {
-                  if (await attempt(() => post("prep", { title: `Run through: ${s.title}`, kind: "practise", minutes: 15 }))) { await load(); toast("Added a run-through to prep"); }
-                }}>Add a run-through to prep</button>
+                  if (await attempt(() => post("prep", { title: `Run through: ${s.title}`, kind: "practise", minutes: 15 }))) { await load(); toast("Added a run-through to tasks"); }
+                }}>Add a run-through to tasks</button>
               </div>
             </div>
           </details>
@@ -247,17 +297,17 @@ export function PrepPage() {
   const tabs: [string, string, number][] = [["tasks", "To do", items.filter((x) => !isDone(x)).length], ["stories", "Stories", stories.length]];
   return (
     <div className="page prep-page" ref={page}>
-      {/* Prep for one application: a way back to it. */}
-      {processes.some((p) => String(p.id) === st.for) ? <a className="al-back-link" href={`/p/${st.for}`}>Back to application</a> : null}
+      {/* One application's tasks: a way back to it. */}
+      {/^\d+$/.test(st.for) ? <a className="al-back-link" href={`/p/${st.for}`}>Go back to application</a> : null}
       <header className="al-page-head">
-        <h1>Prep</h1>
+        <h1>Tasks</h1>
         <p className="al-page-head__lede">What to read, practise and rehearse, for a particular interview or in general.</p>
         <div className="al-page-head__end">
           <button className="al-button al-button--primary" type="button" onClick={() => { setAdding(true); change({ tab: "tasks" }); requestAnimationFrame(() => page.current?.querySelector<HTMLElement>("#pa-title")?.focus()); }}>
-            <Icon name="plus" /><span>Add prep</span></button>
+            <Icon name="plus" /><span>Add a task</span></button>
         </div>
       </header>
-      <div className="al-tabs" role="tablist" aria-label="Prep">
+      <div className="al-tabs" role="tablist" aria-label="Tasks">
         {tabs.map(([k, l, n]) => (
           <button key={k} className="al-tab" type="button" role="tab" id={`prep-tab-${k}`} aria-controls="prep-panel" aria-selected={String(st.tab === k) as "true" | "false"}
             onClick={() => change({ tab: k })}>{l}<span className="al-tab__count">{n}</span></button>
@@ -268,7 +318,7 @@ export function PrepPage() {
   );
 }
 
-/** Adding prep: in the page, or (`dialog`) in the modal. */
+/** Adding a task: in the page, or (`dialog`) in the modal. */
 function AddPrep({ st, processes, steps, close, added, dialog = false }: { st: PrepState; processes: Row[]; steps: Map<number, Row>; close: () => void; added: (made: Row) => void; dialog?: boolean }) {
   const [vals, setVals] = useState({ title: "", url: "", description: "", kind: "read", process_id: st.for !== "all" && st.for !== "general" ? st.for : "", step_id: st.step || "",
     minutes: 30, due_on: null as string | null, priority: "normal", repeats: false });
@@ -298,9 +348,8 @@ function AddPrep({ st, processes, steps, close, added, dialog = false }: { st: P
     <Field><Label htmlFor="pa-kind">Kind</Label>
       <Select id="pa-kind" value={vals.kind} onChange={(e) => set({ kind: e.target.value })}>{prepKinds().map(([v, l]) => <option key={v} value={v}>{l}</option>)}</Select></Field>
     <Field><Label htmlFor="pa-for">For</Label>
-      <Select id="pa-for" value={vals.process_id} onChange={(e) => set({ process_id: e.target.value, step_id: "" })}>
-        <option value="">General prep</option>{processes.map((p) => <option key={p.id} value={String(p.id)}>{p.label}</option>)}
-      </Select></Field>
+      <ForPicker id="pa-for" processes={processes} value={vals.process_id} placeholder="General: search applications"
+        onValue={(v) => setVals((x) => ({ ...x, process_id: v, step_id: "" }))} /></Field>
     <Field hidden={!mine.length}><Label htmlFor="pa-step">Step <Optional /></Label>
       <Select id="pa-step" value={vals.step_id} onChange={(e) => set({ step_id: e.target.value })}>
         <option value="">The whole process</option>{mine.map((s) => <option key={s.id} value={String(s.id)}>{s.title}</option>)}
@@ -321,16 +370,16 @@ function AddPrep({ st, processes, steps, close, added, dialog = false }: { st: P
   </>;
   const actions = <>
     <button className="al-button" type="button" onClick={(e) => { if (mayDiscard(e.currentTarget)) close(); }}>Cancel</button>
-    <button className="al-button al-button--primary" type="submit" disabled={!vals.title.trim()} aria-busy={busy ? "true" : undefined}>Add prep</button>
+    <button className="al-button al-button--primary" type="submit" disabled={!vals.title.trim()} aria-busy={busy ? "true" : undefined}>Add task</button>
   </>;
   return dialog ? (
     <form onSubmit={submit}>
-      <h2 className="al-dialog__title" id="modal-title">Add prep</h2>
+      <h2 className="al-dialog__title" id="modal-title">Add a task</h2>
       <div className="al-dialog__body prep-fields">{fields}</div>
       <div className="al-dialog__actions">{actions}</div>
     </form>
   ) : (
-    <form className="al-panel prep-add" aria-label="Add prep" data-unsaved="" onSubmit={submit}>
+    <form className="al-panel prep-add" aria-label="Add a task" data-unsaved="" onSubmit={submit}>
       {fields}
       <div className="prep-add-actions">{actions}</div>
     </form>
