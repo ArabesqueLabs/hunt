@@ -79,6 +79,15 @@ const AR = {
   'An image on {x}': 'صورة في {x}',
   'Only web pages can be kept.': 'لا يُحفظ إلا صفحات الويب.',
 
+  // Someone's LinkedIn profile.
+  'Add this person to hunt': 'أضف هذا الشخص إلى hunt',
+  'Someone’s LinkedIn profile': 'ملف شخص على LinkedIn',
+  'hunt opens with what it found on it: their name, role, company, location, about and photo. Tick what to keep.':
+    'يُفتح hunt بما وجده فيه: الاسم والدور والشركة والموقع والنبذة والصورة. اختر ما تحتفظ به.',
+  'Add to hunt’s people': 'أضف إلى أشخاص hunt',
+  'Couldn’t read this profile. Let the page finish loading, then try again.':
+    'تعذّرت قراءة هذا الملف. انتظر حتى تكتمل الصفحة، ثم أعد المحاولة.',
+
   // What hunt thinks something could become.
   'It’s in hunt already: {x}.': 'إنه في hunt بالفعل: {x}.',
   'It looks like a job posting: it could be an application.': 'يبدو أنه إعلان وظيفة: يمكن أن يصبح طلبًا.',

@@ -1,5 +1,5 @@
 //! The stash: anything kept to sort later. A link, some text or a file goes
-//! in with one gesture, from hunt, the bookmarklet, a phone or the CLI, and
+//! in with one gesture, from hunt, the browser extension, a phone or the CLI, and
 //! nothing about it has to be decided then. Sorting it later makes it into
 //! something in hunt (an application, a company, a person, a note, a task,
 //! a reminder, a link or a document) or dismisses it.

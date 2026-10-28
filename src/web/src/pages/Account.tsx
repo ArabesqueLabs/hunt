@@ -9,7 +9,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { attempt, del, get, patch, post } from "../lib/api";
 import { fmtDay, fmtStamp, nf, parseLocal, zonedNow } from "../lib/format";
-import { CURRENCIES, applyChoices, builtInSignIn, isAdmin, myAccount, sitePage, tenancy } from "../lib/meta";
+import { CURRENCIES, applyChoices, builtInSignIn, huntUrl, isAdmin, myAccount, sitePage, tenancy } from "../lib/meta";
 import { settle } from "../lib/router";
 import { baseTitle, sectionNav } from "../lib/shell";
 import { S, changed, useShared } from "../lib/state";
@@ -113,7 +113,7 @@ function AskForAccount({ head, who }: { head: ReactNode; who: ReactNode }) {
 
 /** The admin centre's tabs: each one's key, name, what's in it, and its icon. */
 const ALL_ADMIN_TABS: [string, string, string, string][] = [
-  ["general", "General", "Name, notice, new accounts", "sliders"],
+  ["general", "General", "Name, notice, address, new accounts", "sliders"],
   ["lists", "Lists", "Work modes, interview steps, roles, kinds of file", "tag"],
   ["access", "Access and accounts", "Sign-ups, invites, accounts", "key"],
   ["users", "User stats", "How accounts use hunt", "users"],
@@ -346,6 +346,9 @@ function AdminGeneral({ data }: { data: Row }) {
       {<SettingRow id="site-contact" label="Address for help" hint="Where people can write to the admins: on the account screen, and in Settings.">
         <TextSetting id="site-contact" type="email" value={about.contact || ""} placeholder="help@example.com" maxLength={254} autoComplete="off" save={site("contact")} />
       </SettingRow>}
+      <SettingRow id="site-url" label="hunt's address" hint="Where people open hunt: in the links it gives (the calendar's, invites) and for connecting the browser extension and other apps. Leave it empty for the address each page is at.">
+        <TextSetting id="site-url" type="url" value={about.url || ""} placeholder={location.origin} maxLength={200} autoComplete="off" save={site("url")} />
+      </SettingRow>
     </SettingsPanel>
     <SettingsPanel title="Undo" intro="After a change that can be undone, a message says what changed, with Undo.">
       <SettingRow id="undo-seconds" label="Seconds to undo" hint="How long the message stays, for everyone: 5 unless changed, at most 60. 0 keeps it until it's used or closed.">
@@ -422,8 +425,9 @@ function AdminAccess({ data, reload }: { data: Row; reload: () => void }) {
         const made = await attempt(() => post("admin/invites", { email, name: name || null }));
         setSending(false);
         if (!made) return;
-        try { await navigator.clipboard.writeText(`${location.origin}/app`); } catch { /* the toast says where */ }
-        toast(`Invited ${made.email}. The link to send them: ${location.origin}${builtInSignIn() ? "/signup" : "/"}`);
+        const where = `${huntUrl()}${builtInSignIn() ? "/signup" : "/"}`;
+        try { await navigator.clipboard.writeText(where); } catch { /* the toast says where */ }
+        toast(`Invited ${made.email}. The link to send them: ${where}`);
         reload();
       }}>
         <Field><Label htmlFor="invite-email">Email address</Label><Input id="invite-email" type="email" required autoComplete="off" placeholder="name@example.com" value={email} onChange={(e) => setEmail(e.target.value)} /></Field>

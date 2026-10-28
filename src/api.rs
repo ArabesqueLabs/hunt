@@ -36,7 +36,7 @@
 //! | `DELETE /api/account` | delete your own account and everything in it (`{confirm: "DELETE"}`); not the only admin's, or the only account |
 //! | `DELETE /api/data` | clear your data: cycles, applications, companies, people, notes, documents, tags (`{confirm: "CLEAR"}`); settings and the board stay |
 //! | `GET /api/account`, `POST /api/account/request` | with several people (`--tenants`): who's asking and their account; ask for one (`{name, reason, provider, agrees}`: agreeing to the terms of use) |
-//! | `PATCH /api/admin/settings` | admins: `{site}`, this hunt's `name`, an `announcement` on every page and a `contact` address for help; `{signups_open}`, whether new people may ask for an account; `{defaults}`, the language, region, time zone and currency new accounts start with; `{undo_seconds}`, how long a toast with Undo stays (5; 0 until dismissed, 60 at most); `{choices}`, the lists admins can change (`{work_mode: [{value?, label}], …}`, null for hunt's own; see `choices.rs`). One person's hunt: its owner, `{site}`'s `name` and `announcement` |
+//! | `PATCH /api/admin/settings` | admins: `{site}`, this hunt's `name`, an `announcement` on every page, a `contact` address for help and the `url` it's opened at; `{signups_open}`, whether new people may ask for an account; `{defaults}`, the language, region, time zone and currency new accounts start with; `{undo_seconds}`, how long a toast with Undo stays (5; 0 until dismissed, 60 at most); `{choices}`, the lists admins can change (`{work_mode: [{value?, label}], …}`, null for hunt's own; see `choices.rs`). One person's hunt: its owner, `{site}`'s `name` and `announcement` |
 //! | `POST /api/admin/invites` | admins: `{email, name?}`, an account for someone, open for sign-ups or not |
 //! | `GET /api/admin/usage` | admins: each account's use of hunt (counts and sizes; no names or addresses) |
 //! | `GET /api/admin/overview`, `POST /api/admin/accounts/{id}/decide`, `PATCH, DELETE /api/admin/accounts/{id}?data=` | admins: every account; approve, reject, disable or enable (`{status, note}`); change role, name or CLI token; remove (with `data=1`, everything of theirs) |
@@ -46,7 +46,7 @@
 //! | `POST /api/backup?confirm=replace` | a backup as the body: replaces everything with it; how many rows each table now has |
 //! | `PUT /api/owner` | one person's hunt: `{email, password}`, its owner (who signs in, and runs it), made by the launcher; then, signed in, `{email?, password?, current}` changes them, this browser staying signed in |
 //! | `POST /api/setup/done` | a new hunt's launcher is done: `GET /api/meta`'s `setup` is false from now on |
-//! | `GET/PATCH /api/settings` | one account's: `{theme: light\|dark\|auto, language, locale, numerals, clock, currency, timezone, week_start, work_hours, calendar_zones, uk_resident, uk_region, desired_take_home, desired_take_home_per, calendar_feed, bookmarklet_url, same_name: ask\|merge\|new}` |
+//! | `GET/PATCH /api/settings` | one account's: `{theme: light\|dark\|auto, language, locale, numerals, clock, currency, timezone, week_start, work_hours, calendar_zones, uk_resident, uk_region, desired_take_home, desired_take_home_per, calendar_feed, same_name: ask\|merge\|new}` |
 //! | `GET /api/stash?status=new\|done\|dismissed`, `GET /api/stash/count` | the stash (to sort, by default), each item with `suggestion` `{to, why, target}` and, sorted, `result`; how many wait |
 //! | `POST /api/stash` | `{url?, title?, body? (or text), source?}`: keep a link or some text to sort later; text that's only a link is kept as the link |
 //! | `POST /api/stash/file?filename=&source=` | a file as the body, kept to sort later; `GET /api/stash/{id}/file[?download]` gives it back |
@@ -73,7 +73,7 @@
 //! | `GET, PUT, DELETE /api/companies/{id}/logo` | a company's logo: the image; set it (the body is the image); remove it |
 //! | `POST /api/companies/{id}/logo/fetch` | `{url}`: set the logo from an image's address, as an import found it |
 //! | `POST /api/people/lookup` | `{url}`: what someone's LinkedIn profile says; saves nothing |
-//! | `POST /api/people/from-page` | what the “Send to hunt” bookmark collected from a profile: who it's about; saves nothing |
+//! | `POST /api/people/from-page` | what the browser extension collected from a profile: who it's about; saves nothing |
 //! | `GET, PUT, DELETE /api/people/{id}/photo`, `POST …/photo/fetch` | a person's photo, as for a company's logo |
 //! | `POST /api/companies/lookup` | `{url}`: what a company's website or LinkedIn page says about it; saves nothing |
 //! | `GET /api/calendar?from=&to=&q=&kinds=&status=` | dated things in time order: interview steps, next actions, tasks, deadlines, applied and posted dates |
@@ -733,8 +733,8 @@ async fn not_routed(method: axum::http::Method, uri: axum::http::Uri, v: Viewer)
     ApiError(Error::NotFound(format!("nothing at {}", uri.path()))).into_response()
 }
 
-/// An address of the app's from when it lived under /app (a bookmark, the
-/// "Send to hunt" bookmarklet): the same page, without it, with its query.
+/// An address of the app's from when it lived under /app (a bookmark): the
+/// same page, without it, with its query.
 async fn drop_app(uri: axum::http::Uri) -> Response {
     let path = uri.path().strip_prefix("/app").unwrap_or("/");
     let path = if path.is_empty() { "/" } else { path };
@@ -2877,7 +2877,7 @@ struct AdminSettings {
     signups_open: Option<bool>,
     /// What new accounts start with: `{language, region, timezone, currency}`.
     defaults: Option<Value>,
-    /// What it says of itself, to everyone: `{name, announcement, contact}`.
+    /// What it says of itself, to everyone: `{name, announcement, contact, url}`.
     site: Option<Value>,
     /// How long a toast with Undo stays, in seconds (0: until dismissed).
     undo_seconds: Option<u32>,
@@ -2885,7 +2885,7 @@ struct AdminSettings {
     choices: Option<Value>,
 }
 
-/// Hunt-wide settings: its name, notice and address for help; whether new
+/// Hunt-wide settings: its name, notice, address for help and its own; whether new
 /// people may ask for an account; and what new accounts start with.
 async fn admin_settings(a: Admin, Json(s): Json<AdminSettings>) -> ApiResult {
     ok(tokio::task::spawn_blocking(move || {

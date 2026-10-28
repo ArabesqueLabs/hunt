@@ -308,7 +308,7 @@ function GettingStarted({ b }: { b: Board }) {
         {task(<a href="/settings?tab=board">Make the board yours</a>, "Its stages, and the swimlanes that group them.", optional)}
         {task(<a href="/settings?tab=calendar">Put interviews in your calendar</a>, "Your working hours, and a link your calendar app can follow.", S.PREFS.calendar_feed ? done : optional)}
         {/* Settings → Connections is hidden for now.
-        {task(<a href="/settings?tab=connections">Add people from LinkedIn in one click</a>, "A bookmark that sends a profile to hunt.", optional)} */}
+        {task(<a href="/settings?tab=connections">Add people from LinkedIn in one click</a>, "The browser extension sends a profile to hunt.", optional)} */}
       </ol>
     </section>
   );

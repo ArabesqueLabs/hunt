@@ -30,20 +30,20 @@ process's Company panel.
 
 Profiles need a sign-in, so hunt reads them from your browser.
 
-- Drag "Send to hunt" from Settings → LinkedIn to your bookmarks bar; on
-  someone's profile, click it.
+- With the [browser extension](../../extension/README.md), on someone's
+  profile, choose **Add to hunt's people** in its popup (or **Add this
+  person to hunt** in the right-click menu).
 - hunt opens with their name, role, company, location, about and photo to
   choose from, and updates whoever already has that profile instead of
   adding them twice.
 - Someone of the same name, added by hand or under another link, is asked
-  about, merged into, or left alone, as Settings say. Settings also hold
-  the address the bookmark opens hunt at, for when that isn't this page's.
-- The bookmark only collects the page's text; hunt reads it, so a change
-  to LinkedIn's pages needs a hunt update, not a new bookmark.
+  about, merged into, or left alone, as Settings → Connected apps say.
+- The extension only collects the page's text; hunt reads it, so a change
+  to LinkedIn's pages needs a hunt update, not a new extension.
 
 ## Refresh from LinkedIn
 
 A company or person with a LinkedIn link has it in place of "Import…" (and
 as refresh in the listings), reading that link again. LinkedIn keeps most
 profiles from anyone not signed in; then it offers to open the profile,
-for the "Send to hunt" bookmark.
+for the browser extension.

@@ -1,10 +1,12 @@
 // Keeping things without opening the popup: "Send … to hunt" in the menu
 // when you right-click a page, a link, an image or a selection, and a
-// keyboard shortcut that keeps the page you're on. The toolbar button
+// keyboard shortcut that keeps the page you're on. On someone's LinkedIn
+// profile, the menu also brings them into hunt. The toolbar button
 // says how it went, for a few seconds: ✓, or ! (its tooltip says why, and
 // the settings open when there's nothing to send to yet).
 import { connected, load } from './lib/settings.js';
 import { keep } from './lib/hunt.js';
+import { bringIn } from './lib/linkedin.js';
 import { explain, setLanguage, t } from './lib/i18n.js';
 
 const MENUS = [
@@ -12,6 +14,12 @@ const MENUS = [
   { id: 'send-link', title: 'Send this link to hunt', contexts: ['link'] },
   { id: 'send-image', title: 'Send this image to hunt', contexts: ['image'] },
   { id: 'send-selection', title: 'Send the selection to hunt', contexts: ['selection'] },
+  {
+    id: 'add-person',
+    title: 'Add this person to hunt',
+    contexts: ['page'],
+    documentUrlPatterns: ['https://linkedin.com/in/*', 'https://*.linkedin.com/in/*'],
+  },
 ];
 
 // How long the toolbar button shows how it went.
@@ -23,7 +31,7 @@ async function buildMenus() {
   setLanguage(settings.language);
   await chrome.contextMenus.removeAll();
   for (const menu of MENUS) {
-    chrome.contextMenus.create({ id: menu.id, title: t(menu.title), contexts: menu.contexts });
+    chrome.contextMenus.create(Object.assign({}, menu, { title: t(menu.title) }));
   }
 }
 
@@ -69,6 +77,21 @@ async function send(tab, capture) {
   }
 }
 
+/** Bring the LinkedIn profile open in `tab` into hunt, in a tab beside it. */
+async function addPerson(tab) {
+  const settings = await load();
+  setLanguage(settings.language);
+  if (!connected(settings)) {
+    chrome.runtime.openOptionsPage();
+    return;
+  }
+  try {
+    await bringIn(settings, tab);
+  } catch (error) {
+    badge(tab, false, explain(error));
+  }
+}
+
 /** A tab's page, if it's a web page (not the browser's own). */
 function webPage(tab) {
   return tab && tab.url && /^https?:/i.test(tab.url) ? tab.url : null;
@@ -94,6 +117,9 @@ chrome.contextMenus.onClicked.addListener(function (info, tab) {
       break;
     case 'send-selection':
       send(tab, { url: pageUrl, title: pageTitle, body: info.selectionText });
+      break;
+    case 'add-person':
+      addPerson(tab);
       break;
   }
 });

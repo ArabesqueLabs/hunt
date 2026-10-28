@@ -16,6 +16,7 @@
   <symbol id="al-icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="miter"><path d="M6 6l12 12M18 6L6 18"/></symbol>
   <symbol id="al-icon-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="miter"><path d="M3.5 7h9M16.5 7h4M3.5 12h3M10.5 12h10M3.5 17h11M18.5 17h2"/><circle cx="14.5" cy="7" r="2"/><circle cx="8.5" cy="12" r="2"/><circle cx="16.5" cy="17" r="2"/></symbol>
   <symbol id="al-icon-warning" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="miter"><path d="M12 3.5l9 16H3z"/><path d="M12 10v4.5M12 16.5v1"/></symbol>
+  <symbol id="al-icon-info" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="miter"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5M12 7.5v1"/></symbol>
   <symbol id="al-icon-external" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="miter"><path d="M14 4.5h5.5V10M19.5 4.5L11 13"/><path d="M17.5 13.5v6h-13v-13h6"/></symbol>
 </svg>
 
@@ -47,6 +48,19 @@
       <p data-i18n>Give the extension your hunt’s address and a token from hunt’s Settings → Connected apps.</p>
       <div class="al-notice__actions">
         <button class="al-button al-button--sm al-button--primary" id="connect-open" type="button" data-i18n>Open settings</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Someone's LinkedIn profile: brought into hunt, to tick what to keep of
+       it, rather than kept in the stash (which stays below, as for any page). -->
+  <div class="al-notice al-notice--info" id="profile" hidden>
+    <svg class="al-icon" aria-hidden="true"><use href="#al-icon-info"/></svg>
+    <div class="al-notice__body">
+      <p class="al-notice__title" data-i18n>Someone’s LinkedIn profile</p>
+      <p data-i18n>hunt opens with what it found on it: their name, role, company, location, about and photo. Tick what to keep.</p>
+      <div class="al-notice__actions">
+        <button class="al-button al-button--sm al-button--primary" id="add-person" type="button" data-i18n>Add to hunt’s people</button>
       </div>
     </div>
   </div>

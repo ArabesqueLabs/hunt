@@ -411,7 +411,7 @@ export function StashPage() {
       </div>
       {items == null ? <LoadingBlock lines={6} /> : !all.length ? (
         tab === "new"
-          ? <EmptyState title="Nothing to sort" text="Paste a link above, press I anywhere in hunt, or use the bookmarklet in Settings to send pages here." />
+          ? <EmptyState title="Nothing to sort" text="Paste a link above, press I anywhere in hunt, or send pages here with the browser extension (Settings → Connected apps)." />
           : <EmptyState title={tab === "done" ? "Nothing sorted yet" : "Nothing dismissed"} />
       ) : (
         <>
@@ -423,26 +423,4 @@ export function StashPage() {
       )}
     </div>
   );
-}
-
-/**
- * A page sent by the “Send to hunt” bookmark (/stash/new?url=&title=&text=):
- * kept, then the stash, with it at the top.
- */
-export function SentToStash() {
-  const [sent] = useState(() => {
-    const q = new URLSearchParams(location.search);
-    // Off the address bar, so going back or reloading doesn't keep it again.
-    history.replaceState(null, "", "/stash");
-    return { url: q.get("url"), title: q.get("title"), body: q.get("text"), source: q.get("source") || "bookmarklet" };
-  });
-  const [kept, setKept] = useState(false);
-  useEffect(() => {
-    if (!sent.url && !sent.body) { setKept(true); return; }
-    post("stash", sent)
-      .then(() => toast("Kept in your stash"))
-      .catch((e) => toast(e.message, "error"))
-      .finally(() => setKept(true));
-  }, [sent]);
-  return kept ? <StashPage /> : <LoadingBlock lines={6} />;
 }

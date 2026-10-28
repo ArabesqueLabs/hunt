@@ -2803,34 +2803,10 @@ async fn gmail_is_matched_to_processes() {
 }
 
 #[tokio::test]
-async fn bookmarklet_settings() {
+async fn same_name_setting() {
     let app = app();
     let s = ok(&app, "GET", "/api/settings", None).await;
-    assert_eq!(
-        (&s["bookmarklet_url"], &s["same_name"]),
-        (&Value::Null, &json!("ask"))
-    );
-    let s = ok(
-        &app,
-        "PATCH",
-        "/api/settings",
-        Some(json!({ "bookmarklet_url": "http://hunt.local:4848/" })),
-    )
-    .await;
-    assert_eq!(
-        s["bookmarklet_url"], "http://hunt.local:4848",
-        "no trailing slash"
-    );
-    for bad in ["hunt.local", "ftp://x", "http://x/some/path"] {
-        let (status, _) = call(
-            &app,
-            "PATCH",
-            "/api/settings",
-            Some(json!({ "bookmarklet_url": bad })),
-        )
-        .await;
-        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{bad}");
-    }
+    assert_eq!(s["same_name"], "ask");
     let s = ok(
         &app,
         "PATCH",
@@ -2838,11 +2814,7 @@ async fn bookmarklet_settings() {
         Some(json!({ "same_name": "merge" })),
     )
     .await;
-    assert_eq!(
-        (&s["bookmarklet_url"], &s["same_name"]),
-        (&json!("http://hunt.local:4848"), &json!("merge")),
-        "others stay"
-    );
+    assert_eq!(s["same_name"], "merge");
     let (status, _) = call(
         &app,
         "PATCH",
@@ -2851,18 +2823,6 @@ async fn bookmarklet_settings() {
     )
     .await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
-    let s = ok(
-        &app,
-        "PATCH",
-        "/api/settings",
-        Some(json!({ "bookmarklet_url": "" })),
-    )
-    .await;
-    assert_eq!(
-        s["bookmarklet_url"],
-        Value::Null,
-        "empty: this page's address"
-    );
 }
 
 /// Google, in miniature: sign-in and the parts of the Gmail API hunt uses.
@@ -3882,7 +3842,7 @@ async fn the_dashboard_lives_under_app_and_old_addresses_lead_there() {
     let res = get("/about").await;
     assert_eq!(res.status(), StatusCode::PERMANENT_REDIRECT);
     assert_eq!(res.headers()["location"], "/");
-    // Addresses from when it was under /app (a bookmark, the bookmarklet):
+    // Addresses from when it was under /app (a bookmark):
     // the same page, without it, with their query.
     for (old, new) in [
         ("/app", "/"),
@@ -6089,6 +6049,27 @@ async fn the_owner_runs_the_hunt_and_a_new_one_is_closed_to_others() {
     let about = ok(&app, "GET", "/api/meta", None).await["about"].clone();
     assert_eq!(about["name"], "My search");
     assert_eq!(about["announcement"], "Back up on Sunday");
+    // Its address: an origin, without a trailing slash; empty, none.
+    let at = |url: &str| {
+        request(
+            "PATCH",
+            "/api/admin/settings",
+            &[("authorization", &me)],
+            Some(json!({ "site": { "url": url } })),
+        )
+    };
+    let saved = json_of(send(at("https://hunt.example.com/")).await).await;
+    assert_eq!(saved["site"]["url"], "https://hunt.example.com");
+    assert_eq!(saved["site"]["name"], "My search", "others stay");
+    for bad in ["hunt.example.com", "ftp://x", "http://x/some/path"] {
+        assert_eq!(
+            send(at(bad)).await.status(),
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "{bad}"
+        );
+    }
+    let saved = json_of(send(at("")).await).await;
+    assert_eq!(saved["site"]["url"], Value::Null, "empty: the page's own");
     // Closed: nobody signs up.
     let signup = |form: &str| {
         Request::post("/signup")
