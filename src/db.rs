@@ -21,7 +21,7 @@ const SCHEMA_POSTGRES: &str = include_str!("schema_postgres.sql");
 const SCHEMA_MYSQL: &str = include_str!("schema_mysql.sql");
 /// "hunt" in ASCII: marks a database as ours.
 const APP_ID: i64 = 0x6875_6e74;
-pub const SCHEMA_VERSION: i64 = 29;
+pub const SCHEMA_VERSION: i64 = 30;
 /// The version schema*.sql describe: a new database is made at it, then
 /// brought up to [`SCHEMA_VERSION`] by the migrations after it.
 const SCHEMA_BASE: i64 = 14;
@@ -57,6 +57,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("migrate_v27.sql"),
     include_str!("migrate_v28.sql"),
     include_str!("migrate_v29.sql"),
+    include_str!("migrate_v30.sql"),
 ];
 /// Upgrades PostgreSQL and MySQL databases can take: (version reached, its
 /// SQL for PostgreSQL, for MySQL). They start at version 8.
@@ -165,6 +166,11 @@ const SERVER_MIGRATIONS: &[(i64, &str, &str)] = &[
         29,
         include_str!("migrate_v29_postgres.sql"),
         include_str!("migrate_v29_mysql.sql"),
+    ),
+    (
+        30,
+        include_str!("migrate_v30_postgres.sql"),
+        include_str!("migrate_v30_mysql.sql"),
     ),
 ];
 
@@ -1170,6 +1176,12 @@ impl Db {
                         set.push(("swimlane_id", Value::from(first)));
                     }
                 }
+                let name = field_of(set, "name");
+                self.check_stage_name(
+                    None,
+                    name.as_str().unwrap_or(""),
+                    &field_of(set, "swimlane_id"),
+                )?;
             }
             "swimlane" => {
                 check_flag(set, "folded", "Folded: 1 for folded, 0 for not")?;
@@ -1252,6 +1264,21 @@ impl Db {
         }
         if r.entity == "stage" {
             self.check_stage_active(old, set)?;
+            if set
+                .iter()
+                .any(|(k, _)| matches!(*k, "name" | "swimlane_id"))
+            {
+                let now = |n: &str| {
+                    set.iter()
+                        .find(|(k, _)| *k == n)
+                        .map_or_else(|| old[n].clone(), |(_, v)| v.clone())
+                };
+                self.check_stage_name(
+                    old["id"].as_i64(),
+                    now("name").as_str().unwrap_or(""),
+                    &now("swimlane_id"),
+                )?;
+            }
         }
         if matches!(r.entity, "stage" | "swimlane" | "lane") {
             let says = "Folded: 1 for folded, 0 for not";
@@ -1503,6 +1530,26 @@ impl Db {
                 "UPDATE lane SET is_default = 0 WHERE stage_id = ?1 AND id <> ?2",
                 args![stage, id.unwrap_or(0)],
             )?;
+        }
+        Ok(())
+    }
+
+    /// A stage's name is its swimlane's alone (in none: the first), though
+    /// another swimlane may have a stage called the same.
+    fn check_stage_name(&self, id: Option<i64>, name: &str, swimlane: &Value) -> Result<()> {
+        let first = self.int(
+            "SELECT coalesce(min(id), 0) FROM swimlane WHERE position = (SELECT min(position) FROM swimlane)",
+            &[],
+        )?;
+        let swimlane = swimlane.as_i64().unwrap_or(first);
+        let taken = self.int(
+            "SELECT count(*) FROM stage WHERE lower(name) = lower(?1) AND id <> ?2 AND coalesce(swimlane_id, ?3) = ?4",
+            args![name, id.unwrap_or(0), first, swimlane],
+        )?;
+        if taken > 0 {
+            return Err(Error::Conflict(
+                "there's already a stage with that name in its swimlane".into(),
+            ));
         }
         Ok(())
     }

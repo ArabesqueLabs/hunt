@@ -76,7 +76,7 @@ export async function askTag(title: string, ok: string, existing = S.TAGS.map((t
  * delete. `ids()` gives them; `stages` (with their lanes) are where they
  * can go; `after()` redraws.
  */
-export function ProcessActions({ ids, stages, after }: { ids: () => number[]; stages: Stage[]; after: () => void }) {
+export function ProcessActions({ ids, stages, named = (st) => st.name, after }: { ids: () => number[]; stages: Stage[]; named?: (st: Stage) => string; after: () => void }) {
   const many = () => `${ids().length} ${ids().length === 1 ? "process" : "processes"}`;
   return (
     <>
@@ -87,8 +87,8 @@ export function ProcessActions({ ids, stages, after }: { ids: () => number[]; st
       }}>
         <option value="">Move to…</option>
         {stages.flatMap((st) => [
-          <option key={`${st.id}:`} value={`${st.id}:`}>{st.name}</option>,
-          ...(st.lanes || []).map((l) => <option key={`${st.id}:${l.id}`} value={`${st.id}:${l.id}`}>{`${st.name} · ${l.name}`}</option>),
+          <option key={`${st.id}:`} value={`${st.id}:`}>{named(st)}</option>,
+          ...(st.lanes || []).map((l) => <option key={`${st.id}:${l.id}`} value={`${st.id}:${l.id}`}>{`${named(st)} · ${l.name}`}</option>),
         ])}
       </Select>
       <button className="al-button al-button--sm" type="button" onClick={async () => {

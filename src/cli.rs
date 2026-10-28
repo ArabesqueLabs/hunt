@@ -1584,6 +1584,15 @@ fn stage_id(api: &Client, text: &str) -> Result<i64> {
         .collect();
     match (exact.as_slice(), prefix.as_slice()) {
         ([one], _) | ([], [one]) => Ok(one["id"].as_i64().unwrap_or(0)),
+        // The same name in two swimlanes: which, by its id.
+        ([_, ..], _) => bail!(
+            "more than one stage is called {text:?} (one in each of their swimlanes); give its id: {}",
+            exact
+                .iter()
+                .map(|st| format!("#{}", st["id"]))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
         _ => bail!(
             "no single stage called {text:?}; there are {}",
             stages

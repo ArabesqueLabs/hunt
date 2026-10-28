@@ -120,10 +120,10 @@ input.al-input, select.al-select:not([multiple]) { block-size: var(--al-field-he
 .board-empty .al-empty__title { margin: 0; }
 
 /* Every column the same width, in every swimlane however many it has: the
-   page's width over the board's --board-columns (3, 4 or 5); more than fit,
+   page's width over the board's --board-columns (3 or 5); more than fit,
    and they scroll. */
 .columns {
-  --column-width: calc((100% - (var(--board-columns, 4) - 1) * var(--al-space-4)) / var(--board-columns, 4));
+  --column-width: calc((100% - (var(--board-columns, 5) - 1) * var(--al-space-4)) / var(--board-columns, 5));
   display: grid; grid-auto-flow: column; grid-auto-columns: var(--column-width); justify-content: start;
   gap: var(--al-space-4); overflow-x: auto; align-items: start; padding-bottom: var(--al-space-2);
   scroll-snap-type: x proximity;

@@ -3,7 +3,7 @@
 // (/); ViewSwitch moves between them.
 
 import { useEffect, useState } from "react";
-import { loadBoard } from "../lib/board";
+import { loadBoard, stageNamer } from "../lib/board";
 import { runningCycles } from "../lib/cycles";
 import { matchesFilters, placeOf, readFilters, restoreFilters, rowFromCard, type FilterRow, type Filters } from "../lib/filters";
 import { fmtDay, fmtMoney, HOME, homePay } from "../lib/format";
@@ -69,7 +69,8 @@ function ApplicationsTable({ board, reload }: { board: Board; reload: () => void
   const ro = !!board.read_only;
   const stages = board.stages;
   const place = placeOf(board);
-  const stageAt = new Map(stages.map((st, i) => [st.id, { name: st.name, n: i }]));
+  const named = stageNamer(board);
+  const stageAt = new Map(stages.map((st, i) => [st.id, { name: named(st), n: i }]));
   const modes = fieldOf("applications", "work_mode").options;
   const rows: TableRow[] = stages.flatMap((st) => st.cards).map((card) => ({
     ...rowFromCard(card, place), card,
@@ -141,7 +142,7 @@ function ApplicationsTable({ board, reload }: { board: Board; reload: () => void
           </tbody>
         </Table>
       </div>
-      {ro ? null : <BulkBar count={sel.size} clear={() => { sel.clear(); redraw(); }} actions={<ProcessActions ids={() => [...sel]} stages={stages} after={after} />} />}
+      {ro ? null : <BulkBar count={sel.size} clear={() => { sel.clear(); redraw(); }} actions={<ProcessActions ids={() => [...sel]} stages={stages} named={named} after={after} />} />}
     </div>
   );
 }

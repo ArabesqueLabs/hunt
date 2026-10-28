@@ -92,6 +92,18 @@ export function boardSwimlanes(b: Board) {
 }
 
 /**
+ * A stage's name, as a list of the board's stages says it: with its
+ * swimlane's, when a stage in another swimlane has the same name.
+ */
+export function stageNamer(b: Board) {
+  const lanes = boardSwimlanes(b);
+  const of = new Map(lanes.flatMap((g) => g.stages.map((st) => [st.id, g.lane.name] as const)));
+  const seen = new Map<string, number>();
+  for (const st of boardStages(b)) seen.set(st.name.toLowerCase(), (seen.get(st.name.toLowerCase()) || 0) + 1);
+  return (st: { id: number; name: string }) => ((seen.get(st.name.toLowerCase()) || 0) > 1 && of.get(st.id) ? `${st.name} (${of.get(st.id)})` : st.name);
+}
+
+/**
  * Packs: a list of cards (a sub stage's, or a column's top) folded into
  * one card on the rest, until unfolded. A stage says how its own start
  * (`folded`), and a sub stage how its do (or as its stage); `folded(key)`

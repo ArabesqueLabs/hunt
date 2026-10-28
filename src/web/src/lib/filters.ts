@@ -4,7 +4,7 @@
 // remembered.
 
 import { enc } from "./api";
-import { boardStages, nextOf, type Next } from "./board";
+import { boardStages, nextOf, stageNamer, type Next } from "./board";
 import { homePay, isoToday, zonedNow } from "./format";
 import { here, settle } from "./router";
 import { store, stored } from "./storage";
@@ -73,8 +73,9 @@ function payTop(x: Row) {
 export type Place = (c: Card) => { stage: string; stage_n: number; lane: string; lane_n: number };
 export function placeOf(b: Board): Place {
   const stages = new Map<number, [string, number]>(), lanes = new Map<number, [string, number]>();
+  const named = stageNamer(b);
   boardStages(b).forEach((st, i) => {
-    stages.set(st.id, [st.name, i]);
+    stages.set(st.id, [named(st), i]);
     (st.lanes || []).forEach((l, j) => lanes.set(l.id, [l.name, j]));
   });
   return (c) => {

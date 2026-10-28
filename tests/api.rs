@@ -6376,3 +6376,65 @@ async fn notes_steps_emails_and_links_move_to_another_application() {
         "{why}"
     );
 }
+
+#[tokio::test]
+async fn stages_in_different_swimlanes_can_share_a_name() {
+    let app = app();
+    let board = ok(&app, "GET", "/api/board", None).await;
+    let active = board["swimlanes"][0]["id"].clone();
+    let held = ok(
+        &app,
+        "POST",
+        "/api/swimlanes",
+        Some(json!({ "name": "On hold" })),
+    )
+    .await;
+    // Offer is in the first swimlane; another swimlane may have one too.
+    let offer = ok(
+        &app,
+        "POST",
+        "/api/stages",
+        Some(json!({ "name": "offer", "swimlane_id": held["id"] })),
+    )
+    .await;
+    // But not a second one in the same swimlane, made, renamed or moved there.
+    let (status, v) = call(
+        &app,
+        "POST",
+        "/api/stages",
+        Some(json!({ "name": "Offer" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{v}");
+    let other = ok(
+        &app,
+        "POST",
+        "/api/stages",
+        Some(json!({ "name": "Take-home", "swimlane_id": held["id"] })),
+    )
+    .await;
+    let (status, v) = call(
+        &app,
+        "PATCH",
+        &format!("/api/stages/{}", other["id"]),
+        Some(json!({ "name": "OFFER" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{v}");
+    let (status, v) = call(
+        &app,
+        "PATCH",
+        &format!("/api/stages/{}", offer["id"]),
+        Some(json!({ "swimlane_id": active })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{v}");
+    // Its own name, again, is no clash.
+    ok(
+        &app,
+        "PATCH",
+        &format!("/api/stages/{}", offer["id"]),
+        Some(json!({ "name": "Offer" })),
+    )
+    .await;
+}
