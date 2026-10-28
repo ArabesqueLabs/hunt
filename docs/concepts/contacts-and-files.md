@@ -15,7 +15,7 @@ A company's website or LinkedIn page fills in its details, and its logo.
 A person is a recruiter, hiring manager, interviewer or referrer, at a
 company or not. A process lists the people involved and what each is to
 it; an interview step lists who it's with. A LinkedIn profile fills a
-person in, from a link or the "Send to hunt" bookmark.
+person in, from a link or the browser extension.
 
 Companies and people are your contacts, shared by every cycle.
 

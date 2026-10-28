@@ -419,8 +419,9 @@ holds for you and the Zero Trust dashboard, with hunt's own health check,
 calendar feed, backup, source and image builds. The CLI uses a service
 token: set `HUNT_ACCESS_CLIENT_ID` and `HUNT_ACCESS_CLIENT_SECRET` to its
 id and secret, and `HUNT_URL` to the public address, and set its Client ID
-as the account's CLI token in the admin centre. The "Send to hunt"
-bookmarklet opens hunt in a tab, so it signs in like any other visit.
+as the account's CLI token in the admin centre. Bringing someone in from
+LinkedIn, the extension opens hunt in a tab, so it signs in like any other
+visit.
 
 Apps that send to your stash with an access token have to get past Access
 first:
@@ -464,7 +465,8 @@ opens them (Admin → Access and accounts), or invites someone.
     remove it (with everything of theirs, if chosen).
   - General: this hunt's name (in the sidebar and the browser's tab), a
     notice above every page (until each person closes it), an address
-    people can write to for help, and what new accounts start with.
+    people can write to for help, hunt's own address (for the links it
+    gives and connecting apps), and what new accounts start with.
   - Info: its version, how people sign in, who runs it, and how many
     accounts it has. User stats and System resources: how each account
     uses hunt (by number, not name), and the machine. Debugging info:

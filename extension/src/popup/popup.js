@@ -1,5 +1,6 @@
 import { connected, load, save } from '../lib/settings.js';
 import { keep, page, whoami } from '../lib/hunt.js';
+import { bringIn, isProfile } from '../lib/linkedin.js';
 import { explain, localise, suggestionText, t } from '../lib/i18n.js';
 
 const form = document.getElementById('form');
@@ -19,8 +20,12 @@ const problemActions = document.getElementById('problem-actions');
 const fix = document.getElementById('fix');
 const footer = document.getElementById('footer');
 const who = document.getElementById('who');
+const profile = document.getElementById('profile');
+const addPerson = document.getElementById('add-person');
 
 let settings = null;
+// The tab the popup was opened on.
+let tab = null;
 // The page the popup was opened on: its address, if it's a web page's.
 let url = null;
 let sending = false;
@@ -104,6 +109,16 @@ async function send() {
   }
 }
 
+addPerson.addEventListener('click', async function () {
+  problem.hidden = true;
+  try {
+    await bringIn(settings, tab);
+    window.close();
+  } catch (error) {
+    showProblem(error);
+  }
+});
+
 form.addEventListener('submit', function (event) {
   event.preventDefault();
   send();
@@ -139,7 +154,7 @@ async function open() {
     return;
   }
   showWho();
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   const web = tab && tab.url && /^https?:/i.test(tab.url);
   url = web ? tab.url : null;
   pageLine.textContent = url || '';
@@ -150,7 +165,11 @@ async function open() {
   note.value = selected;
   noteHint.hidden = !selected;
   form.hidden = false;
-  (url ? keepButton : note).focus();
+  // On a profile, bringing them in comes first; keeping the page stays.
+  const someone = Boolean(url && isProfile(url));
+  profile.hidden = !someone;
+  keepButton.classList.toggle('al-button--primary', !someone);
+  (someone ? addPerson : url ? keepButton : note).focus();
 
   // Who it is now, and their language, for next time (and this time, if
   // it's changed).

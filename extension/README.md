@@ -13,6 +13,13 @@ hunt [stash](../docs/cli/stash.md), to sort later. It works from:
   the page at once, and <kbd>Alt</kbd><kbd>Shift</kbd><kbd>H</kbd> opens the
   popup. Change them in the browser's own shortcut settings.
 
+On someone's LinkedIn profile, the popup (and the right-click menu's **Add
+this person to hunt**) brings them in: LinkedIn only shows a profile to
+people signed in, so hunt can't read one itself. The extension collects
+the profile's text from the page and opens hunt beside it, at
+`/linkedin?d=…`, where hunt reads it and you tick what to keep (their
+name, role, company, location, about and photo).
+
 Without the popup, the toolbar button says how it went for a few seconds:
 ✓, or ! with the reason in its tooltip.
 
@@ -53,7 +60,8 @@ with the page's address, its title and your note, marked as from the
 extension. When it's connecting or the popup opens, it also asks
 `GET /api/stash/me` whose stash it is and in what language. It reads the
 selected text on a page only when you open the popup there, and nothing
-else on the page.
+else on the page, except on a LinkedIn profile when you ask to add the
+person: then it reads that profile's text, and opens hunt with it.
 
 ## Building
 
@@ -82,11 +90,12 @@ To try it out without a store:
 | | |
 |---|---|
 | `src/manifest-chrome.json`, `src/manifest-firefox.json` | each browser's manifest (Firefox: background scripts, its theme icons, its id) |
-| `src/background.js` | the right-click menu and the keyboard shortcut that keeps the page at once |
+| `src/background.js` | the right-click menu (adding someone from LinkedIn too) and the keyboard shortcut that keeps the page at once |
 | `src/popup/` | the toolbar popup |
 | `src/options/` | the settings page: hunt's address, the token, Access, the shortcuts |
 | `src/lib/settings.js` | the settings, in local storage |
 | `src/lib/hunt.js` | hunt's API: keeping something, and whose stash it is |
+| `src/lib/linkedin.js` | someone's LinkedIn profile: collecting it from the page, and opening hunt with it |
 | `src/lib/i18n.js` | the Arabic, looked up by the English, as hunt's web UI does |
 | `src/icons/` | hunt's logo (`mark.svg`, from `src/web/img/logo.svg`) at each size, and reversed for Firefox's dark toolbars |
 | `src/vendor/arabesque/` | the design system's CSS and fonts |

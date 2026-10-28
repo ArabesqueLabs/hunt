@@ -39,6 +39,9 @@ export const takeHomeOn = () => !!S.PREFS.uk_resident;
  */
 export const sitePage = (path: string) => `${S.META.site}${path}`;
 
+/** The address this hunt is opened at, as admins set it (Admin → General), or this page's. */
+export const huntUrl = () => S.META.about.url || location.origin;
+
 // ---- several people ----------------------------------------------------------------------
 
 /** Who's asking, their account, and how this hunt signs people in. */

@@ -1,7 +1,6 @@
 // Importing what a page says: a company's website or LinkedIn page, a
 // person's LinkedIn profile, or a job posting; read, then chosen field by
-// field. And the “Send to hunt” bookmark, which sends a profile from the
-// browser.
+// field. And a profile the browser extension sends, read in the browser.
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { attempt, enc, get, patch, post } from "../lib/api";
@@ -309,13 +308,13 @@ async function choosePerson(found: Row, named: Row[]): Promise<Row | null | unde
 }
 
 /**
- * A profile sent by the “Send to hunt” bookmark (/linkedin?d=…): read it,
+ * A profile sent by the browser extension (/linkedin?d=…): read it,
  * then choose what to keep, for the person already kept with that profile
  * or a new one. `go` opens a page.
  */
 export async function importSentProfile(data: string | null, go: (path: string) => void) {
   let page;
-  try { page = JSON.parse(data || ""); } catch { toast("The bookmark sent nothing hunt can read", "error"); return; }
+  try { page = JSON.parse(data || ""); } catch { toast("The extension sent nothing hunt can read", "error"); return; }
   const found = await attempt(() => post("people/from-page", page));
   if (!found) return;
   found.platform = "LinkedIn, in your browser";
@@ -355,31 +354,4 @@ export async function importSentProfile(data: string | null, go: (path: string) 
       if (made) { toast(`Added ${made.name}`); go(`/people/${made.id}`); }
     },
   });
-}
-
-/**
- * The “Send to hunt” bookmarklet. On a LinkedIn profile it collects the
- * page's text (hunt reads it) and opens hunt with it, in a new tab: opening
- * a page isn't something LinkedIn's security rules stop, as sending data
- * from its page would be. On any other page, it keeps the page (its link,
- * title and what's selected) in the stash, the same way.
- */
-export function profileBookmarklet(origin = location.origin) {
-  const code = `(()=>{const H=${JSON.stringify(origin)};
-const E=encodeURIComponent;
-if(!/(^|\\.)linkedin\\.com$/.test(location.hostname)||!/^\\/in\\//.test(location.pathname)){const s=String(getSelection()||"").trim().slice(0,4000);
-window.open(H+"/stash/new?url="+E(location.href)+"&title="+E(document.title)+(s?"&text="+E(s):""),"_blank");return}
-const t=e=>(e&&e.innerText||"").trim();
-const n=document.querySelector("main h1")||document.querySelector("h1");
-const top=n&&(n.closest("section")||n.parentElement);
-const sec=id=>{const a=document.getElementById(id);return a&&a.closest("section")};
-let ph={s:"",w:0};
-if(top)for(const i of top.querySelectorAll("img")){const s=i.currentSrc||i.src||"";const w=i.naturalWidth||1;
-if(/licdn\\.com/.test(s)&&w>=ph.w&&(/profile-displayphoto|profile-framedphoto/.test(s)||(n&&i.alt&&i.alt.includes(t(n)))))ph={s,w}}
-const c=document.querySelector('[aria-label^="Current company"]');
-const d={url:location.href.split("?")[0],title:document.title,name:t(n),top:t(top).slice(0,3000),
-about:t(sec("about")).slice(0,4000),experience:t(sec("experience")).slice(0,2500),
-company:c?c.getAttribute("aria-label")||"":"",photo:ph.s};
-window.open(H+"/linkedin?d="+E(JSON.stringify(d)),"_blank")})()`;
-  return `javascript:${encodeURIComponent(code.replace(/\n/g, ""))}`;
 }

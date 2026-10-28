@@ -73,11 +73,11 @@ data, Glassdoor, Blind or layoffs.fyi.
 |---|---|---|
 | **levels.fyi** | The server, as now | Company and salary pages carry their numbers as JSON in the page: pay by level (median total comp, base/stock/bonus), job families and locations. |
 | **layoffs.fyi** | The server | Its tracker is public data: layoffs by company and date ("Laid off 10% in March"). |
-| **Glassdoor** | The browser, by bookmarklet | Behind bot protection and a sign-in; its public API closed years ago, so a server's requests mostly fail. |
-| **Blind** | The browser, by bookmarklet | Behind a sign-in, as Glassdoor. |
+| **Glassdoor** | The browser, by the extension | Behind bot protection and a sign-in; its public API closed years ago, so a server's requests mostly fail. |
+| **Blind** | The browser, by the extension | Behind a sign-in, as Glassdoor. |
 
-For Glassdoor and Blind, the LinkedIn "Send to hunt" bookmarklet already
-solves the same problem: generalise it so that on a page you're viewing
+For Glassdoor and Blind, the extension's LinkedIn profiles already solve
+the same problem: generalise that so that on a page you're viewing
 (signed in), it sends the page's text to hunt. It's your own access, a page
 at a time, which also keeps it within what those sites allow: automated
 access is against their terms. levels.fyi also restricts automated use, so
@@ -111,12 +111,12 @@ hunt looks the company up on levels.fyi and layoffs.fyi in the background,
 by name or website domain, and offers a search link when it can't match.
 Refreshed at most weekly per company, and on demand. Glassdoor and Blind
 can't be automatic: the company's page links to them, with "Read it with
-the bookmarklet".
+the extension".
 
 **In steps.**
 
 1. levels.fyi pay and layoffs.fyi into a Research section, with no AI.
-2. The bookmarklet reading Glassdoor and Blind pages.
+2. The extension reading Glassdoor and Blind pages.
 3. The optional Claude summary, and the offer-against-market note.
 
 ## Bigger projects

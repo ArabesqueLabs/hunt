@@ -7,7 +7,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "re
 import { api, attempt, del, get, patch, post, put } from "../lib/api";
 import { LOC, fmtDay, fmtStamp, fmtTime, HOME, homeK, zonedNow } from "../lib/format";
 import { LANG, setLanguage } from "../lib/i18n";
-import { CURRENCIES, choiceLabel, myAccount, reloadMeta, reloadTags, sitePage, takeHomeOn, tenancy } from "../lib/meta";
+import { CURRENCIES, choiceLabel, huntUrl, myAccount, reloadMeta, reloadTags, sitePage, takeHomeOn, tenancy } from "../lib/meta";
 import { settle } from "../lib/router";
 import { sectionNav } from "../lib/shell";
 import { S, changed, useShared } from "../lib/state";
@@ -19,7 +19,6 @@ import type { Row, Tag } from "../lib/types";
 import { mayDiscard } from "../lib/unsaved";
 import { ask, confirmDelete, pushDialog } from "../components/dialogs";
 import { useFilePicker } from "../components/files";
-import { profileBookmarklet } from "../components/importer";
 import { openTagColours } from "../components/tags";
 import { Facts, Field, Icon, Input, Label, LoadingBlock, STAGE_ICONS, Select, Table } from "../components/ui";
 import { MenuButton, MenuItem } from "../components/Menu";
@@ -53,27 +52,13 @@ const RowActions = ({ what, edit, remove }: { what: string; edit?: () => void; r
 
 const AddLink = ({ label, onClick }: { label: string; onClick: () => void }) => <button className="al-button al-button--quiet app-add" type="button" onClick={onClick}>{`+ ${label}`}</button>;
 
-/** Save and Cancel, for a section edited as a whole. */
-const SaveCancel = ({ save, cancel }: { save: () => void; cancel: () => void }) => (
-  <div className="actions">
-    <button className="al-button al-button--primary" type="button" onClick={save}>Save</button>
-    <button className="al-button" type="button" onClick={(e) => { if (mayDiscard(e.currentTarget)) cancel(); }}>Cancel</button>
-  </div>
-);
-
-/** A section that reads first and is edited as a whole: its editing state. */
-function useEditing() {
-  const [editing, setEditing] = useState(false);
-  return [editing, setEditing] as const;
-}
-
 /** Settings' tabs: each one's key, name, what's in it, and its icon. */
 const SETTINGS_TABS: [string, string, string, string][] = [
   ["general", "General", "Appearance, language, account", "sliders"],
   ["board", "Board", "Swimlanes, stages, sub stages", "board"],
   ["calendar", "Calendar", "Hours, time zones, sharing", "cal"],
   ["data", "Data", "Backup, audit log", "database"],
-  ["connections", "Connected apps", "Browser extension, tokens, bookmark", "link"],
+  ["connections", "Connected apps", "Browser extension, tokens, LinkedIn", "link"],
   ["pay", "Pay calculator", "Where you live, take-home", "calc"],
   ["tags", "Tags", "", "tag"],
 ];
@@ -123,7 +108,7 @@ export function SettingsPage() {
 // ---- calendar sharing -----------------------------------------------------------------
 
 /** The calendar's private link (`/api/calendar/<secret>.ics`), while it's shared; null when not. */
-const calendarFeedUrl = () => (S.PREFS.calendar_feed ? `${location.origin}/api/calendar/${S.PREFS.calendar_feed}.ics` : null);
+const calendarFeedUrl = () => (S.PREFS.calendar_feed ? `${huntUrl()}/api/calendar/${S.PREFS.calendar_feed}.ics` : null);
 
 /**
  * Sharing the calendar with a calendar app: off unless turned on. On, a
@@ -609,58 +594,16 @@ function DesiredSettings() {
 
 // ---- integrations -----------------------------------------------------------------------
 
-/** Settings: the bookmark that brings LinkedIn profiles in, and its settings. */
+/** Settings: LinkedIn profiles, as the extension brings them in. */
 function LinkedinSettings() {
-  const [editing, setEditing] = useEditing();
-  const [prefs, setPrefs] = useState<Row | null>(null);
-  const [address, setAddress] = useState("");
-  const [rule, setRule] = useState("");
-  const [version, setVersion] = useState(0);
-  useEffect(() => { get("settings").then((p) => { setPrefs(p); setAddress(p.bookmarklet_url || ""); setRule(p.same_name); }).catch(() => {}); }, [version]);
-  useEffect(() => { if (editing) setTimeout(() => document.getElementById("bm-url")?.focus(), 0); }, [editing]);
-  if (!prefs) return <LoadingBlock />;
-  const origin = prefs.bookmarklet_url || location.origin;
-  const href = profileBookmarklet(origin);
+  useShared();
   return (
-    <SettingsPanel title="“Send to hunt” bookmark" editing={editing} onToggle={setEditing} done="Cancel" className="linkedin"
-      intro="Keep any page you're on in your stash, to sort later, with one click. On a LinkedIn profile (which only people signed in can see, so hunt can't read it itself) it reads the profile open in your browser instead, and brings it here to choose what to keep.">
-      <ol className="steps-help">
-        <li>Drag{" "}<a className="al-button al-button--sm bookmarklet" title="Drag me to your bookmarks bar"
-          // Its javascript: address set on the link itself: React won't put one in an href.
-          ref={(el) => { if (el && el.getAttribute("href") !== href) el.setAttribute("href", href); }}
-          onClick={(e) => { e.preventDefault(); toast("Drag it to your bookmarks bar, then click it on any page"); }}>
-          <img src="/logo.svg" alt="" width={18} height={18} />Send to hunt</a>{" to your bookmarks bar (show it with ⇧⌘B)."}</li>
-        <li>On any page (a posting, an article, a company's site), click the bookmark: hunt opens with the page kept in your stash, and what's selected on it too.</li>
-        <li>On someone's LinkedIn profile, hunt opens with what it found instead: their name, role, company, location, about and photo. Tick what to keep.</li>
-      </ol>
-      {!editing ? (
-        <Facts rows={[
-          ["hunt's address", prefs.bookmarklet_url || <span>{location.origin}<span className="muted small"> · this page's</span></span>],
-          ["Same name", choiceLabel(S.META.same_name, prefs.same_name)],
-        ]} />
-      ) : <>
-        <div className="fields">
-          <Field><Label htmlFor="bm-url">hunt's address</Label><Input type="url" id="bm-url" placeholder={location.origin} value={address} onChange={(e) => setAddress(e.target.value)} />
-            <p className="muted small">Where the bookmark opens hunt. Leave empty for the address this page is at; set it when you open hunt at another one (e.g. http://hunt.local:4848). After changing it, drag the bookmark again.</p></Field>
-          <Field><Label htmlFor="bm-same">When someone of the same name is already here</Label>
-            <Select id="bm-same" value={rule} onChange={(e) => setRule(e.target.value)}>{S.META.same_name.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</Select>
-            <p className="muted small">Someone kept with the same LinkedIn profile is always merged into. This is for people added by hand, or under another link.</p></Field>
-        </div>
-        <SaveCancel cancel={() => setEditing(false)} save={async () => {
-          const saved = await attempt(() => patch("settings", { bookmarklet_url: address, same_name: rule }));
-          if (!saved) return;
-          toast((saved.bookmarklet_url || "") !== (prefs.bookmarklet_url || "") ? "Saved. Drag the bookmark to your bar again, replacing the old one" : "Saved");
-          setEditing(false);
-          setVersion((n) => n + 1);
-        }} />
-      </>}
-      <details className="al-disclosure more"><summary>Giving the bookmark hunt's icon</summary>
-        <p className="small">Browsers don't let a bookmarklet choose its icon. A workaround that keeps hunt's icon in some browsers (Firefox does; Chrome and Safari usually don't): bookmark this page, so the bookmark takes hunt's icon, then edit it and paste the bookmark's code in as its address.</p>
-        <div className="actions"><button className="al-button al-button--sm" type="button" onClick={async () => {
-          try { await navigator.clipboard.writeText(href); toast("Copied the bookmark's code"); } catch { toast("Couldn't copy; drag the button instead", "error"); }
-        }}>Copy code</button></div>
-      </details>
-      <p className="muted small">It only reads the page you're on, when you click it, and sends it to <span className="muted">{origin}</span>. Nothing goes anywhere else.</p>
+    <SettingsPanel title="LinkedIn profiles" className="linkedin"
+      intro="LinkedIn only shows a profile to people signed in, so hunt can't read one itself. On someone's profile, the browser extension reads it and opens hunt with what it found: their name, role, company, location, about and photo, to tick what to keep.">
+      <SettingRow id="set-same-name" label="Someone of the same name" hint="Someone kept with the same LinkedIn profile is always merged into. This is for people added by hand, or under another link.">
+        <ChoiceSetting id="set-same-name" value={S.PREFS.same_name || "ask"} options={S.META.same_name.map((o) => [o.value, o.label])}
+          save={(v) => saveSettings({ same_name: v })} />
+      </SettingRow>
     </SettingsPanel>
   );
 }
@@ -691,8 +634,8 @@ function showSecret(secret: string) {
             <div className="settings-copy"><Input id="token-secret" readOnly value={secret} className="settings-mono" translate="no" onFocus={(e) => e.currentTarget.select()} />
               <button className="al-button" type="button" onClick={() => copy(secret, "the token")}><Icon name="copy" /><span>Copy</span></button></div></Field>
           <Field><Label htmlFor="token-address">hunt's address</Label>
-            <div className="settings-copy"><Input id="token-address" readOnly value={location.origin} className="settings-mono" translate="no" />
-              <button className="al-button" type="button" onClick={() => copy(location.origin, "the address")}><Icon name="copy" /><span>Copy</span></button></div></Field>
+            <div className="settings-copy"><Input id="token-address" readOnly value={huntUrl()} className="settings-mono" translate="no" />
+              <button className="al-button" type="button" onClick={() => copy(huntUrl(), "the address")}><Icon name="copy" /><span>Copy</span></button></div></Field>
         </div>
         <div className="al-dialog__actions"><button className="al-button al-button--primary" type="button" onClick={close}>Done</button></div>
       </div>
@@ -766,11 +709,11 @@ function TokenSettings() {
 /** The browser extension: what it does, and connecting it. */
 const ExtensionSettings = () => (
   <SettingsPanel title="Browser extension" className="extension"
-    intro="Send the page you're on, a link, an image or what you've selected to your stash, from Chrome, Firefox, Edge or Safari: from its button, the right-click menu, or a keyboard shortcut.">
+    intro="Send the page you're on, a link, an image or what you've selected to your stash, from Chrome, Firefox, Edge or Safari: from its button, the right-click menu, or a keyboard shortcut. On someone's LinkedIn profile, it brings the profile in.">
     <ol className="steps-help">
       <li>Install hunt's extension in your browser.</li>
       <li>Make a token below that adds to your stash.</li>
-      <li>In the extension's settings, paste the token and this hunt's address, <span className="settings-mono" translate="no">{location.origin}</span>.</li>
+      <li>In the extension's settings, paste the token and this hunt's address, <span className="settings-mono" translate="no">{huntUrl()}</span>.</li>
     </ol>
   </SettingsPanel>
 );

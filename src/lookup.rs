@@ -170,7 +170,7 @@ fn get(url: &str, accept: &str) -> Result<(Page, String)> {
     {
         return Err(Error::Fetch(
             "LinkedIn wouldn't show that page without signing in. For a profile, open it \
-             in your browser and click the “Send to hunt” bookmark (Settings → LinkedIn bookmarklet); \
+             in your browser and use the Send to hunt extension (Settings → Connected apps); \
              otherwise try another source, or fill the details in by hand."
                 .into(),
         ));
@@ -507,10 +507,10 @@ pub(crate) fn linkedin_profile(url: &str) -> Option<String> {
     }
 }
 
-/// What the “Send to hunt” bookmark collects from a LinkedIn profile open in
+/// What the browser extension collects from a LinkedIn profile open in
 /// your browser, where you're signed in. It only collects text; reading it
 /// is done here, so when LinkedIn changes its pages, hunt changes, not the
-/// bookmark.
+/// extension.
 #[derive(Debug, Default, Clone, serde::Deserialize)]
 #[serde(default)]
 pub struct ProfilePage {

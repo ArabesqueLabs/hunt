@@ -9,7 +9,7 @@ import { here, settle } from "../lib/router";
 import { S } from "../lib/state";
 import { store, stored } from "../lib/storage";
 import type { Row } from "../lib/types";
-import { EmptyState, Input, LoadingBlock, Logo, SearchBox, SysIcon } from "../components/ui";
+import { EmptyState, Icon, Input, LoadingBlock, Logo, SearchBox, SysIcon } from "../components/ui";
 
 /** What the calendar shows, of active processes: all that's coming up, each kind in its colour, and what each is called beside its checkbox. */
 const CAL_KINDS: [string, string][] = [["step", "Interviews"], ["next", "Next actions"], ["task", "Tasks"], ["closes", "Deadlines"]];
@@ -278,7 +278,8 @@ function zoneShort(zone: string, day: Date) {
 /**
  * Days side by side, midnight to midnight: each event at its time and an
  * hour long (as calendar apps are given them), what has no time above them,
- * all day. Events at the same time share the column. The hours scroll, and
+ * all day (folded away to a count, if asked). Events at the same time share
+ * the column. The hours scroll, their full height below what's all day, and
  * open on the morning (the working day's, if Settings give one), or earlier
  * if something is. Outside working hours is shaded; other time zones'
  * hours run beside the calendar's own.
@@ -286,6 +287,7 @@ function zoneShort(zone: string, day: Date) {
 function TimeGrid({ days, events, name }: { days: Date[]; events: Row[]; name: string }) {
   const HOUR = 2.1; // rem
   const scroller = useRef<HTMLDivElement>(null);
+  const [folded, setFolded] = useState(() => stored("calendar-allday") === "folded");
   const minutes = (e: Row) => Number(e.at.slice(11, 13)) * 60 + Number(e.at.slice(14, 16));
   const today = isoDay(zonedNow());
   const now = zonedNow();
@@ -346,26 +348,30 @@ function TimeGrid({ days, events, name }: { days: Date[]; events: Row[]; name: s
     const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
     if (scroller.current) scroller.current.scrollTop = open * HOUR * rem;
   }, [open, days.length]);
-  const anyAllDay = columns.some((c) => c.allDay.length);
+  const allDays = columns.reduce((n, c) => n + c.allDay.length, 0);
+  const fold = () => { store("calendar-allday", folded ? "" : "folded"); setFolded(!folded); };
   return (
     <div className="cal-time" role="group" aria-label={name} style={{ "--hour": `${HOUR}rem`, "--days": days.length, "--zones": others.length + 1 } as React.CSSProperties}>
+      {/* The days' and zones' names, and what has no time, above the hours:
+          only the hours scroll. Both keep room for a scrollbar, so their
+          columns line up. */}
+      <div className="cal-time-top">
+        {days.length > 1 || others.length ? (
+          <div className="cal-time-head" aria-hidden="true">{zoneHeads}{columns.map((c) => (
+            <div key={c.key} className={`cal-time-day${c.key === today ? " today" : ""}`}>
+              {days.length > 1 ? <><span className="cal-week-dow">{c.d.toLocaleDateString(LOC(), { weekday: "short" })}</span><span className="cal-date">{c.d.getDate()}</span></> : null}
+            </div>
+          ))}</div>
+        ) : null}
+        {/* What has no time, on its day; a screen reader hears it in its day's column. */}
+        {allDays ? (
+          <div className={`cal-time-allday${folded ? " folded" : ""}`}>
+            <button type="button" className="cal-hour cal-allday-label" aria-expanded={String(!folded) as "true" | "false"} title={folded ? "Show all-day events" : "Hide all-day events"} onClick={fold}>
+              <Icon name="chevron" /><span>All day</span>{folded ? <span className="al-badge">{allDays}</span> : null}</button>
+            {columns.map((c) => <div key={c.key} className="cal-allday-items" aria-hidden="true">{folded ? null : c.allDay.map((e, i) => block(e, undefined, i))}</div>)}</div>
+        ) : null}
+      </div>
       <div className="cal-time-scroll" ref={scroller}>
-        {/* The days' and zones' names, and what has no time, held at the top as
-            the hours scroll: inside the scrolling, so they line up with its columns. */}
-        <div className="cal-time-top">
-          {days.length > 1 || others.length ? (
-            <div className="cal-time-head" aria-hidden="true">{zoneHeads}{columns.map((c) => (
-              <div key={c.key} className={`cal-time-day${c.key === today ? " today" : ""}`}>
-                {days.length > 1 ? <><span className="cal-week-dow">{c.d.toLocaleDateString(LOC(), { weekday: "short" })}</span><span className="cal-date">{c.d.getDate()}</span></> : null}
-              </div>
-            ))}</div>
-          ) : null}
-          {/* What has no time, on its day; a screen reader hears it in its day's column. */}
-          {anyAllDay ? (
-            <div className="cal-time-allday" aria-hidden="true"><span className="cal-hour cal-allday-label">All day</span>
-              {columns.map((c) => <div key={c.key} className="cal-allday-items">{c.allDay.map((e, i) => block(e, undefined, i))}</div>)}</div>
-          ) : null}
-        </div>
         <div className="cal-time-body">
           {others.map((z) => gutter(z))}{gutter(null)}
           {columns.map((c) => (

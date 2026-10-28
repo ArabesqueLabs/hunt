@@ -1476,8 +1476,8 @@ pub const NUMERALS: &[(&str, &str)] = &[
 
 impl Db {
     /// Settings kept by the service, one account's: how hunt looks and
-    /// speaks, the calendar, pay, where the bookmark sends profiles, and what
-    /// to do about a name already here.
+    /// speaks, the calendar, pay, and what to do about a name already here
+    /// when a LinkedIn profile comes in.
     pub fn settings(&self) -> Result<Value> {
         let currency = self
             .setting("locale.currency")?
@@ -1489,7 +1489,6 @@ impl Db {
             self.cached_rate(&currency)?
         };
         Ok(json!({
-            "bookmarklet_url": self.setting("bookmarklet.url")?,
             "same_name": self.setting("people.same_name")?.unwrap_or_else(|| "ask".into()),
             "locale": self.setting("locale.region")?,
             "clock": self.setting("locale.clock")?.unwrap_or_else(|| "auto".into()),
@@ -1544,26 +1543,6 @@ impl Db {
                         "calendar_feed: true, false or \"new\", not {other}"
                     )));
                 }
-            }
-        }
-        if let Some(url) = v.get("bookmarklet_url") {
-            let url = url.as_str().unwrap_or("").trim().trim_end_matches('/');
-            if url.is_empty() {
-                self.set_setting("bookmarklet.url", None)?;
-            } else {
-                let ok = url
-                    .parse::<ureq::http::Uri>()
-                    .ok()
-                    .filter(|u| {
-                        matches!(u.scheme_str(), Some("http" | "https")) && u.host().is_some()
-                    })
-                    .filter(|u| u.path().is_empty() || u.path() == "/");
-                if ok.is_none() {
-                    return Err(invalid(format!(
-                        "hunt's address should be like http://127.0.0.1:4848, not {url:?}"
-                    )));
-                }
-                self.set_setting("bookmarklet.url", Some(url))?;
             }
         }
         if let Some(rule) = v.get("same_name") {

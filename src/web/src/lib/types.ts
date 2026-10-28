@@ -39,7 +39,7 @@ export interface Meta {
   site: string | null;
   operator: string | null;
   /** What the admins say of this hunt, to everyone: its name, a notice on every page, an address for help. */
-  about: { name: string | null; announcement: string | null; contact: string | null };
+  about: { name: string | null; announcement: string | null; contact: string | null; url: string | null };
   /** How long a toast with Undo stays, in seconds; 0, until it's used or dismissed. */
   undo_seconds: number;
   experiments: string[];

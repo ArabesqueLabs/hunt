@@ -180,7 +180,12 @@ pub const UNDO_SECONDS: u32 = 5;
 
 /// What admins say of this hunt (General, in the admin centre), each with
 /// the most characters it may have.
-const SITE: &[(&str, usize)] = &[("name", 40), ("announcement", 280), ("contact", 254)];
+const SITE: &[(&str, usize)] = &[
+    ("name", 40),
+    ("announcement", 280),
+    ("contact", 254),
+    ("url", 200),
+];
 
 /// What's asked of `v`'s fields among `keys` (those it has): each one's
 /// value, checked, or none (empty) to go back to none.
@@ -190,7 +195,10 @@ fn site_changes(v: &Value, keys: &[&str]) -> Result<Vec<(String, Option<String>)
         let Some(x) = v.get(k) else {
             continue;
         };
-        let value = x.as_str().map(str::trim).unwrap_or("");
+        let mut value = x.as_str().map(str::trim).unwrap_or("");
+        if *k == "url" {
+            value = value.trim_end_matches('/');
+        }
         if value.chars().count() > *most {
             return Err(invalid(format!("{k}: at most {most} characters")));
         }
@@ -199,12 +207,27 @@ fn site_changes(v: &Value, keys: &[&str]) -> Result<Vec<(String, Option<String>)
                 "contact: an email address, like help@example.com, not {value:?}"
             )));
         }
+        if *k == "url" && !value.is_empty() && !looks_like_origin(value) {
+            return Err(invalid(format!(
+                "url: hunt's address, like https://hunt.example.com, not {value:?}"
+            )));
+        }
         out.push((
             format!("site.{k}"),
             Some(value.to_string()).filter(|v| !v.is_empty()),
         ));
     }
     Ok(out)
+}
+
+/// An address hunt can be opened at: http or https, a host, and no path.
+fn looks_like_origin(s: &str) -> bool {
+    s.parse::<ureq::http::Uri>().is_ok_and(|u| {
+        matches!(u.scheme_str(), Some("http" | "https"))
+            && u.host().is_some()
+            && matches!(u.path(), "" | "/")
+            && u.query().is_none()
+    })
 }
 
 pub(crate) fn looks_like_email(s: &str) -> bool {
@@ -837,8 +860,9 @@ impl Tenants {
     }
 
     /// What admins say of this hunt, to everyone who opens it: its name
-    /// (hunt's own, unless named), a notice on every page, and an address
-    /// to write to for help. Each null when not set.
+    /// (hunt's own, unless named), a notice on every page, an address
+    /// to write to for help, and the address hunt is opened at (for links
+    /// and connecting apps; the page's own, unless set). Each null when not set.
     pub fn site(&self) -> Result<Value> {
         let mut out = Map::new();
         for (k, _) in SITE {

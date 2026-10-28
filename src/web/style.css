@@ -494,7 +494,12 @@ fieldset.group > legend { padding: 0; padding-inline-end: 0.5rem; font-size: 0.8
    times; what has no time above. The hours scroll within the page. */
 .cal-time { --gutter: 4.5rem; border-top: 1px solid var(--al-color-line-strong); }
 .cal-time-head, .cal-time-allday, .cal-time-body { display: grid; grid-template-columns: repeat(var(--zones), var(--gutter)) repeat(var(--days), minmax(0, 1fr)); }
-.cal-allday-label { grid-column: 1 / span var(--zones); }
+.cal-allday-label { grid-column: 1 / span var(--zones); display: flex; align-items: center; justify-content: flex-end; gap: 0.25rem; align-self: start; background: none; border: 0; cursor: pointer; font: inherit; font-size: 0.75rem; padding-block-end: 0.3rem; }
+.cal-allday-label:hover { color: var(--al-color-text); }
+.cal-allday-label svg { inline-size: 0.875rem; block-size: 0.875rem; flex: none; transition: transform 0.15s; }
+.cal-time-allday.folded .cal-allday-label svg { transform: rotate(-90deg); }
+[dir="rtl"] .cal-time-allday.folded .cal-allday-label svg { transform: rotate(90deg); }
+.cal-allday-label .al-badge { font-variant-numeric: tabular-nums; }
 /* Each zone's name over its hours; the calendar's own last, beside the days. */
 .cal-zone { align-self: end; font-size: 0.6875rem; color: var(--al-color-text-muted); padding: 0.4rem 0.6rem 0.4rem 0; text-align: end; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cal-gutter.other .cal-hour { color: color-mix(in oklab, var(--al-color-text-muted) 80%, var(--al-color-bg)); }
@@ -504,8 +509,9 @@ fieldset.group > legend { padding: 0; padding-inline-end: 0.5rem; font-size: 0.8
 .cal-time-allday { border-bottom: 1px solid var(--al-color-line-strong); }
 .cal-allday-items { display: flex; flex-direction: column; gap: 0.25rem; padding: 0.3rem; min-width: 0; border-inline-start: 1px solid var(--al-color-line); }
 .cal-hour { font-size: 0.75rem; font-variant-numeric: tabular-nums; color: var(--al-color-text-muted); padding: 0.3rem 0.6rem 0 0; text-align: end; }
-.cal-time-scroll { max-block-size: 54vh; overflow-y: auto; }
-.cal-time-top { position: sticky; inset-block-start: 0; z-index: 2; background: var(--al-color-bg); }
+/* Only the hours scroll; what's above keeps the same room for a scrollbar, so the columns line up. */
+.cal-time-scroll { max-block-size: 54vh; overflow-y: auto; scrollbar-gutter: stable; }
+.cal-time-top { overflow-y: hidden; scrollbar-gutter: stable; background: var(--al-color-bg); }
 .cal-time-top:empty { display: none; }
 .cal-gutter { display: grid; grid-template-rows: repeat(24, var(--hour)); }
 .cal-gutter .cal-hour { transform: translateY(-0.9rem); }
@@ -749,9 +755,6 @@ fieldset.group > legend { padding: 0; padding-inline-end: 0.5rem; font-size: 0.8
 .gmail h3 { margin-top: 1.25rem; font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--al-color-text-muted); }
 .emails h2 .count { margin-inline-start: 0.5rem; }
 .mail-query { white-space: pre-wrap; word-break: break-word; font-size: 0.78rem; padding: 0.5rem 0.65rem; border: 1px solid var(--al-color-line); border-radius: var(--al-radius-sm); background: var(--al-color-surface); color: var(--al-color-text-muted); max-height: 9rem; overflow: auto; }
-.bookmarklet { cursor: grab; border-style: dashed; }
-.bookmarklet { display: inline-flex; align-items: center; gap: 0.4rem; }
-.bookmarklet img { width: 18px; height: 18px; }
 .choose-person .choice { display: flex; }
 .choose-person .combo { flex: 1; }
 .google-signin { padding-bottom: 1rem; margin-bottom: 1rem; border-bottom: 1px solid var(--al-color-line); }

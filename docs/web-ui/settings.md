@@ -41,8 +41,8 @@ long as Admin → General says); adding something is said, without Undo.
     have full access (everything you can do, except tokens, your sign-in
     and Admin). A new token is shown once. The list says when each was
     made and last used, and **Revoke** stops one at once.
-  - **“Send to hunt” bookmark:** the bookmarklet, the address it opens,
-    and what to do about a name already here.
+  - **LinkedIn profiles:** what to do about a name already here, when
+    the extension brings someone in.
 - **Signing in** (at the bottom of General): change your email address
   or password (with the one now; a new password ends your other
   sessions), and Log out. Behind Cloudflare Access or a sign-in proxy, you
@@ -66,7 +66,9 @@ owner (who set it up: account 1) to begin with, and whoever they make
 admins.
 
 - **General:** this hunt's name (in the sidebar and the browser's tab), a
-  notice above every page, an address people can write to for help, how
+  notice above every page, an address people can write to for help,
+  hunt's own address (for the links it gives, like the calendar's and
+  invites, and for connecting the extension; each page's own unless set), how
   long Undo is offered after a change (5 seconds unless changed, at most
   60; 0 keeps it until it's used or closed), and what new accounts start
   with.

@@ -1627,7 +1627,7 @@ async fn admins_name_the_hunt_and_everyone_sees_what_it_says() {
     let about = ok(&app, BOB, "GET", "/api/meta", None).await["about"].clone();
     assert_eq!(
         about,
-        json!({ "name": null, "announcement": null, "contact": null })
+        json!({ "name": null, "announcement": null, "contact": null, "url": null })
     );
     let set = ok(
         &app,

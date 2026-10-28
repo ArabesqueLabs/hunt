@@ -27,7 +27,7 @@ import { Home } from "./pages/Board";
 import { CalendarPage } from "./pages/Calendar";
 import { CelebratePage } from "./pages/Celebrate";
 import { CyclesPage } from "./pages/Cycles";
-import { StashPage, SentToStash, quickCapture } from "./pages/Stash";
+import { StashPage, quickCapture } from "./pages/Stash";
 import { Launcher } from "./pages/Launcher";
 import { ContactsPage, ListPage, NewRecord } from "./pages/Lists";
 import { NotesPage } from "./pages/Notes";
@@ -38,7 +38,7 @@ import { StatsPage } from "./pages/Stats";
 import { TablePage } from "./pages/Table";
 import { TakeHomePage } from "./pages/TakeHome";
 
-/** A profile sent by the “Send to hunt” bookmark: People, and choosing what to keep of it. */
+/** A profile sent by the browser extension: People, and choosing what to keep of it. */
 function SentProfile() {
   const [data] = useState(() => {
     const d = new URLSearchParams(location.search).get("d");
@@ -75,7 +75,6 @@ function Page({ page, arg }: { page: string; arg?: string }) {
   if (page === "") return <Home />;
   if (page === "applications" && !arg) return <TablePage />;
   if (page === "p" && arg) return <ProcessLink id={arg} />;
-  if (page === "stash" && arg === "new") return <SentToStash />;
   if (page === "applications" && arg) return <ApplicationPage id={Number(arg)} processId={Number(query.get("process")) || null} editing={opensEditing(query)} />;
   if (LISTS[page]) {
     if (arg === "new") return <NewRecord page={page} />;
