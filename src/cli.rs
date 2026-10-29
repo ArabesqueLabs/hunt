@@ -68,6 +68,12 @@ enum Command {
         /// forgotten
         #[arg(long, env = "HUNT_ADMIN_PASSWORD", hide_env_values = true)]
         admin_password: Option<String>,
+        /// hunt's demo: its owner is user@example.com, password huntdemo
+        /// (unless --admin-email and --admin-password say otherwise), and the
+        /// sign-in page says so. For a database scripts/demo.sh made
+        #[arg(long, env = "HUNT_DEMO", value_parser = clap::builder::BoolishValueParser::new(),
+              action = clap::ArgAction::SetTrue)]
+        demo: bool,
         /// Instead of Access: a sign-in proxy (Authelia, Authentik,
         /// oauth2-proxy, Tailscale) names who's asking in this header (e.g.
         /// Remote-Email), taken only from --trusted-proxies
@@ -405,6 +411,7 @@ pub fn run() -> Result<()> {
             identity_header,
             admin_email,
             admin_password,
+            demo,
             auth_header,
             trusted_proxies,
             experiments,
@@ -451,6 +458,7 @@ pub fn run() -> Result<()> {
                 identity,
                 owner_email: admin_email.filter(|e| !e.trim().is_empty()),
                 owner_password: admin_password.filter(|p| !p.is_empty()),
+                demo,
             };
             let experiments = hunt::experiments::Experiments::parse(&experiments)?;
             // An empty HUNT_DB (a blank line in .env) is none: the default.

@@ -1,7 +1,8 @@
 <!doctype html>
 <!-- Signing in with hunt's own sign-in (an account's email address and
      password): src/auth.rs fills in where to go after, whether the last try
-     was wrong, and (while sign-ups are open) the way to sign up. -->
+     was wrong, (while sign-ups are open) the way to sign up, and (in the
+     demo) whom to sign in as. -->
 <html lang="en" dir="ltr">
 <head>
   <meta charset="utf-8">
@@ -22,6 +23,8 @@
     .login form { display: grid; gap: 1rem; }
     .login h1 { margin: 0; font-size: var(--al-text-lg); font-weight: 500; }
     .login-other { margin: 0; color: var(--al-color-text-muted); }
+    .login-demo { margin: 0; padding: 0.75rem 1rem; border: var(--al-border-hairline) solid var(--al-color-line); border-radius: var(--al-radius-sm); background: var(--al-color-surface-sunk); color: var(--al-color-text-muted); }
+    .login-demo b { color: var(--al-color-text); font-weight: 500; }
   </style>
 </head>
 <body>
@@ -41,6 +44,7 @@
       </div>
       <button class="al-button al-button--primary" type="submit">Sign in</button>
     </form>
+    {{demo}}
     {{signup}}
   </main>
 </body>

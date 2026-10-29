@@ -22,6 +22,7 @@ import { useFilePicker } from "../components/files";
 import { openTagColours } from "../components/tags";
 import { Facts, Field, Icon, Input, Label, LoadingBlock, STAGE_ICONS, Select, Table } from "../components/ui";
 import { MenuButton, MenuItem } from "../components/Menu";
+import { Avatar } from "../components/TopBar";
 import { GMAIL, GmailSettings } from "./Mail";
 import { takeHomeNumber } from "./TakeHome";
 
@@ -54,7 +55,7 @@ const AddLink = ({ label, onClick }: { label: string; onClick: () => void }) => 
 
 /** Settings' tabs: each one's key, name, what's in it, and its icon. */
 const SETTINGS_TABS: [string, string, string, string][] = [
-  ["general", "General", "Appearance, language, account", "sliders"],
+  ["general", "General", "Profile, appearance, language, account", "sliders"],
   ["board", "Board", "Swimlanes, stages, sub stages", "board"],
   ["calendar", "Calendar", "Hours, time zones, sharing", "cal"],
   ["data", "Data", "Backup, audit log", "database"],
@@ -86,7 +87,7 @@ export function SettingsPage() {
   useEffect(() => () => sectionNav.set(null), []);
   const parts: Record<string, () => ReactNode> = {
     general: () => <>
-      <ThemeSettings /><LocaleSettings />
+      <ProfileSettings /><ThemeSettings /><LocaleSettings />
       {myAccount()?.has_password ? <SignInDetails /> : !myAccount() && S.META.access ? <SignInSettings /> : null}
       <DeleteAccountSettings />
     </>,
@@ -102,6 +103,44 @@ export function SettingsPage() {
       <header className="al-page-head"><h1>Settings</h1><p className="al-page-head__lede">Your preferences.</p></header>
       <div className="settings-content" id="settings-content" role="region" aria-labelledby={`settings-tab-${tab}`}>{parts[tab]()}</div>
     </div>
+  );
+}
+
+// ---- you ------------------------------------------------------------------------------
+
+/**
+ * Your photo, if you'd like one: on your badge at the top of every page,
+ * your initials otherwise. Kept with your data (and in its backups), for
+ * whatever else hunt makes of you later.
+ */
+function ProfileSettings() {
+  useShared();
+  const me = myAccount();
+  const has = !!S.PREFS.photo;
+  const kept = (photo: string | null) => { S.PREFS = { ...S.PREFS, photo }; changed(); };
+  const pick = useFilePicker("image/*", async (f) => {
+    const res = await fetch("/api/settings/photo", { method: "PUT", headers: { "Content-Type": f.type || "application/octet-stream" }, body: f });
+    const out = await res.json().catch(() => ({}));
+    if (!res.ok) { toast(out.error || "Couldn't use that image", "error"); return; }
+    kept(out.photo);
+    toast("Your photo is updated");
+  });
+  const remove = async () => {
+    if (await attempt(() => del("settings/photo"))) { kept(null); toast("Your photo is removed"); }
+  };
+  return (
+    <SettingsPanel title="Profile" intro="Your photo is optional. Without one, your initials show at the top of every page.">
+      <div className="profile-picture me-profile">
+        <Avatar size="xl" />
+        <div>
+          {me?.name || me?.email ? <p className="me-profile__who">{me?.name ? <b translate="no">{me.name}</b> : null}{me?.email ? <span className="muted small" translate="no">{me.email}</span> : null}</p> : null}
+          <div className="cycle-actions">{pick.input}
+            <button className="al-button al-button--sm" type="button" onClick={pick.open}>{has ? "Change photo" : "Upload a photo"}</button>
+            {has ? <button className="al-button al-button--quiet al-button--sm" type="button" onClick={remove}>Remove photo</button> : null}
+          </div>
+        </div>
+      </div>
+    </SettingsPanel>
   );
 }
 

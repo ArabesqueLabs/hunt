@@ -119,6 +119,9 @@ pub struct AppState {
     site: Arc<site::Site>,
     /// Features being tried out, and whom they're on for.
     experiments: Arc<Experiments>,
+    /// In the demo (`--demo`): its owner's email address and password, for
+    /// the sign-in page to say.
+    demo: Option<Arc<(String, String)>>,
 }
 
 /// The database, as the request's account sees it: its own rows only (see
@@ -354,6 +357,26 @@ pub fn router_with_owner(db: Db, email: &str, password: &str) -> Router {
     router_tenants(db, tenants)
 }
 
+/// The demo (`--demo`): its owner made, and named on the sign-in page.
+pub fn router_demo(db: Db) -> Router {
+    let db = Arc::new(Mutex::new(db));
+    let tenants =
+        Tenants::open(db.clone(), &[], crate::tenants::IdentitySource::BuiltIn).expect("accounts");
+    tenants
+        .make_owner(auth::DEMO_EMAIL, auth::DEMO_PASSWORD)
+        .expect("an owner");
+    routes(AppState {
+        db,
+        tenants: Arc::new(tenants),
+        site: Arc::new(site::Site::default()),
+        experiments: Arc::new(Experiments::default()),
+        demo: Some(Arc::new((
+            auth::DEMO_EMAIL.to_string(),
+            auth::DEMO_PASSWORD.to_string(),
+        ))),
+    })
+}
+
 /// The whole service, with its accounts (see [`crate::tenants`]): who's
 /// asking told as `tenants` says.
 pub fn router_tenants(db: Arc<Mutex<Db>>, tenants: Tenants) -> Router {
@@ -368,6 +391,7 @@ pub fn router_run_by(db: Arc<Mutex<Db>>, tenants: Tenants, site: site::Site) -> 
         tenants: Arc::new(tenants),
         site: Arc::new(site),
         experiments: Arc::new(Experiments::default()),
+        demo: None,
     })
 }
 
@@ -382,6 +406,7 @@ pub fn router_tenants_trying(
         tenants: Arc::new(tenants),
         site: Arc::new(site::Site::default()),
         experiments: Arc::new(experiments),
+        demo: None,
     })
 }
 
@@ -511,6 +536,14 @@ fn routes(state: AppState) -> Router {
         .route(crate::google::CALLBACK, get(google_callback))
         .route("/api/settings", get(settings).patch(update_settings))
         .route(
+            "/api/settings/photo",
+            get(own_photo)
+                .put(upload_own_photo)
+                .delete(remove_own_photo)
+                .layer(DefaultBodyLimit::max(crate::lookup::MAX_IMAGE + 64 * 1024)),
+        )
+        .route("/api/search", get(search))
+        .route(
             "/api/backup",
             get(backup)
                 .post(restore)
@@ -566,12 +599,15 @@ fn routes(state: AppState) -> Router {
 /// A hunt's accounts, as it starts: admins named (`HUNT_ADMINS`), where
 /// who's asking comes from beside hunt's own sign-in, and its owner, made
 /// (or their password replaced) from `HUNT_ADMIN_EMAIL` and
-/// `HUNT_ADMIN_PASSWORD`.
+/// `HUNT_ADMIN_PASSWORD`. In the demo (`demo`), the owner is
+/// [`auth::DEMO_EMAIL`] and [`auth::DEMO_PASSWORD`] unless those say
+/// otherwise, and the sign-in page names them.
 pub struct TenancyConfig {
     pub admins: Vec<String>,
     pub identity: crate::tenants::IdentitySource,
     pub owner_email: Option<String>,
     pub owner_password: Option<String>,
+    pub demo: bool,
 }
 
 /// Serve on `addr` until ctrl-c, with its accounts as `tenancy` says, and
@@ -579,9 +615,20 @@ pub struct TenancyConfig {
 pub fn serve(
     db: Db,
     addr: &str,
-    tenancy: TenancyConfig,
+    mut tenancy: TenancyConfig,
     experiments: Experiments,
 ) -> crate::error::Result<()> {
+    // The demo's owner, unless the environment names another.
+    if tenancy.demo && tenancy.owner_email.is_none() && tenancy.owner_password.is_none() {
+        tenancy.owner_email = Some(auth::DEMO_EMAIL.into());
+        tenancy.owner_password = Some(auth::DEMO_PASSWORD.into());
+    }
+    let demo = match (&tenancy.owner_email, &tenancy.owner_password) {
+        (Some(email), Some(password)) if tenancy.demo => {
+            Some(Arc::new((email.clone(), password.clone())))
+        }
+        _ => None,
+    };
     crate::system::mark_started();
     // Uptime carries on across a rollout; then a heartbeat every minute.
     let _ = db.note_start();
@@ -600,7 +647,11 @@ pub fn serve(
             tenants.make_owner(email, password)?;
         }
         (None, Some(password)) if !tenants.no_accounts()? => {
-            tenants.set_credentials(1, None, Some(password))?;
+            // The same password as they have: kept, so they stay signed in.
+            let owner = tenants.get(1)?;
+            if tenants.sign_in(&owner.email, password).is_none() {
+                tenants.set_credentials(1, None, Some(password))?;
+            }
         }
         (None, Some(_)) => {
             return Err(Error::Invalid(
@@ -643,6 +694,7 @@ pub fn serve(
         tenants,
         site,
         experiments: Arc::new(experiments),
+        demo,
     };
     runtime.block_on(async {
         let listener = tokio::net::TcpListener::bind(addr).await?;
@@ -878,7 +930,12 @@ async fn login_page(State(app): State<AppState>, Query(q): Query<LoginQuery>) ->
     let open = app.tenants.signups_open().unwrap_or(false);
     (
         [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
-        auth::login_page(&auth::safe_next(q.next.as_deref()), false, open),
+        auth::login_page(
+            &auth::safe_next(q.next.as_deref()),
+            false,
+            open,
+            app.demo.as_deref(),
+        ),
     )
         .into_response()
 }
@@ -914,7 +971,7 @@ async fn login(
         return (
             StatusCode::UNAUTHORIZED,
             [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
-            auth::login_page(&next, true, open),
+            auth::login_page(&next, true, open, app.demo.as_deref()),
         )
             .into_response();
     };
@@ -1410,6 +1467,8 @@ async fn meta(v: Viewer, headers: HeaderMap) -> ApiResult {
         "setup": t.built_in() && (setup_pending(&v.app) || t.no_accounts().unwrap_or(false)),
         "setup_pending": t.built_in() && setup_pending(&v.app),
         "site": v.app.site.url,
+        // The docs' page on searching: the field's help.
+        "search_help": v.app.site.doc("web-ui/search"),
         // Who runs it, by name: for disclaimers.
         "operator": v.app.site.operator,
         // Features being tried out, on for them.
@@ -2170,6 +2229,52 @@ async fn upload_photo(
 
 async fn remove_photo(s: Scoped, Path(id): Path<i64>) -> ApiResult {
     ok(with_db(&s, |db| db.remove_picture(Picture::Photo, id))?)
+}
+
+/// Your own photo, for your profile badge.
+async fn own_photo(s: Scoped) -> Result<Response, ApiError> {
+    let file = with_db(&s, |db| db.own_photo())?;
+    let mut res = (
+        [
+            (header::CONTENT_TYPE, file.content_type.clone()),
+            (header::CACHE_CONTROL, "private, max-age=86400".to_string()),
+            (header::X_CONTENT_TYPE_OPTIONS, "nosniff".to_string()),
+        ],
+        file.data,
+    )
+        .into_response();
+    if file.content_type.contains("svg") {
+        res.headers_mut().insert(
+            header::CONTENT_SECURITY_POLICY,
+            header::HeaderValue::from_static("sandbox"),
+        );
+    }
+    Ok(res)
+}
+
+async fn upload_own_photo(s: Scoped, headers: HeaderMap, body: Bytes) -> ApiResult {
+    let declared = headers
+        .get(header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_string();
+    let photo = with_db(&s, |db| db.set_own_photo(&body, &declared))?;
+    ok(json!({ "photo": photo }))
+}
+
+async fn remove_own_photo(s: Scoped) -> ApiResult {
+    with_db(&s, |db| db.remove_own_photo())?;
+    ok(json!({ "photo": null }))
+}
+
+#[derive(Deserialize)]
+struct Search {
+    q: Option<String>,
+}
+
+/// Search everything: applications, companies, people, notes and files.
+async fn search(s: Scoped, Query(q): Query<Search>) -> ApiResult {
+    ok(with_db(&s, |db| db.search(q.q.as_deref().unwrap_or("")))?)
 }
 
 /// Fetch a photo from where a profile said, without holding the database.

@@ -8,7 +8,7 @@ month, week, day or as an agenda, searched by company, role or title.
 - The week and the day run midnight to midnight, each event at its time.
 - The hours outside your working hours are hatched, and other time zones'
   hours can run beside yours: both in Settings → Calendar, which the icon
-  by the search opens.
+  by the page's title opens.
 - "Weekends" shows or hides Saturdays and Sundays.
 
 ## What it shows
@@ -25,7 +25,7 @@ they're remembered.
 
 ## Coming up
 
-"Coming up", in the sidebar on every page, is what's due today and
+"Coming up", the bell at the top of every page, is what's due today and
 tomorrow: reminders (the overdue ones too, in amber), interviews, and
-applications closing. Its count is on the button; each opens its
-application, and "Open the calendar" the agenda.
+applications closing. How many is on the bell's corner (amber when one's
+overdue); each opens its application, and "Open the calendar" the agenda.

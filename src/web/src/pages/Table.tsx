@@ -1,6 +1,6 @@
 // The Applications table view (/applications): every application, with
 // where it stands, in sortable columns. The board itself is the other view
-// (/); ViewSwitch moves between them.
+// (/); ViewSwitch moves between them (and the board's compact and detailed cards).
 
 import { useEffect, useState } from "react";
 import { loadBoard, stageNamer } from "../lib/board";
@@ -13,10 +13,10 @@ import { toast } from "../lib/toast";
 import type { Board, Card } from "../lib/types";
 import { BulkBar, ProcessActions, SelectAllCell, SelectCell } from "../components/bulk";
 import { useColumns } from "../components/columns";
-import { FilterBar } from "../components/FilterBar";
+import { ApplicationsScope } from "../components/ApplicationsScope";
 import { TagChip } from "../components/tags";
 import { LoadingPage, Logo, Table } from "../components/ui";
-import { BoardContext, BoardHead, CyclePicker, NextLabel, NoCycle, ViewSwitch } from "./Board";
+import { BoardContext, BoardHead, NextLabel, NoCycle } from "./Board";
 
 const TABLE_DEFAULTS = { sort: "stage", desc: false };
 
@@ -97,9 +97,9 @@ function ApplicationsTable({ board, reload }: { board: Board; reload: () => void
   };
   return (
     <div className={`board table-mode${ro ? " read-only" : ""}`}>
-      <BoardHead b={board} />
+      <BoardHead b={board} view="table" />
       <BoardContext />
-      <FilterBar rows={rows} initial={f} onChange={setF} shown={shown.length} total={rows.length} lead={<CyclePicker />} extra={<ViewSwitch current="table" />} />
+      <ApplicationsScope rows={rows} initial={f} onChange={setF} shown={shown.length} total={rows.length} />
       {cols.style}
       {cols.bar}
       <div className="al-table-wrap" tabIndex={0} aria-label="Applications">

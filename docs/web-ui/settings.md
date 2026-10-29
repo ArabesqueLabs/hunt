@@ -12,8 +12,11 @@ left or on Enter; Escape puts it back), and says so, with Undo.
 Undo is offered for a change, a move or a removal, for 5 seconds (or as
 long as Admin → General says); adding something is said, without Undo.
 
-- **Appearance:** the theme (light, dark, or matching the system; also in
-  the sidebar's foot), and language and region:
+- **Profile:** your photo, if you'd like one (PNG, JPEG, GIF, WebP, SVG
+  or ICO). It's on your badge at the top of every page; without one,
+  your initials are. It's kept with your data, and in its backups.
+- **Appearance:** the theme (light, dark, or matching the system; also at
+  the foot of the sidebar), and language and region:
   the language (English or Arabic; see
   [Languages](../../README.md#languages)), the region dates and numbers are
   written for, which digits numbers use, 24- or 12-hour times, and the home
@@ -45,7 +48,7 @@ long as Admin → General says); adding something is said, without Undo.
     the extension brings someone in.
 - **Signing in** (at the bottom of General): change your email address
   or password (with the one now; a new password ends your other
-  sessions), and Log out. Behind Cloudflare Access or a sign-in proxy, you
+  sessions), and Log out (in your menu too). Behind Cloudflare Access or a sign-in proxy, you
   sign in there instead.
 - **Delete account** (at the bottom of General): **Clear my data** deletes
   your cycles, applications, companies, people, notes, documents, tags,
@@ -61,7 +64,7 @@ you live in the UK, and the theme.
 
 ## Admin
 
-This hunt's admins have **Admin** in the sidebar, under Settings: its
+This hunt's admins have **Admin** in their menu, under their badge at the top right: its
 owner (who set it up: account 1) to begin with, and whoever they make
 admins.
 

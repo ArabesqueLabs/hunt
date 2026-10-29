@@ -1,8 +1,11 @@
 // Talking to hunt: keeping something in the stash, and asking whose stash
 // it is. Every request carries the token (Authorization: Bearer), and,
-// behind Cloudflare Access, the service token if one's set, and the
-// browser's own cookies (so Access lets through someone signed in to it in
-// this browser).
+// behind Cloudflare Access, either the service token, if one's set, or
+// else the browser's own cookies (so Access lets through someone signed in
+// to it in this browser). Never both: Access answers a service token with
+// a CF_Authorization cookie of its own, which, let into the browser, takes
+// the place of the person's, and hunt's pages then see the service token,
+// with no account, in place of them.
 
 /** Why a request didn't work, for the popup and the settings to say. */
 export class HuntError extends Error {
@@ -18,12 +21,17 @@ export class HuntError extends Error {
   }
 }
 
+/** Whether the settings give an Access service token. */
+function serviceToken(settings) {
+  return Boolean(settings.accessId && settings.accessSecret);
+}
+
 function headers(settings, json) {
   const h = { Authorization: 'Bearer ' + settings.token.trim() };
   if (json) {
     h['Content-Type'] = 'application/json';
   }
-  if (settings.accessId && settings.accessSecret) {
+  if (serviceToken(settings)) {
     h['CF-Access-Client-Id'] = settings.accessId.trim();
     h['CF-Access-Client-Secret'] = settings.accessSecret.trim();
   }
@@ -42,7 +50,7 @@ async function call(settings, method, path, body) {
       method,
       headers: headers(settings, body !== undefined),
       body: body === undefined ? undefined : JSON.stringify(body),
-      credentials: 'include',
+      credentials: serviceToken(settings) ? 'omit' : 'include',
       // Access answers someone it hasn't signed in with a redirect to its
       // sign-in page; hunt's API never redirects.
       redirect: 'manual',

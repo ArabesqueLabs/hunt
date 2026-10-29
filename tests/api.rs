@@ -2062,6 +2062,134 @@ async fn people_have_photos_and_profiles() {
 }
 
 #[tokio::test]
+async fn your_photo_is_optional_and_kept() {
+    let app = app();
+    assert!(ok(&app, "GET", "/api/settings", None).await["photo"].is_null());
+    let (status, _) = call(&app, "GET", "/api/settings/photo", None).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let jpeg: &[u8] = &[0xFF, 0xD8, 0xFF, 0xE0, 4, 5, 6];
+    let req = Request::put("/api/settings/photo")
+        .header("content-type", "image/jpeg")
+        .body(Body::from(jpeg))
+        .unwrap();
+    let (status, body) = bytes(&app, req).await;
+    assert_eq!(status, StatusCode::OK);
+    let hash = serde_json::from_slice::<Value>(&body).unwrap()["photo"].clone();
+    assert!(hash.is_string());
+    assert_eq!(ok(&app, "GET", "/api/settings", None).await["photo"], hash);
+    let (status, body) = bytes(
+        &app,
+        Request::get("/api/settings/photo")
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await;
+    assert_eq!((status, body.as_slice()), (StatusCode::OK, jpeg));
+    // Not pruned by something else changing, and in a backup.
+    let p = ok(&app, "POST", "/api/people", Some(json!({ "name": "Sam" }))).await;
+    ok(&app, "DELETE", &format!("/api/people/{}", p["id"]), None).await;
+    let (status, body) = bytes(
+        &app,
+        Request::get("/api/backup").body(Body::empty()).unwrap(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let backup: Value = serde_json::from_slice(&body).unwrap();
+    assert!(
+        backup["tables"]["stored_file"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|f| f["sha256"] == hash)
+    );
+    // Not an image: refused.
+    let req = Request::put("/api/settings/photo")
+        .header("content-type", "image/png")
+        .body(Body::from("hello"))
+        .unwrap();
+    assert_eq!(bytes(&app, req).await.0, StatusCode::UNPROCESSABLE_ENTITY);
+    ok(&app, "DELETE", "/api/settings/photo", None).await;
+    assert!(ok(&app, "GET", "/api/settings", None).await["photo"].is_null());
+    let (status, _) = call(&app, "GET", "/api/settings/photo", None).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn search_finds_everything() {
+    let app = app();
+    assert_eq!(ok(&app, "GET", "/api/search?q=", None).await, json!([]));
+    ok(
+        &app,
+        "POST",
+        "/api/applications",
+        Some(json!({ "company": "Globex", "title": "Platform engineer" })),
+    )
+    .await;
+    ok(
+        &app,
+        "POST",
+        "/api/applications",
+        Some(json!({ "company": "Acme", "title": "Globe trotter" })),
+    )
+    .await;
+    ok(
+        &app,
+        "POST",
+        "/api/people",
+        Some(json!({ "name": "Gloria Diaz", "title": "Recruiter" })),
+    )
+    .await;
+    ok(
+        &app,
+        "POST",
+        "/api/memos",
+        Some(json!({ "title": "Global teams", "body": "Ask about time zones" })),
+    )
+    .await;
+    ok(
+        &app,
+        "POST",
+        "/api/documents",
+        Some(json!({ "name": "Glossary" })),
+    )
+    .await;
+    let found = ok(&app, "GET", "/api/search?q=glo", None).await;
+    let kinds: Vec<&str> = found
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|g| g["kind"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        kinds,
+        ["applications", "companies", "people", "memos", "documents"]
+    );
+    let apps = &found[0];
+    assert_eq!(apps["count"], 2);
+    // The application whose company starts with it comes first, with its company beside it.
+    assert_eq!(apps["items"][0]["label"], "Platform engineer");
+    assert_eq!(apps["items"][0]["detail"], "Globex");
+    assert!(
+        apps["items"][0]["href"]
+            .as_str()
+            .unwrap()
+            .starts_with("/applications/")
+    );
+    assert_eq!(found[2]["items"][0]["label"], "Gloria Diaz");
+    assert_eq!(found[2]["items"][0]["detail"], "Recruiter");
+    assert!(
+        found[3]["items"][0]["href"]
+            .as_str()
+            .unwrap()
+            .starts_with("/notes?note=")
+    );
+    // Every word must match.
+    let found = ok(&app, "GET", "/api/search?q=glo+platform", None).await;
+    assert_eq!(found.as_array().unwrap().len(), 1);
+    assert_eq!(found[0]["count"], 1);
+}
+
+#[tokio::test]
 async fn records_carry_tags() {
     let app = app();
     let a = ok(
@@ -3255,13 +3383,26 @@ async fn a_backup_restores_everything_into_any_database() {
         ["Acme", "Globex"],
         "what was there before is gone"
     );
+    // Restored rows get new ids (a backup may be someone else's), and what
+    // refers to them follows: they're found by what they are.
+    let apps = ok(&to, "GET", "/api/applications", None).await;
+    let id_of = |title: &str| {
+        apps.as_array()
+            .unwrap()
+            .iter()
+            .find(|a| a["title"] == title)
+            .unwrap_or_else(|| panic!("no {title} in {apps}"))["id"]
+            .clone()
+    };
+    let (app_id, later_id) = (id_of("Staff Engineer"), id_of("SRE"));
     let a = ok(&to, "GET", &format!("/api/applications/{app_id}"), None).await;
     assert_eq!(
         (a["tags"].clone(), a["via_id"].clone()),
-        (json!(["remote"]), later["id"].clone())
+        (json!(["remote"]), later_id.clone())
     );
-    let v = ok(&to, "GET", &format!("/api/documents/{}", doc["id"]), None).await;
-    assert_eq!(v["name"], "Resume");
+    let docs = ok(&to, "GET", "/api/documents", None).await;
+    assert_eq!(docs.as_array().unwrap().len(), 1);
+    assert_eq!(docs[0]["name"], "Resume");
     let version = ok(&to, "GET", "/api/versions", None).await[0]["id"].clone();
     let (_, file) = bytes(
         &to,
@@ -3275,10 +3416,18 @@ async fn a_backup_restores_everything_into_any_database() {
         ok(&to, "GET", "/api/settings", None).await["same_name"],
         "merge"
     );
+    let card_id = ok(&to, "GET", "/api/processes", None)
+        .await
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| p["application_id"] == app_id)
+        .expect("its process")["id"]
+        .clone();
     let log = ok(
         &to,
         "GET",
-        &format!("/api/processes/{}/detail", card["id"]),
+        &format!("/api/processes/{card_id}/detail"),
         None,
     )
     .await;
@@ -3294,7 +3443,8 @@ async fn a_backup_restores_everything_into_any_database() {
         Some(json!({ "name": "Hooli" })),
     )
     .await;
-    assert!(next["id"].as_i64().unwrap() > later["company_id"].as_i64().unwrap());
+    let globex = ok(&to, "GET", &format!("/api/applications/{later_id}"), None).await;
+    assert!(next["id"].as_i64().unwrap() > globex["company_id"].as_i64().unwrap());
 
     // What isn't a backup changes nothing.
     let mut bad = backup.clone();
@@ -6741,4 +6891,28 @@ async fn the_stash_keeps_anything_and_sorts_it_into_hunt() {
     )
     .await;
     assert_eq!(ok(&app, "GET", "/api/stash/count", None).await["new"], 2);
+}
+
+#[tokio::test]
+async fn the_demo_says_whom_to_sign_in_as() {
+    let app = hunt::api::router_demo(test_db());
+    let res = app
+        .clone()
+        .oneshot(request("GET", "/login", &[], None))
+        .await
+        .unwrap();
+    let page =
+        String::from_utf8(res.into_body().collect().await.unwrap().to_bytes().to_vec()).unwrap();
+    assert!(page.contains("user@example.com") && page.contains("huntdemo"));
+    // And they're who it says.
+    let res = app
+        .oneshot(request(
+            "GET",
+            "/api/board",
+            &[("authorization", &basic("user@example.com", "huntdemo"))],
+            None,
+        ))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
 }

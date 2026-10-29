@@ -111,11 +111,61 @@ pub fn unscoped(sql: &str) -> std::borrow::Cow<'_, str> {
     }
 }
 
+/// `sql` without its comments (`/* … */` and `-- …`), quoted text left
+/// alone. What's in a comment isn't SQL: an apostrophe there would
+/// otherwise read as a quote opening, and hide the rest from scoping and
+/// from its parameters.
+pub fn without_comments(sql: &str) -> std::borrow::Cow<'_, str> {
+    if !sql.contains("/*") && !sql.contains("--") {
+        return std::borrow::Cow::Borrowed(sql);
+    }
+    let mut out = String::with_capacity(sql.len());
+    let mut chars = sql.chars().peekable();
+    let mut quote: Option<char> = None;
+    while let Some(c) = chars.next() {
+        if let Some(q) = quote {
+            out.push(c);
+            if c == q {
+                quote = None;
+            }
+            continue;
+        }
+        match c {
+            '\'' | '"' | '`' => {
+                quote = Some(c);
+                out.push(c);
+            }
+            '/' if chars.peek() == Some(&'*') => {
+                chars.next();
+                let mut prev = '\0';
+                for d in chars.by_ref() {
+                    if prev == '*' && d == '/' {
+                        break;
+                    }
+                    prev = d;
+                }
+                out.push(' ');
+            }
+            '-' if chars.peek() == Some(&'-') => {
+                for d in chars.by_ref() {
+                    if d == '\n' {
+                        out.push('\n');
+                        break;
+                    }
+                }
+            }
+            _ => out.push(c),
+        }
+    }
+    std::borrow::Cow::Owned(out)
+}
+
 /// `sql`, as `owner` may run it.
 pub fn scope(sql: &str, owner: i64) -> String {
     if sql.contains(ALL_OWNERS) {
         return sql.to_string();
     }
+    let sql = &*without_comments(sql);
     let head = sql.trim_start();
     let lead = &sql[..sql.len() - head.len()];
     let first = head
@@ -447,5 +497,27 @@ mod tests {
             ),
             "INSERT OR IGNORE INTO stored_file (sha256, data) VALUES (?1, ?2)"
         );
+    }
+
+    #[test]
+    fn an_apostrophe_in_a_comment_hides_nothing() {
+        // What's after the comment is scoped too, and the comment's gone.
+        assert_eq!(
+            scope(
+                "SELECT 1 FROM company c /* the company's own */ JOIN tag g -- a tag's\n ON g.id = ?",
+                3
+            ),
+            "SELECT 1 FROM (SELECT * FROM company WHERE owner_id = 3) c   \
+             JOIN (SELECT * FROM tag WHERE owner_id = 3) g \n ON g.id = ?"
+        );
+        // Quoted text that looks like a comment is kept.
+        assert_eq!(
+            without_comments("SELECT '/* not */', 'a -- b' -- gone\nFROM x"),
+            "SELECT '/* not */', 'a -- b' \nFROM x"
+        );
+        assert!(matches!(
+            without_comments("SELECT 1"),
+            std::borrow::Cow::Borrowed(_)
+        ));
     }
 }

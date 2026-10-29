@@ -17,6 +17,8 @@ once you stop it):
 docker run --rm -p 127.0.0.1:4848:4848 ghcr.io/arabesquelabs/hunt:demo
 ```
 
+Sign in as user@example.com, password huntdemo.
+
 To run your own, with Docker (see "Docker", below), Kubernetes
 ("Kubernetes") or built from source with Rust and Node, then open
 http://localhost:4848. In a clone of hunt, `make help` lists a target for each:
@@ -51,7 +53,7 @@ the same API, so the CLI and the browser always agree.
 make                            # make dev: http://127.0.0.1:4848, on an empty database each start (the launcher)
 make dev-demo                   # the same, with made-up data in it
 make help                       # every target, by who it's for
-make watch                      # serve it for several people, rebuilding and restarting on every change
+make watch                      # serve it, rebuilding and restarting on every change
 make image && make image-try    # the container image, built and run here, keeping nothing
 make ci                         # what CI runs: format check, lint, every test
 ```
@@ -481,12 +483,10 @@ opens them (Admin → Access and accounts), or invites someone.
 - **Gmail sync** is the owner's (account 1) only, for now.
 - **`--tenants`** (`HUNT_TENANTS`), which once turned several people on, is
   no longer needed: it's still taken, and changes nothing.
-- **Trying it out locally**: `make dev-tenants` (or `make watch`) serves
-  `target/dev.db` with `ADMINS` (by default admin@example.test) as admins,
-  and who's asking taken on trust (`--identity-header X-Hunt-User`): in a
-  browser, open `/dev/as?email=admin@example.test` to be the admin, or any
-  other email to be someone new asking for an account; `/dev/as` alone
-  signs out. Never run it like this where others can reach hunt.
+- **Trying it out locally**: `make dev`, `make dev-demo` and `make watch`
+  all sign in, as their owner user@example.com (password huntdemo, or
+  `DEV_EMAIL` and `DEV_PASSWORD`). Sign up as someone else at /signup,
+  once sign-ups are open (Admin → Access and accounts).
 
 ## Take-home pay (UK)
 

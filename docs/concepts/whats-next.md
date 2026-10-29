@@ -19,7 +19,7 @@ A reminder is something to do for a process, by a date: chase the
 recruiter, send availability, send references. It's done once you tick it.
 
 The card shows its next one, overdue ones turn amber, and what's due today
-and tomorrow is under **Coming up**, in the sidebar on every page.
+and tomorrow is under the bell, **Coming up**, at the top of every page.
 
 ## The calendar
 

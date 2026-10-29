@@ -8,7 +8,7 @@ import {
   BOARD_SEL, boardStages, boardSwimlanes, cardDetail, cardsCount, hiddenStages, isTerminal, loadBoard, nextOf,
   packOpen, setBoardRedraw, setPacksOpen, setStageHidden, showBoard, stageFolded, stageNamer, swimlaneChoices, swimlaneOpen, type Next,
 } from "../lib/board";
-import { boardCycle, cycleById, cycleWeek, cycleWeeks, currentCycle, endedCycles, pickCycle, runningCycles, viewedCycle } from "../lib/cycles";
+import { boardCycle, cycleById, cycleWeek, cycleWeeks, currentCycle, endedCycles, runningCycles, viewedCycle } from "../lib/cycles";
 import { activeFilters, matchesFilters, placeOf, readFilters, restoreFilters, rowFromCard, type FilterRow, type Filters } from "../lib/filters";
 import { fmtDay, longDate, nf } from "../lib/format";
 import { closedWhy, fieldOf, optionLabel } from "../lib/meta";
@@ -21,7 +21,7 @@ import type { Board, Card, Stage } from "../lib/types";
 import { BulkBar, ProcessActions, bulkProcesses } from "../components/bulk";
 import { resumeCycle, startCycle } from "../components/cycleDialogs";
 import { useFilePicker } from "../components/files";
-import { FilterBar } from "../components/FilterBar";
+import { ApplicationsScope } from "../components/ApplicationsScope";
 import { newApplication } from "../components/NewApplication";
 import { TagChip } from "../components/tags";
 import { Icon, LoadingPage, Logo, Notice, Table, dotted } from "../components/ui";
@@ -47,22 +47,35 @@ export function Home() {
   return <BoardPage />;
 }
 
-/** Board or Table: the switch at the end of both views' filters. */
-export function ViewSwitch({ current }: { current: string }) {
-  const choice = (value: string, label: string, path: string) => (
-    <button type="button" aria-pressed={String(current === value) as "true" | "false"}
-      // Filters come along.
-      onClick={() => { if (current !== value) { store("boardMode", value); go(path + location.search); } }}>{label}</button>
-  );
+/** Compact board, detailed board or table: one switch, in both views' heads. */
+export function ViewSwitch({ current }: { current: "board" | "table" }) {
+  const here = current === "table" ? "table" : cardDetail();
+  const choose = (v: string) => {
+    if (v === here) return;
+    if (v === "table") { store("boardMode", "table"); go("/applications" + location.search); return; }
+    store("cardView", v);
+    // Filters come along.
+    if (current === "board") showBoard();
+    else { store("boardMode", "board"); go("/" + location.search); }
+  };
+  const VIEWS: [string, string, string][] = [
+    ["compact", "Compact board: just company, role and what's next", "board-compact"],
+    ["detailed", "Detailed board: everything on each card", "board-detailed"],
+    ["table", "Table", "table"],
+  ];
   return (
     <div className="al-segmented view-switch" role="group" aria-label="View">
-      {choice("board", "Board", "/")}{choice("table", "Table", "/applications")}
+      {VIEWS.map(([v, label, icon]) => (
+        <button key={v} type="button" aria-pressed={String(here === v) as "true" | "false"} aria-label={label} title={label} onClick={() => choose(v)}>
+          <Icon name={icon} />
+        </button>
+      ))}
     </div>
   );
 }
 
-/** The board's head: its name, what it shows, and what to do. */
-export function BoardHead({ b }: { b: Board }) {
+/** The board's head: its name, what it shows, and what to do; the view (board or table) beside that. */
+export function BoardHead({ b, view }: { b: Board; view: "board" | "table" }) {
   const cur = currentCycle();
   const run = runningCycles();
   const total = b.stages.reduce((n, s) => n + s.cards.length, 0);
@@ -75,6 +88,7 @@ export function BoardHead({ b }: { b: Board }) {
       <h1>Applications</h1>
       {sub ? <p className="board-count">{sub}</p> : null}
       <div className="al-page-head__end">
+        <ViewSwitch current={view} />
         {run.length && !b.read_only ? (
           <button className="al-button al-button--primary" type="button" onClick={() => newApplication()} aria-keyshortcuts="n">
             <Icon name="plus" /><span>Add application</span><kbd className="al-kbd board-kbd" aria-hidden="true">N</kbd>
@@ -85,7 +99,7 @@ export function BoardHead({ b }: { b: Board }) {
   );
 }
 
-/** Above the board: an ended cycle's notice (which running cycle to show is CyclePicker, in the filters' row). */
+/** Above the board: an ended cycle's notice (which running cycle to show is a filter: cycle:, in the search). */
 export function BoardContext() {
   const viewing = viewedCycle();
   const run = runningCycles();
@@ -104,25 +118,6 @@ export function BoardContext() {
     );
   }
   return null;
-}
-
-/** Which running cycle the board shows, or all of them: at the start of the filters' row. None with only one. */
-export function CyclePicker() {
-  const run = runningCycles();
-  if (viewedCycle() || run.length < 2) return null;
-  const chosen = boardCycle();
-  return (
-    <div className="board-cycles">
-      <span className="al-label">Cycle</span>
-      <div className="al-segmented" role="group" aria-label="Cycle">
-        {[{ id: "", name: "All active" }, ...run].map((c) => (
-          <button key={c.id} type="button" aria-pressed={String(String(c.id) === chosen) as "true" | "false"} onClick={() => pickCycle(c.id)}>
-            <span translate={c.id ? "no" : undefined}>{c.name}</span>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
 }
 
 /**
@@ -247,29 +242,17 @@ export function BoardPage() {
   for (const id of [...BOARD_SEL]) if (!known.has(id)) BOARD_SEL.delete(id);
   const toggleCard = (id: number) => { if (BOARD_SEL.has(id)) BOARD_SEL.delete(id); else BOARD_SEL.add(id); redraw(); };
   const ctx: Ctx = { b, ro: !!b.read_only, detailed: detail === "detailed", shown, filtering: !!activeFilters(f), drag, setDrag, over, setOver, redraw, toggleCard };
-  // How many columns fit across the page: 5, or 3 when no swimlane has more
-  // than 2.
+  // How many columns fit across the page: as many as the widest swimlane
+  // has, but no fewer than 3 and no more than 6.
   const lanes = boardSwimlanes(b);
   const most = Math.max(0, ...lanes.map((g) => g.stages.length));
-  const across = most < 3 ? 3 : 5;
-  // Compact or Detailed cards, beside Board or Table.
-  const views = (
-    <>
-      <div className="al-segmented" role="group" aria-label="Cards">
-        {([["compact", "Compact"], ["detailed", "Detailed"]] as const).map(([v, l]) => (
-          <button key={v} type="button" aria-pressed={String(detail === v) as "true" | "false"} title={v === "detailed" ? "Show everything on each card" : "Just company, role and what's next"}
-            onClick={() => { if (detail !== v) { store("cardView", v); showBoard(); } }}>{l}</button>
-        ))}
-      </div>
-      <ViewSwitch current="board" />
-    </>
-  );
+  const across = Math.min(6, Math.max(3, most));
   return (
-    <div className={`board ${detail}${b.read_only ? " read-only" : ""}`} style={{ "--board-columns": across } as React.CSSProperties}>
-      <BoardHead b={b} />
+    <div className={`board ${detail}${b.read_only ? " read-only" : ""}${drag ? " is-dragging" : ""}`} style={{ "--board-columns": across } as React.CSSProperties}>
+      <BoardHead b={b} view="board" />
       <BoardContext />
       <GettingStarted b={b} />
-      <FilterBar rows={[...rows.values()]} initial={f} onChange={setF} shown={visible} total={boardStages(b).flatMap((st) => st.cards).length} lead={<CyclePicker />} extra={views} />
+      <ApplicationsScope rows={[...rows.values()]} initial={f} onChange={setF} shown={visible} total={boardStages(b).flatMap((st) => st.cards).length} />
       <HiddenStagesBar b={b} />
       {lanes.map((g) => <Swimlane key={String(g.lane.id ?? 0)} g={g} ctx={ctx} />)}
       {b.read_only ? null : (
@@ -334,10 +317,20 @@ function HiddenStagesBar({ b }: { b: Board }) {
 /** A swimlane: a row of the board, its stages' columns, folded until opened or not. */
 function Swimlane({ g, ctx }: { g: ReturnType<typeof boardSwimlanes>[number]; ctx: Ctx }) {
   const columns = useRef<HTMLDivElement>(null);
+  const view = useLaneView(columns);
+  const onDragOver = useDragScroll(columns, ctx);
   const count = g.stages.reduce((n, st) => n + st.cards.length, 0);
   const shownCount = g.stages.reduce((n, st) => n + st.cards.filter(ctx.shown).length, 0);
   const key = String(g.lane.id ?? 0);
   const title = `swimlane-${key}`;
+  const more = view.before.length + view.after.length > 0;
+  // To the first column out of view on that side.
+  const step = (side: "before" | "after") => {
+    const id = side === "after" ? view.after[0] : view.before[view.before.length - 1];
+    columns.current?.querySelector(`.column[data-stage="${id}"]`)
+      ?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: side === "after" ? "end" : "start" });
+  };
+  const names = (ids: string[]) => ids.map((id) => g.stages.find((st) => String(st.id) === id)?.name).filter(Boolean).join(", ");
   return (
     <details className="al-disclosure zone swimlane" open={swimlaneOpen(key, g.lane)} aria-labelledby={title} data-swimlane={key}
       onToggle={(e) => {
@@ -349,56 +342,131 @@ function Swimlane({ g, ctx }: { g: ReturnType<typeof boardSwimlanes>[number]; ct
         <h2 id={title}>{g.lane.name}</h2>
         <span className="al-badge al-badge--outline al-badge--count swimlane-count" data-total={count}>{ctx.filtering ? shownCount : count}</span>
       </summary>
-      <div className="al-disclosure__body">
-        <StagePager stages={g.stages} columns={columns} />
-        <div className="columns" ref={columns} style={{ "--columns": g.stages.length } as React.CSSProperties}>
-          {g.stages.map((st, i) => <Column key={st.id} stage={st} number={i + 1} ctx={ctx} />)}
+      <div className={`al-disclosure__body${more ? " lane-more" : ""}`}>
+        <StagePager stages={g.stages} columns={columns} inView={view.inView} />
+        <div className="lane-view">
+          <div className="columns" ref={columns} onDragOver={onDragOver}
+            data-more-before={view.before.length ? "" : undefined} data-more-after={view.after.length ? "" : undefined}
+            style={{ "--columns": g.stages.length } as React.CSSProperties}>
+            {g.stages.map((st, i) => <Column key={st.id} stage={st} number={i + 1} ctx={ctx} />)}
+          </div>
+          {(["before", "after"] as const).map((side) => view[side].length > 0 && (
+            <div key={side} className={`lane-edge lane-edge--${side}`}>
+              <button className="al-button al-button--sm lane-step" type="button" title={names(view[side])}
+                aria-label={`Show ${names(view[side])}`} onClick={() => step(side)}>
+                {side === "before" && <Icon name="back" className="flip-rtl" />}
+                <span>{nf(view[side].length)}</span>
+                {side === "after" && <Icon name="forward" className="flip-rtl" />}
+              </button>
+            </div>
+          ))}
         </div>
       </div>
     </details>
   );
 }
 
+/** Which of a swimlane's columns are in view, and those out of it on either side (stage ids, in order). */
+interface LaneView { inView: Set<string>; before: string[]; after: string[] }
+
+const PHONE = "(max-width: 52rem)";
+
 /**
- * On a phone, where a column is the screen's width: the stages as tabs above
- * them, the one in view marked, each going to its column.
+ * Watches a swimlane's columns as they scroll and the page resizes: a column
+ * is in view when at least half of it shows. On a phone, where a column is
+ * the screen's width, it's the one nearest the middle, and the columns are
+ * as tall as it is, not the tallest.
  */
-function StagePager({ stages, columns }: { stages: Stage[]; columns: React.RefObject<HTMLDivElement | null> }) {
-  const hidden = hiddenStages();
-  const shown = stages.filter((st) => !hidden.has(st.id));
-  const pager = useRef<HTMLElement>(null);
-  const [at, setAt] = useState<string | null>(null);
+function useLaneView(columns: React.RefObject<HTMLDivElement | null>): LaneView {
+  const [view, setView] = useState<LaneView>({ inView: new Set(), before: [], after: [] });
+  const last = useRef("");
+  const measure = useRef<() => void>(() => {});
+  measure.current = () => {
+    const cols = columns.current;
+    if (!cols) return;
+    const box = cols.getBoundingClientRect();
+    const phone = matchMedia(PHONE).matches;
+    const inView = new Set<string>(), before: string[] = [], after: string[] = [];
+    let here: HTMLElement | null = null, best = Infinity;
+    if (box.width > 0) {
+      for (const col of cols.querySelectorAll<HTMLElement>(".column:not([hidden])")) {
+        const r = col.getBoundingClientRect(), id = col.dataset.stage || "";
+        const d = Math.abs(r.left + r.width / 2 - (box.left + box.width / 2));
+        if (d < best) { best = d; here = col; }
+        // In the columns' own order, so the same either way the page reads.
+        const seen = Math.min(r.right, box.right) - Math.max(r.left, box.left);
+        if (!phone && seen >= r.width / 2) inView.add(id);
+        else if (!phone) (inView.size ? after : before).push(id);
+      }
+    }
+    if (phone && here) inView.add(here.dataset.stage || "");
+    cols.style.blockSize = phone && here ? `${here.offsetHeight + 8}px` : "";
+    const sig = [[...inView], before, after].map((ids) => ids.join(",")).join("|");
+    if (sig !== last.current) { last.current = sig; setView({ inView, before, after }); }
+  };
   useLayoutEffect(() => {
     const cols = columns.current;
     if (!cols) return;
-    // The column nearest the middle is the one in view.
-    const mark = () => {
-      const box = cols.getBoundingClientRect();
-      const mid = box.left + box.width / 2;
-      let here: string | null = null, best = Infinity;
-      for (const col of cols.querySelectorAll<HTMLElement>(".column:not([hidden])")) {
-        const r = col.getBoundingClientRect();
-        const d = Math.abs(r.left + r.width / 2 - mid);
-        if (d < best) { best = d; here = col.dataset.stage || null; }
-      }
-      // As tall as that column, not the tallest (only where the tabs show).
-      const col = cols.querySelector<HTMLElement>(`.column[data-stage="${here}"]`);
-      cols.style.blockSize = pager.current?.offsetParent && col ? `${col.offsetHeight + 8}px` : "";
-      setAt(here);
-    };
     let frame = 0;
-    const onScroll = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(mark); };
-    cols.addEventListener("scroll", onScroll, { passive: true });
-    frame = requestAnimationFrame(mark);
-    return () => { cols.removeEventListener("scroll", onScroll); cancelAnimationFrame(frame); };
+    const later = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(() => measure.current()); };
+    // Its own size (opened, the window resized) and its columns' (hidden, shown, filled).
+    const sizes = new ResizeObserver(later);
+    sizes.observe(cols);
+    const watch = () => { for (const col of cols.children) sizes.observe(col); };
+    watch();
+    const children = new MutationObserver(() => { watch(); later(); });
+    children.observe(cols, { childList: true });
+    cols.addEventListener("scroll", later, { passive: true });
+    later();
+    return () => { cols.removeEventListener("scroll", later); sizes.disconnect(); children.disconnect(); cancelAnimationFrame(frame); };
   }, [columns]);
+  return view;
+}
+
+/**
+ * While a card is dragged near either side of a swimlane, its columns scroll
+ * that way, faster the nearer the side, so it can land in a stage out of view.
+ */
+function useDragScroll(columns: React.RefObject<HTMLDivElement | null>, ctx: Ctx) {
+  const at = useRef({ x: 0, t: 0, frame: 0 });
+  useEffect(() => () => cancelAnimationFrame(at.current.frame), []);
+  return (e: DragEvent<HTMLDivElement>) => {
+    if (!ctx.drag) return;
+    const a = at.current;
+    a.x = e.clientX; a.t = performance.now();
+    if (a.frame) return;
+    const tick = () => {
+      const cols = columns.current;
+      // Dragging over something else fires no more of these: stop.
+      if (!cols || performance.now() - a.t > 150) { a.frame = 0; return; }
+      const box = cols.getBoundingClientRect();
+      const zone = Math.min(96, box.width / 5);
+      const left = a.x - box.left, right = box.right - a.x;
+      const pull = left < zone ? -(1 - left / zone) : right < zone ? 1 - right / zone : 0;
+      if (pull) cols.scrollBy({ left: Math.round(pull * 20) });
+      a.frame = requestAnimationFrame(tick);
+    };
+    a.frame = requestAnimationFrame(tick);
+  };
+}
+
+/**
+ * The stages as tabs above their columns, those in view marked, each going
+ * to its column: always on a phone, where a column is the screen's width;
+ * elsewhere, when there are more than fit.
+ */
+function StagePager({ stages, columns, inView }: { stages: Stage[]; columns: React.RefObject<HTMLDivElement | null>; inView: Set<string> }) {
+  const hidden = hiddenStages();
+  const shown = stages.filter((st) => !hidden.has(st.id));
+  const pager = useRef<HTMLElement>(null);
+  const marked = [...inView].join(",");
   useEffect(() => {
     pager.current?.querySelector('[aria-current="true"]')?.scrollIntoView({ block: "nearest", inline: "nearest" });
-  }, [at]);
+  }, [marked]);
   return (
     <nav className="stage-pager" aria-label="Stages" ref={pager}>
       {shown.map((st) => (
-        <button key={st.id} type="button" data-stage={st.id} aria-current={String(String(st.id) === at) as "true" | "false"}
+        <button key={st.id} type="button" data-stage={st.id} aria-current={String(inView.has(String(st.id))) as "true" | "false"}
           onClick={() => columns.current?.querySelector(`.column[data-stage="${st.id}"]`)?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "start" })}>
           <span>{st.name}</span><span className="stage-pager-count" aria-label={`${st.cards.length} active`}>{st.cards.length}</span>
         </button>

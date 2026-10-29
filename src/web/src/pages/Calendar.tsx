@@ -6,10 +6,12 @@ import { attempt, get } from "../lib/api";
 import { LOC, daysFromToday, fmtTime, parseLocal, zonedNow } from "../lib/format";
 import { R } from "../lib/meta";
 import { here, settle } from "../lib/router";
+import { usePageScope } from "../lib/search";
 import { S } from "../lib/state";
 import { store, stored } from "../lib/storage";
 import type { Row } from "../lib/types";
-import { EmptyState, Icon, Input, LoadingBlock, Logo, SearchBox, SysIcon } from "../components/ui";
+import { EmptyState, Icon, LoadingBlock, Logo, SysIcon } from "../components/ui";
+import { MenuButton, MenuCheck } from "../components/Menu";
 
 /** What the calendar shows, of active processes: all that's coming up, each kind in its colour, and what each is called beside its checkbox. */
 const CAL_KINDS: [string, string][] = [["step", "Interviews"], ["next", "Next actions"], ["task", "Tasks"], ["closes", "Deadlines"]];
@@ -77,9 +79,7 @@ export function CalendarPage() {
     const given = new URLSearchParams(location.search).get("date");
     return given && /^\d{4}-\d{2}-\d{2}$/.test(given) ? parseLocal(given) : today();
   });
-  const [q, setQ] = useState(f.q);
   const [events, setEvents] = useState<Row[] | null>(null);
-  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const atParam = (d: Date) => (isoDay(d) === isoDay(today()) ? "" : isoDay(d));
   // A change of view is a step Back undoes; moving through the months isn't.
   const keep = (next: Record<string, string>, d: Date, { push = true } = {}) => {
@@ -90,6 +90,16 @@ export function CalendarPage() {
   };
   const change = (o: Record<string, string>, { push = true } = {}) => { const next = { ...f, ...o }; setF(next); keep(next, at, { push }); };
   const moveTo = (d: Date) => { setAt(d); keep(f, d, { push: false }); };
+  // Searched from the top bar's field: companies, roles, steps.
+  // (What's kept is a chip there; what's being typed is searched, not kept.)
+  const [kept, setKept] = useState(f.q);
+  const search = (q: string, push = true) => { setKept(q); change({ q }, { push }); };
+  usePageScope({
+    key: "calendar", name: "Calendar", placeholder: "Search companies, roles and steps", defs: [], values: { q: kept },
+    commit: (next, push = true) => search((next.q || "").trim(), push),
+    preview: (next) => setF({ ...f, q: (next.q || "").trim() }),
+    clear: () => search(""),
+  });
   useEffect(() => { keep(f, at, { push: false }); }, []);
   // Weekends can be hidden from the month and the week only: a day and the
   // agenda show what there is.
@@ -143,18 +153,9 @@ export function CalendarPage() {
   const shown = events ? events.filter((e) => !hidden.includes(e.kind) && (weekends || !isWeekend(parseLocal(e.at.slice(0, 10))))) : null;
   return (
     <div className="page calendar">
-      <div className="al-page-head page-head">
+      {/* Its title, then where it is; at the end, the kinds, weekends, the view and its settings: one row, wrapping when it must. */}
+      <div className="al-page-head page-head cal-head">
         <h1>Calendar</h1>
-        <SearchBox placeholder="Search companies, roles, steps" aria-label="Search the calendar" value={q} onValue={(v) => {
-          setQ(v);
-          clearTimeout(timer.current);
-          timer.current = setTimeout(() => change({ q: v.trim() }, { push: false }), 200);
-        }} />
-        {/* Working hours, time zones and sharing with calendar apps: in Settings. */}
-        <a className="al-button al-button--icon al-button--quiet" href="/settings?tab=calendar" aria-label="Calendar settings" title="Calendar settings"><SysIcon name="settings" /></a>
-      </div>
-      {/* Where it is; then, at the end, weekends and the view, centred on the same line. */}
-      <div className="cal-bar">
         <div className="cal-nav">
           <button className="al-button" type="button" aria-label={`Previous ${unit}`} onClick={() => step(-1)}>‹</button>
           <button className="al-button" type="button" onClick={() => moveTo(today())}>Today</button>
@@ -162,21 +163,26 @@ export function CalendarPage() {
           <h2 className="cal-month">{label}</h2>
         </div>
         <div className="cal-filters">
-          <div className="cal-kinds" role="group" aria-label="Show">
-            {CAL_KINDS.map(([k, l]) => (
-              <label key={k} className={`cal-kind al-choice kind-${k}`}>
-                <Input type="checkbox" checked={!hidden.includes(k)} onChange={(e) => toggle(k, e.target.checked)} />{l}
-              </label>
-            ))}
-          </div>
-          <label className="cal-kind al-choice" hidden={!hasWeekends}>
-            <Input type="checkbox" checked={weekends} onChange={(e) => change({ weekends: e.target.checked ? "" : "hide" })} />Weekends
-          </label>
+          {/* What it shows: each kind (its tick in the kind's colour, so it's the key too), and weekends. */}
+          <MenuButton className="al-button cal-show" menuClassName="cal-show-menu" title="What the calendar shows"
+            items={() => <>
+              {CAL_KINDS.map(([k, l]) => (
+                <MenuCheck key={k} className={`kind-${k}`} checked={!hidden.includes(k)} onChange={(on) => toggle(k, on)}>{l}</MenuCheck>
+              ))}
+              {hasWeekends ? <>
+                <hr className="al-menu__separator" />
+                <MenuCheck checked={weekends} onChange={(on) => change({ weekends: on ? "" : "hide" })}>Weekends</MenuCheck>
+              </> : null}
+            </>}>
+            <Icon name="eye" /><span>{hidden.length ? `Showing ${CAL_KINDS.length - hidden.length} of ${CAL_KINDS.length}` : "Show"}</span><Icon name="chevron" />
+          </MenuButton>
           <div className="al-segmented" role="group" aria-label="View">
             {([["month", "Month"], ["week", "Week"], ["day", "Day"], ["agenda", "Agenda"]] as [string, string][]).map(([v, l]) => (
               <button key={v} type="button" aria-pressed={String(f.view === v) as "true" | "false"} onClick={() => change({ view: v })}>{l}</button>
             ))}
           </div>
+          {/* Working hours, time zones and sharing with calendar apps: in Settings. */}
+          <a className="al-button al-button--icon al-button--quiet" href="/settings?tab=calendar" aria-label="Calendar settings" title="Calendar settings"><SysIcon name="settings" /></a>
         </div>
       </div>
       <div className="cal-body" aria-live="polite">

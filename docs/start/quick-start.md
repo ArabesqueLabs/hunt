@@ -10,6 +10,8 @@ nothing once you stop it (Ctrl-C):
 docker run --rm -p 127.0.0.1:4848:4848 ghcr.io/arabesquelabs/hunt:demo
 ```
 
+Sign in as user@example.com, password huntdemo.
+
 ## 1. Run it
 
 In a folder of its own, get hunt's compose file and its settings, and
@@ -60,7 +62,7 @@ skipped; the rest can be changed later, in Settings.
 2. **Authentication:** your account, as the hunt's owner: an email address
    and a password (8 characters or more). You sign in with them at
    `/login`, and hunt remembers each browser for 30 days. You run the hunt
-   too: you're its admin (Admin, in the sidebar), and it's yours alone,
+   too: you're its admin (Admin, in your menu at the top right), and it's yours alone,
    with sign-ups closed, until you open them or invite someone. The
    password's kept in the database as a hash (never in a backup), and both
    are changed in Settings → General. Until there's an owner, nothing needs
@@ -123,7 +125,7 @@ It's a card on the board now, in your job search.
   the people involved, or the CV you sent.
 - **Give it a reminder** with a date ("send availability", tomorrow). It
   shows on the card, and what's due today and tomorrow (reminders,
-  interviews, closing dates) is under **Coming up**, in the sidebar.
+  interviews, closing dates) is under the bell, **Coming up**, at the top of every page.
   Interviews and closing dates are on the Calendar too.
 - **Close it** by dropping it on a reason, in Terminated Processes: they
   rejected me, I withdrew, they went silent. Drag it back to reopen it.
@@ -155,6 +157,8 @@ git clone https://github.com/ArabesqueLabs/hunt && cd hunt
 make dev-demo   # builds hunt, fills a throwaway database with the demo data, and serves it on http://127.0.0.1:4848
 make            # the same, empty: the launcher, every start
 ```
+
+Both sign in as user@example.com, password huntdemo.
 
 ## Next steps
 

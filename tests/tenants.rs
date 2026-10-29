@@ -1892,3 +1892,30 @@ async fn apps_send_to_the_stash_with_a_token_of_their_own() {
     .await;
     assert_eq!(status, StatusCode::FORBIDDEN);
 }
+
+/// Starting again with the owner's password (HUNT_ADMIN_EMAIL and
+/// HUNT_ADMIN_PASSWORD, as `make watch` does each restart) keeps it as it
+/// was, so its sessions, signed with a key from its hash, stay good; a new
+/// one replaces it, and ends them.
+#[test]
+fn a_restart_with_the_same_password_keeps_the_owner_signed_in() {
+    let db = Arc::new(Mutex::new(test_db()));
+    let tenants = Tenants::open(db.clone(), &[], IdentitySource::BuiltIn).unwrap();
+    let first = tenants
+        .make_owner("me@example.com", "correct horse")
+        .unwrap();
+    let session = tenants.session(&first, i64::MAX).unwrap();
+    let again = Tenants::open(db.clone(), &[], IdentitySource::BuiltIn).unwrap();
+    let kept = again.make_owner("me@example.com", "correct horse").unwrap();
+    assert_eq!(kept.password_hash, first.password_hash, "the same hash");
+    assert_eq!(
+        again.session(&kept, i64::MAX).unwrap(),
+        session,
+        "the same session"
+    );
+    let changed = again.make_owner("me@example.com", "another one").unwrap();
+    assert_ne!(
+        changed.password_hash, first.password_hash,
+        "a new password, a new hash"
+    );
+}

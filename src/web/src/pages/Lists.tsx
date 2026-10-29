@@ -14,15 +14,15 @@ import { tagNames } from "../lib/tags";
 import { toast } from "../lib/toast";
 import type { Row } from "../lib/types";
 import { BulkBar, RecordActions, SelectAllCell, SelectCell } from "../components/bulk";
-import { Combo } from "../components/Combo";
 import { useColumns } from "../components/columns";
 import { confirmDelete } from "../components/dialogs";
-import { CreateForm, FieldControl, GbpLine, refSource, setField } from "../components/fields";
+import { CreateForm, FieldControl, GbpLine, setField } from "../components/fields";
 import { FileDrop, acceptFiles, guessKind, stem, uploadVersion, useFileDrop } from "../components/files";
 import { IMPORTED, logoFromImport, openImport, personFromProfile, refreshFromLinkedIn } from "../components/importer";
 import { newApplication } from "../components/NewApplication";
-import { TagChip, TagFilter } from "../components/tags";
-import { Icon, Input, LoadingRows, Logo, Notice, Photo, SearchBox, Select, Table } from "../components/ui";
+import { TagChip } from "../components/tags";
+import { useAddressFilters, usePageScope } from "../lib/search";
+import { Icon, Input, LoadingRows, Logo, Notice, Photo, Table } from "../components/ui";
 import { NewRecordPage } from "./Record";
 
 /**
@@ -39,7 +39,7 @@ export function RowIcons({ what, editHref, onRemove, onRefresh }: { what: string
   );
 }
 
-/** Contacts: everyone and every company, or one of them. */
+/** Contacts: everyone and every company, or one of them; in the page's head, by its New buttons. */
 function ContactsSwitch({ current }: { current: string }) {
   return (
     <div className="al-segmented" role="group" aria-label="Show">
@@ -48,15 +48,6 @@ function ContactsSwitch({ current }: { current: string }) {
       ))}
     </div>
   );
-}
-
-/** A search box's value, and the same a moment after the typing stops. */
-function useSearch(delay = 150) {
-  const [q, setQ] = useState("");
-  const [settled, setSettled] = useState("");
-  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const set = (v: string) => { setQ(v); clearTimeout(timer.current); timer.current = setTimeout(() => setSettled(v), delay); };
-  return [q, settled, set] as const;
 }
 
 /** A document's row: a file dropped on it becomes its next version. */
@@ -76,25 +67,29 @@ export function ListPage({ page }: { page: string }) {
   useShared();
   const { resource, columns: cols } = LISTS[page];
   const r = R(resource) as Row;
-  const [q, settled, setQ] = useSearch();
-  const [tag, setTag] = useState("");
-  // Files: of one kind, or all.
+  // Searched and filtered from the top bar's field: words, tag:, and for
+  // files, kind: and application: (those sent with one, ?application=ID).
+  const filters = useAddressFilters(["q", "tag", "kind", "application"]);
+  const { q: settled, tag, kind } = filters.applied;
   const kindField = resource === "documents" ? r.fields.find((f: Row) => f.name === "kind") : null;
-  const [kind, setKind] = useState("");
-  // Files: those sent with one application (?application=ID), or all.
-  const [app, setApp] = useState<{ id: number; label: string | null } | null>(() => {
-    const id = resource === "documents" ? Number(new URLSearchParams(location.search).get("application")) : 0;
-    return id ? { id, label: null } : null;
-  });
+  const appId = resource === "documents" ? Number(filters.applied.application) || 0 : 0;
+  const [app, setApp] = useState<{ id: number; label: string | null } | null>(null);
   useEffect(() => {
-    if (app && app.label == null) attempt(() => get(`applications/${app.id}`)).then((a) => setApp(a ? { id: a.id, label: a.label } : null));
-  }, [app]);
-  const pickApp = (next: { id: number; label: string } | null) => {
-    setApp(next);
-    const query = new URLSearchParams(location.search);
-    if (next) query.set("application", String(next.id)); else query.delete("application");
-    history.replaceState(null, "", location.pathname + (query.toString() ? `?${query}` : ""));
-  };
+    if (!appId) { setApp(null); return; }
+    if (app?.id === appId) return;
+    setApp({ id: appId, label: null });
+    attempt(() => get(`applications/${appId}`)).then((a) => setApp(a ? { id: a.id, label: a.label } : null));
+  }, [appId]);
+  const scopeKey = page === "files" ? "files" : page;
+  usePageScope({
+    key: scopeKey, name: r.title, placeholder: resource === "documents" ? "Search files, or filter by kind or tag" : `Search ${r.title.toLowerCase()}, or filter by tag`,
+    values: filters.values, commit: filters.commit, preview: filters.preview, clear: filters.clear,
+    defs: [
+      ...(kindField ? [{ key: "kind", label: "Kind", keyword: "kind", choices: kindField.options as [string, string][], uncounted: true }] : []),
+      { key: "tag", label: "Tag", keyword: "tag", choices: S.TAGS.map((t) => [t.name, t.name] as [string, string]), uncounted: true },
+      ...(app ? [{ key: "application", label: "Sent with", keyword: "application", choices: [[String(app.id), app.label ?? `#${app.id}`]] as [string, string][], uncounted: true }] : []),
+    ],
+  });
   const [rows, setRows] = useState<Row[] | null>(null);
   const [companies, setCompanies] = useState<Map<number, Row> | null>(null);
   const [version, setVersion] = useState(0);
@@ -110,7 +105,7 @@ export function ListPage({ page }: { page: string }) {
   useEffect(() => {
     let alive = true;
     (async () => {
-      const list: Row[] = await get(`${resource}?q=${enc(settled)}${tag ? `&tag=${enc(tag)}` : ""}${kind ? `&kind=${enc(kind)}` : ""}${app ? `&application_id=${app.id}` : ""}`);
+      const list: Row[] = await get(`${resource}?q=${enc(settled)}${tag ? `&tag=${enc(tag)}` : ""}${kind ? `&kind=${enc(kind)}` : ""}${appId ? `&application_id=${appId}` : ""}`);
       // Applications and people belong to companies: show whose logo.
       const cos = ["applications", "people"].includes(resource) ? new Map<number, Row>((await get("companies")).map((c: Row) => [c.id, c])) : null;
       if (resource === "documents") {
@@ -130,7 +125,7 @@ export function ListPage({ page }: { page: string }) {
       setRows(list);
     })().catch((e) => toast(e.message, "error"));
     return () => { alive = false; };
-  }, [resource, settled, tag, kind, app?.id, version, sel]);
+  }, [resource, settled, tag, kind, appId, version, sel]);
   const shownIds = (rows || []).map((rec) => rec.id);
   const cell = (rec: Row, key: string): ReactNode => {
     if (key === "salary") {
@@ -180,29 +175,11 @@ export function ListPage({ page }: { page: string }) {
         <h1>{contacts ? "Contacts" : r.title}</h1>
         {LIST_LEDES[contacts ? "contacts" : page] ? <p className="al-page-head__lede">{LIST_LEDES[contacts ? "contacts" : page]}</p> : null}
         <div className="al-page-head__end">
+          {contacts ? <ContactsSwitch current={page} /> : null}
           <button className="al-button al-button--primary" type="button" onClick={() => (resource === "applications" ? newApplication() : go(`/${page}/new`))}>
             <Icon name="plus" /><span>{resource === "documents" ? "New document" : `New ${r.entity}`}</span></button>
         </div>
       </header>
-      <div className="list-tools">
-        {contacts ? <ContactsSwitch current={page} /> : null}
-        <SearchBox placeholder={`Search ${r.title.toLowerCase()}`} aria-label="Search" value={q} onValue={setQ} />
-        {kindField ? (
-          <Select aria-label="Kind" value={kind} onChange={(e) => setKind(e.target.value)}>
-            <option value="">All kinds</option>
-            {kindField.options.map(([v, l]: [string, string]) => <option key={v} value={v}>{l}</option>)}
-          </Select>
-        ) : null}
-        {resource === "documents" && (!app || app.label != null) ? (
-          <Combo key={app?.id ?? 0} className="list-app" label="Application" placeholder="Any application" value={app?.label ?? ""} source={refSource("applications")}
-            onPick={(it) => pickApp({ id: it.value, label: it.label })} onInput={(v) => { if (!v.trim()) pickApp(null); }} />
-        ) : null}
-        {S.TAGS.length ? <TagFilter current={tag} onPick={setTag} /> : null}
-        {/* Files: searched or filtered, back to them all. */}
-        {resource === "documents" && (q || kind || tag || app) ? (
-          <button className="al-button al-button--sm al-button--quiet" type="button" onClick={() => { setQ(""); setKind(""); setTag(""); pickApp(null); }}>Reset filters</button>
-        ) : null}
-      </div>
       {columns.style}
       {columns.bar}
       <div className="al-table-wrap">
@@ -218,7 +195,7 @@ export function ListPage({ page }: { page: string }) {
           </thead>
           <tbody>
             {rows == null ? <LoadingRows cols={cols.length + 4} /> : rows.length ? rows.map(row)
-              : <tr><td className="muted" colSpan={cols.length + 4}>{q || tag || kind ? "No matches." : app ? "No files sent with this application yet." : `No ${r.title.toLowerCase()} yet.`}</td></tr>}
+              : <tr><td className="muted" colSpan={cols.length + 4}>{settled || tag || kind ? "No matches." : appId ? "No files sent with this application yet." : `No ${r.title.toLowerCase()} yet.`}</td></tr>}
           </tbody>
         </Table>
       </div>
@@ -240,8 +217,14 @@ export function ListPage({ page }: { page: string }) {
 /** Contacts, all together: companies and people in one list, by name. */
 export function ContactsPage() {
   useShared();
-  const [q, settled, setQ] = useSearch();
-  const [tag, setTag] = useState("");
+  // Searched and filtered from the top bar's field: words, and tag:.
+  const filters = useAddressFilters(["q", "tag"]);
+  const { q: settled, tag } = filters.applied;
+  usePageScope({
+    key: "contacts", name: "Contacts", placeholder: "Search companies and people, or filter by tag",
+    values: filters.values, commit: filters.commit, preview: filters.preview, clear: filters.clear,
+    defs: [{ key: "tag", label: "Tag", keyword: "tag", choices: S.TAGS.map((t) => [t.name, t.name] as [string, string]), uncounted: true }],
+  });
   const [rows, setRows] = useState<Row[] | null>(null);
   useEffect(() => { store("contacts", "all"); }, []);
   useEffect(() => {
@@ -266,15 +249,11 @@ export function ContactsPage() {
         <h1>Contacts</h1>
         <p className="al-page-head__lede">{LIST_LEDES.contacts}</p>
         <div className="al-page-head__end">
+          <ContactsSwitch current="all" />
           <button className="al-button" type="button" onClick={() => go("/people/new")}><Icon name="plus" /><span>New person</span></button>
           <button className="al-button al-button--primary" type="button" onClick={() => go("/companies/new")}><Icon name="plus" /><span>New company</span></button>
         </div>
       </header>
-      <div className="list-tools">
-        <ContactsSwitch current="all" />
-        <SearchBox placeholder="Search companies and people" aria-label="Search" value={q} onValue={setQ} />
-        {S.TAGS.length ? <TagFilter current={tag} onPick={setTag} /> : null}
-      </div>
       <div className="al-table-wrap">
         <Table className="al-table--interactive">
           <thead><tr><th>Name</th><th>Kind</th><th>About</th><th>Where</th><th>Tags</th></tr></thead>
@@ -287,7 +266,7 @@ export function ContactsPage() {
                 <td translate="no">{x.where || ""}</td>
                 <td className="tags-cell">{x.tags.map((t: string) => <TagChip key={t} name={t} />)}</td>
               </tr>
-            )) : <tr><td className="muted" colSpan={5}>{q || tag ? "No matches." : "No contacts yet."}</td></tr>}
+            )) : <tr><td className="muted" colSpan={5}>{settled || tag ? "No matches." : "No contacts yet."}</td></tr>}
           </tbody>
         </Table>
       </div>

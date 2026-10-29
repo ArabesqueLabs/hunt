@@ -39,6 +39,10 @@ pub const COOKIE: &str = "hunt_session";
 pub const SESSION_DAYS: i64 = 30;
 /// The shortest password.
 pub const MIN_LENGTH: usize = 8;
+/// The demo's owner (`--demo`), unless `HUNT_ADMIN_EMAIL` and
+/// `HUNT_ADMIN_PASSWORD` say otherwise: scripts/demo.sh makes its data theirs.
+pub const DEMO_EMAIL: &str = "user@example.com";
+pub const DEMO_PASSWORD: &str = "huntdemo";
 
 /// A password, kept as its Argon2 hash, and the key its sessions are
 /// signed with.
@@ -220,11 +224,25 @@ fn html(text: &str) -> String {
         .replace('>', "&gt;")
 }
 
-/// The sign-in page: an email address and password, where to go after, and
-/// (while sign-ups are open) the way to sign up.
-pub fn login_page(next: &str, wrong: bool, signups_open: bool) -> String {
+/// The sign-in page: an email address and password, where to go after,
+/// (while sign-ups are open) the way to sign up, and, in the demo, whom to
+/// sign in as (`demo`: an email address and its password).
+pub fn login_page(
+    next: &str,
+    wrong: bool,
+    signups_open: bool,
+    demo: Option<&(String, String)>,
+) -> String {
+    let demo = demo.map(|(email, password)| {
+        format!(
+            r#"<p class="login-demo">This is hunt's demo: sign in as <b translate="no">{}</b>, password <b translate="no">{}</b>.</p>"#,
+            html(email),
+            html(password)
+        )
+    });
     include_str!("web/login.html")
         .replace("{{next}}", &html(next))
+        .replace("{{demo}}", &demo.unwrap_or_default())
         .replace(
             "{{error}}",
             if wrong {
@@ -334,6 +352,16 @@ mod tests {
         );
         assert!(Cidr::parse("10.0.0.0/33").is_err());
         assert!(Cidr::parse("proxy").is_err());
+    }
+
+    #[test]
+    fn the_demos_sign_in_page_says_whom_to_sign_in_as() {
+        let demo = (DEMO_EMAIL.to_string(), DEMO_PASSWORD.to_string());
+        let page = login_page("/", false, false, Some(&demo));
+        assert!(page.contains("<b translate=\"no\">user@example.com</b>"));
+        assert!(page.contains("<b translate=\"no\">huntdemo</b>"));
+        let page = login_page("/", false, false, None);
+        assert!(!page.contains("huntdemo") && !page.contains("{{demo}}"));
     }
 
     #[test]

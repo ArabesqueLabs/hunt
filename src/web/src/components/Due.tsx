@@ -1,7 +1,8 @@
-// In the sidebar: what's coming up, a click away from any page. Reminders
+// In the top bar: what's coming up, a click away from any page. Reminders
 // that are due (or overdue), interviews, and applications closing, from
-// today until tomorrow's end; how many, on the button. From the calendar's
-// events, read again on each page.
+// today until tomorrow's end; how many, on the bell's corner (in the
+// warning colour when something's overdue). From the calendar's events,
+// read again on each page.
 
 import { useEffect, useState } from "react";
 import { get } from "../lib/api";
@@ -10,9 +11,7 @@ import { t } from "../lib/i18n";
 import { go, useVisit } from "../lib/router";
 import type { Row } from "../lib/types";
 import { MenuButton, MenuItem } from "./Menu";
-import { Logo, PathIcon } from "./ui";
-
-const BELL = "M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0";
+import { ICONS, Logo, PathIcon } from "./ui";
 
 /** What each kind of event is called, beside its company. */
 const KIND: Record<string, string> = { next: "Next action", step: "Interview", closes: "Applications close" };
@@ -33,7 +32,7 @@ async function loadDue(): Promise<Row[]> {
     .sort((a, b) => String(a.at).localeCompare(String(b.at)));
 }
 
-export function DueMenu({ mini }: { mini: boolean }) {
+export function DueMenu() {
   const visit = useVisit();
   const [due, setDue] = useState<Row[] | null>(null);
   useEffect(() => {
@@ -45,7 +44,7 @@ export function DueMenu({ mini }: { mini: boolean }) {
   const late = due?.some((e) => e.kind === "next" && isOverdue(e.at));
   const label = n ? `Coming up: ${n}` : "Coming up";
   return (
-    <MenuButton className="al-sidebar__link due-button" menuClassName="due-menu" label={label} title={mini ? t(label) : ""}
+    <MenuButton className="al-button al-button--icon al-button--quiet topbar-button" menuClassName="due-menu" label={label}
       items={(close) => <>
         <p className="al-menu__label">Today and tomorrow</p>
         {due && due.length ? due.map((e) => {
@@ -62,9 +61,8 @@ export function DueMenu({ mini }: { mini: boolean }) {
         <hr className="al-menu__separator" />
         <MenuItem close={close} onClick={() => go("/calendar?view=agenda")}>Open the calendar</MenuItem>
       </>}>
-      <PathIcon d={BELL} className="al-icon" />
-      <span className="al-sidebar__label">Coming up</span>
-      {n ? <span className={`due-count al-badge al-badge--count${late ? " al-badge--warning" : " al-badge--accent"}`} aria-hidden="true">{n}</span> : null}
+      <PathIcon d={ICONS.bell} className="al-icon" />
+      {n ? <span className={`topbar-count al-badge al-badge--count${late ? " al-badge--warning" : ""}`} aria-hidden="true">{n > 99 ? "99+" : n}</span> : null}
     </MenuButton>
   );
 }

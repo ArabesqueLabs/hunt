@@ -3,6 +3,24 @@
 Every application, as a board of stages or as a table: the switch at the
 top changes the view, and it opens as you left it.
 
+## The top bar
+
+Along the top of every page:
+
+- **Search**, and filter the page you're on: one field, scoped to the
+  page (its chip, "Applications"), or, with that chip off, everything at
+  once. `/` or ⌘K (Ctrl+K) gets to it from anywhere. On a phone, it's the
+  magnifying glass in the bar. See [Searching and filtering](search.md).
+- **The bell:** what's coming up today and tomorrow (see
+  [Calendar](calendar.md#coming-up)), with how many on its corner, in
+  amber when something's overdue.
+- **You**: your photo (or initials). Your menu has Settings, Admin (for
+  admins) and Log out.
+
+The **theme** (light, dark, or matching the system; a click moves to the
+next) and the **language** (a click switches to the other one) are at the
+foot of the sidebar, under "Hide sidebar".
+
 ## Two views
 
 - **Board** (`/`): a column per stage, a card per process (below).
@@ -13,25 +31,32 @@ top changes the view, and it opens as you left it.
 
 ## Filters
 
-Both views share their filters, which carry over between them.
+Both views share their filters, which carry over between them. They're in
+the search at the top: on this page it starts with the Applications scope,
+so typing narrows the board or the table as you go, and the list under it
+suggests the filters your words could mean (see
+[Searching and filtering](search.md) for how it works, and every keyword).
 
-- **In the filters' row:** words (company, role, location, source, tags,
-  people), needs attention (an interview within 7 days, or unchanged for
-  14+), work mode, pay and source.
+- **What needs doing:** `is:due` (Due next) and `is:overdue`.
+- **Which cycle** the board shows, when more than one is running:
+  `cycle:"Autumn 2026"`. Without it, the board shows them all. Picking a
+  cycle in the sidebar does the same.
+- **The rest:** stage, sub stage, tag, company, person, work mode,
+  location, pay, source, attention (an interview within 7 days, or
+  unchanged for 14+), added or applied in the last 7/30/90 days, closing
+  soon, employment, status, has emails/files/people (or nothing), and why
+  it was closed.
 - **Pay** is a GBP-a-year minimum: other currencies are converted, and
   other periods annualised. "Known pay only" drops those without.
-- **Under "More filters":** company, person, added or applied in the last
-  7/30/90 days, closing soon, location, employment, archive reason, has
-  emails/files/people (or nothing), status and tag.
 - **They're in the address** (`/?mode=remote&pay=120000`), so a filtered
   view can be bookmarked, and Back undoes a change. They're remembered too.
-- "Clear filters" and the count of what's shown appear whenever any is on.
 
 ## The board
 
 - One column per stage; columns grow with their cards.
-- Cards are compact (role and company) or detailed, by Compact / Detailed
-  at the end of the filters' row, beside Board / Table. A detailed card shows its first three
+- Cards are compact (role and company) or detailed. The three icons by
+  "Add application" switch between a compact board, a detailed board
+  and the table. A detailed card shows its first three
   tags, and how many more (named when you point at it).
 - Drag cards between columns or within one.
 - "+ Add a process" at the foot of a column adds one straight into it:
