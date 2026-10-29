@@ -1500,6 +1500,8 @@ impl Db {
             "numerals": self.setting("locale.numerals")?.unwrap_or_else(|| "auto".into()),
             // Light, dark or as the system is: the same on every device.
             "theme": self.setting("appearance.theme")?.unwrap_or_else(|| "auto".into()),
+            // Your photo's hash, if you've one: on your profile badge.
+            "photo": self.setting(crate::files::OWN_PHOTO)?,
             // The zone hunt keeps time in: chosen, or the machine's own.
             "timezone": self.setting("locale.timezone")?,
             "server_timezone": jiff::tz::TimeZone::system().iana_name().unwrap_or("UTC"),

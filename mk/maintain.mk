@@ -73,6 +73,6 @@ deps: ## Update the dependencies (within their versions), then run CI's checks
 # Arabesque Labs' own: their hosted hunt, with careerhunt.app's terms.
 HOSTED_ENV = HUNT_SITE_URL=https://careerhunt.app HUNT_OPERATOR="Arabesque Labs Ltd"
 
-dev-hosted: web ## Like dev-tenants, as the hosted hunt: terms to agree to, and careerhunt.app's legal pages linked
-	$(BE_SOMEONE)
-	$(HOSTED_ENV) $(CARGO) run -- serve --addr $(ADDR) --db $(DEV_DB) $(TENANTS_FLAGS)
+dev-hosted: web ## Like watch, without the watching, as the hosted hunt: terms to agree to, and careerhunt.app's legal pages linked
+	$(SIGN_IN)
+	$(HOSTED_ENV) $(AS_OWNER) $(CARGO) run -- serve --addr $(ADDR) --db $(DEV_DB)

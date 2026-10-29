@@ -930,7 +930,8 @@ impl Db {
             "DELETE FROM stored_file /* all owners */ WHERE sha256 NOT IN (SELECT sha256 FROM version) \
              AND sha256 NOT IN (SELECT logo FROM company WHERE logo IS NOT NULL) \
              AND sha256 NOT IN (SELECT photo FROM person WHERE photo IS NOT NULL) \
-             AND sha256 NOT IN (SELECT file_sha256 FROM stash_item WHERE file_sha256 IS NOT NULL)",
+             AND sha256 NOT IN (SELECT file_sha256 FROM stash_item WHERE file_sha256 IS NOT NULL) \
+             AND sha256 NOT IN (SELECT value FROM setting WHERE name = 'profile.photo' AND value IS NOT NULL)",
             &[],
         )?;
         Ok(())

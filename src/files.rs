@@ -337,6 +337,70 @@ impl Db {
     }
 }
 
+// --- your own photo: on your profile badge, and yours to use elsewhere --------------------
+
+/// Where your photo is kept: in settings, its file's hash and its type.
+pub const OWN_PHOTO: &str = "profile.photo";
+const OWN_PHOTO_TYPE: &str = "profile.photo_type";
+
+impl Db {
+    /// Set your own photo from an image's bytes, checked by what's in them,
+    /// and kept like any file. Returns its hash.
+    pub fn set_own_photo(&self, data: &[u8], declared: &str) -> Result<String> {
+        if data.len() > crate::lookup::MAX_IMAGE {
+            return Err(invalid(format!(
+                "a photo can be at most {}",
+                size(crate::lookup::MAX_IMAGE as i64)
+            )));
+        }
+        let mime = image_type(data, declared)
+            .ok_or_else(|| invalid("that isn't an image: use PNG, JPEG, GIF, WebP, SVG or ICO"))?;
+        let hash = format!("{:x}", Sha256::digest(data));
+        self.atomic(|db| {
+            db.exec(
+                "INSERT OR IGNORE INTO stored_file (sha256, data) VALUES (?1, ?2)",
+                args![hash, data],
+            )?;
+            db.set_setting(OWN_PHOTO, Some(&hash))?;
+            db.set_setting(OWN_PHOTO_TYPE, Some(mime))?;
+            db.prune_blobs()?;
+            Ok(hash.clone())
+        })
+    }
+
+    /// Remove your own photo: your initials take its place.
+    pub fn remove_own_photo(&self) -> Result<()> {
+        self.atomic(|db| {
+            db.set_setting(OWN_PHOTO, None)?;
+            db.set_setting(OWN_PHOTO_TYPE, None)?;
+            db.prune_blobs()
+        })
+    }
+
+    /// Your own photo's image.
+    pub fn own_photo(&self) -> Result<File> {
+        let none = || Error::NotFound("you have no photo".into());
+        let hash = self.setting(OWN_PHOTO)?.ok_or_else(none)?;
+        let row = self
+            .rows(
+                "SELECT data FROM stored_file WHERE sha256 = ?1",
+                args![hash],
+            )?
+            .pop()
+            .ok_or_else(none)?;
+        let data = match row.into_iter().next().map(|(_, v)| v) {
+            Some(Sql::Blob(b)) => b,
+            Some(Sql::Text(t)) => t.into_bytes(),
+            _ => Vec::new(),
+        };
+        Ok(File {
+            filename: "photo".into(),
+            content_type: self.setting(OWN_PHOTO_TYPE)?.unwrap_or_default(),
+            data,
+        })
+    }
+}
+
 /// A file from a row of (name, content type, contents).
 pub(crate) fn file_of(row: crate::store::Row, name: impl Fn(&str) -> String) -> File {
     let mut values = row.into_iter().map(|(_, v)| v);

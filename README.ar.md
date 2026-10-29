@@ -14,6 +14,8 @@ hunt برمجيات حرة، بموجب رخصة [GNU AGPL v3](LICENSE): شغّ�
 docker run --rm -p 127.0.0.1:4848:4848 ghcr.io/arabesquelabs/hunt:demo
 ```
 
+سجّل الدخول بـuser@example.com، وكلمة المرور huntdemo.
+
 ولتشغّل نسختك، بـDocker (انظر «Docker»، أدناه)، أو على Kubernetes («Kubernetes»)، أو مبنيًّا من
 المصدر بـRust وNode، ثم افتح http://localhost:4848. وفي نسخة مستنسخة من hunt، يسرد `make help` هدفًا
 لكلٍّ منها:
@@ -44,7 +46,7 @@ make backup                     # save everything in the running hunt to backups
 make                            # make dev: http://127.0.0.1:4848, on an empty database each start (the launcher)
 make dev-demo                   # the same, with made-up data in it
 make help                       # every target, by who it's for
-make watch                      # serve it for several people, rebuilding and restarting on every change
+make watch                      # serve it, rebuilding and restarting on every change
 make image && make image-try    # the container image, built and run here, keeping nothing
 make ci                         # what CI runs: format check, lint, every test
 ```
@@ -408,10 +410,9 @@ hunt serve --admins you@example.com,other-admin@example.com \
 - **مزامنة Gmail** للمالك (الحساب 1) وحده، حاليًّا.
 - **`--tenants`** (`HUNT_TENANTS`)، الذي كان يشغّل تعدد الأشخاص، لم تعد له حاجة: ما زال يُقبل، ولا يغيّر
   شيئًا.
-- **التجربة محليًّا**: يقدّم `make dev-tenants` (أو `make watch`) الملف `target/dev.db` مع `ADMINS`
-  (افتراضيًّا admin@example.test) مدراءَ، ومن يسأل يُؤخذ بالثقة (`--identity-header X-Hunt-User`): في
-  المتصفح، افتح `/dev/as?email=admin@example.test` لتكون المدير، أو أي بريد آخر لتكون شخصًا جديدًا يطلب
-  حسابًا؛ و`/dev/as` وحده يسجّل الخروج. لا تشغّله هكذا أبدًا حيث يمكن لغيرك الوصول إلى hunt.
+- **التجربة محليًّا**: كلٌّ من `make dev` و`make dev-demo` و`make watch` يطلب تسجيل الدخول، بمالكه
+  user@example.com (كلمة المرور huntdemo، أو `DEV_EMAIL` و`DEV_PASSWORD`). وسجّل حسابًا لشخص آخر من
+  /signup، حين يُفتح التسجيل (الإدارة ← الوصول والحسابات).
 
 ## صافي الأجر (المملكة المتحدة)
 

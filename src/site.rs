@@ -82,6 +82,13 @@ impl Site {
             .unwrap_or_else(|| format!("{}#readme", self.source))
     }
 
+    /// A page of the docs (`page` like "web-ui/search"): on the website, or
+    /// its Markdown on GitHub.
+    pub fn doc(&self, page: &str) -> String {
+        self.page(&format!("/docs/{page}/"))
+            .unwrap_or_else(|| format!("{}/blob/main/docs/{page}.md", self.source))
+    }
+
     /// The footer under the app's pages: who made hunt, the docs and the
     /// source; with a website, its privacy notice and terms too. In English:
     /// the app's own translation turns it to the person's language.
@@ -136,6 +143,10 @@ mod tests {
         assert!(footer.contains(&format!(r#"href="{SOURCE}""#)));
         assert!(footer.contains("GNU AGPL"));
         assert!(footer.contains("Made with"));
+        assert_eq!(
+            Site::default().doc("web-ui/search"),
+            format!("{SOURCE}/blob/main/docs/web-ui/search.md")
+        );
     }
 
     #[test]
@@ -153,6 +164,10 @@ mod tests {
             );
         }
         assert!(footer.contains(SOURCE));
+        assert_eq!(
+            site.doc("web-ui/search"),
+            "https://careerhunt.app/docs/web-ui/search/"
+        );
     }
 
     #[test]

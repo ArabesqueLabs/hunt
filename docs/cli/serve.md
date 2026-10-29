@@ -43,6 +43,8 @@ Options:
           The hunt's owner, made when hunt starts (instead of in its launcher): their email address, with --admin-password. They sign in at /login, and run the hunt (an admin) [env: HUNT_ADMIN_EMAIL=]
       --admin-password <ADMIN_PASSWORD>
           With --admin-email: the owner's password, 8 characters or more. Given again, it replaces theirs: the way back in when it's forgotten [env: HUNT_ADMIN_PASSWORD]
+      --demo
+          hunt's demo: its owner is user@example.com, password huntdemo (unless --admin-email and --admin-password say otherwise), and the sign-in page says so. For a database scripts/demo.sh made [env: HUNT_DEMO=]
       --auth-header <AUTH_HEADER>
           Instead of Access: a sign-in proxy (Authelia, Authentik, oauth2-proxy, Tailscale) names who's asking in this header (e.g. Remote-Email), taken only from --trusted-proxies [env: HUNT_AUTH_HEADER=]
       --trusted-proxies <TRUSTED_PROXIES>

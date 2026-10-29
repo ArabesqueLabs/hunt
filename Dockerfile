@@ -54,7 +54,8 @@ COPY LICENSE /usr/share/doc/hunt/
 COPY src/web/fonts/README.md src/web/fonts/OFL-*.txt /usr/share/doc/hunt/fonts/
 COPY --from=demo-data --chown=65532:65532 /demo /demo
 ENV HUNT_ADDR=0.0.0.0:4848 \
-    HUNT_DB=/demo/hunt.db
+    HUNT_DB=/demo/hunt.db \
+    HUNT_DEMO=1
 EXPOSE 4848
 USER nonroot
 ENTRYPOINT ["/usr/local/bin/hunt"]

@@ -6,7 +6,7 @@ import { Fragment, useRef, useState, type ComponentProps, type ReactNode } from 
 
 // ---- icons ------------------------------------------------------------------------------
 
-const ICONS: Record<string, string> = {
+export const ICONS: Record<string, string> = {
   refresh: "M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8 M21 3v5h-5",
   chevron: "M6 9l6 6 6-6",
   edit: "M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z M15 5l4 4",
@@ -36,6 +36,10 @@ const ICONS: Record<string, string> = {
   server: "M4 3h16v7H4zM4 14h16v7H4zM8 6.5h.01M8 17.5h.01",
   bug: "M8 7a4 4 0 0 1 8 0v1H8zM6 8h12v5a6 6 0 0 1-12 0zM12 13v8M2 13h4M18 13h4M3 7l3 2M21 7l-3 2M3 20l3-3M21 20l-3-3",
   board: "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM8 7v7M12 7v4M16 7v9",
+  // The board's views: short cards, tall cards, rows.
+  "board-compact": "M3 4h5v4H3zM9.5 4h5v4h-5zM16 4h5v4h-5zM3 11h5v4H3zM9.5 11h5v4h-5z",
+  "board-detailed": "M3 4h5v10H3zM9.5 4h5v16h-5zM16 4h5v7h-5z",
+  table: "M3 4h18v16H3zM3 9h18M3 14.5h18M9 9v11",
   database: "M4 5c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zM4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3",
   link: "M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7",
   calc: "M6 2h12a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zM8 6h8M8 11h.01M12 11h.01M16 11h.01M8 15h.01M12 15h.01M16 15h.01M8 19h.01M12 19h.01M16 19h.01",
@@ -55,6 +59,9 @@ const ICONS: Record<string, string> = {
   heart: "M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z",
   pause: "M6 4h4v16H6zM14 4h4v16h-4z",
   x: "M18 6 6 18M6 6l12 12",
+  // For you, in the top bar.
+  shield: "M12 3.5l7.5 3v5.5c0 4.3-3.1 7.6-7.5 8.5-4.4-.9-7.5-4.2-7.5-8.5V6.5z",
+  logout: "M14.5 4.5h5v15h-5M10 8l-4 4 4 4M6 12h10",
 };
 
 /** The icons a stage can have, each with its name in words, in the order they're offered. */

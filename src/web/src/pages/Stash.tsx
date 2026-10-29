@@ -405,7 +405,7 @@ export function StashPage() {
         {TABS.map(([v, l]) => (
           <button key={v} className="al-tab" type="button" role="tab" aria-selected={String(tab === v) as "true" | "false"}
             onClick={() => { setItems(null); setTab(v); setFocus(0); }}>
-            {l}{v === "new" && S.STASH ? <span className="nav-count">{S.STASH}</span> : null}
+            {l}{v === "new" && S.STASH ? <span className="nav-count al-badge al-badge--count">{S.STASH}</span> : null}
           </button>
         ))}
       </div>

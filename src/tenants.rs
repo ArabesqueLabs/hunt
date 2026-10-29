@@ -715,7 +715,9 @@ impl Tenants {
     /// The owner: a new hunt's first account (account 1, an admin), made by
     /// its launcher or from HUNT_ADMIN_EMAIL and HUNT_ADMIN_PASSWORD; or,
     /// when they're there, an admin with that address, given that password
-    /// (the way back in when it's forgotten).
+    /// (the way back in when it's forgotten). The password they have
+    /// already is kept as it is, so a restart with the same one leaves
+    /// them signed in (sessions are signed with a key from its hash).
     pub fn make_owner(&self, email: &str, password: &str) -> Result<Account> {
         let email = email.trim().to_lowercase();
         if !looks_like_email(&email) || email.chars().count() > 254 {
@@ -729,6 +731,9 @@ impl Tenants {
         let a = self
             .find_email(&email)?
             .ok_or_else(|| Error::NotFound(email.clone()))?;
+        if self.password_of(&a).is_some_and(|p| p.matches(password)) {
+            return Ok(a);
+        }
         self.with(|db| {
             db.exec(
                 "UPDATE account SET password_hash = ?1, decided_by = coalesce(decided_by, 'setup') WHERE id = ?2",

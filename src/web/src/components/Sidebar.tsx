@@ -1,27 +1,27 @@
 // The sidebar, the design system's (.al-sidebar): hunt's name, the cycles,
-// what's coming up, the sections, and settings at its foot. In Settings and the admin centre,
-// their sections take the app's place, with the way back to it. Full, or
-// narrowed to its icons (remembered in this browser); on a phone, a bar
-// with a menu.
+// the sections, and the version at its foot. In Settings and the admin
+// centre, their sections take the app's place, with the way back to it.
+// Full, or narrowed to its icons (remembered in this browser); on a phone,
+// a bar with a menu, and the top bar's tools (TopBar.tsx) in the bar.
 
 import { useEffect, useState, type ReactNode } from "react";
 // The logo, inline so it takes the theme's colours (its tick is drawn in
 // the paper colour, to show on the accent in both themes).
 import logoSvg from "../../img/logo.svg?raw";
 import { initSidebars } from "../../vendor/arabesque/js/sidebar.js";
-import { attempt, patch } from "../lib/api";
 import { boardCycle, cycleWeek, endedCycles, pickCycle, runningCycles, viewedCycle } from "../lib/cycles";
 import { longDate } from "../lib/format";
 import { setLanguage, t } from "../lib/i18n";
-import { isAdmin, siteName } from "../lib/meta";
+import { siteName } from "../lib/meta";
 import { go } from "../lib/router";
-import { offerNav, sectionNav } from "../lib/shell";
+import { offerNav, phoneWidth, sectionNav } from "../lib/shell";
 import { S, useShared, useStore } from "../lib/state";
 import { store } from "../lib/storage";
-import { currentTheme, chooseTheme } from "../lib/theme";
-import type { Cycle } from "../lib/types";
-import { DueMenu } from "./Due";
+import { chooseTheme, currentTheme } from "../lib/theme";
+import { attempt, patch } from "../lib/api";
+import type { Cycle, Row } from "../lib/types";
 import { loadStashCount } from "../pages/Stash";
+import { TopBarTools } from "./TopBar";
 import { FLAG, Icon, PathIcon, SysIcon } from "./ui";
 
 const LOGO = logoSvg.trim().replace(/stroke="#fff"/g, 'style="stroke: var(--al-color-bg)"');
@@ -53,9 +53,6 @@ const SECTIONS: [string, string, string, string][] = [
 ];
 const TAKE_HOME = "M6 2h12a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zM8 6h8M8 11h.01M12 11h.01M16 11h.01M8 15h.01M12 15h.01M16 15h.01M8 19h.01M12 19h.01M16 19h.01";
 const STAR = "M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z";
-const SLIDERS = "M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6";
-const SHIELD = "M12 3.5l7.5 3v5.5c0 4.3-3.1 7.6-7.5 8.5-4.4-.9-7.5-4.2-7.5-8.5V6.5z";
-const LOGOUT = "M14.5 4.5h5v15h-5M10 8l-4 4 4 4M6 12h10";
 
 /** The sidebar's section for a page: the board's pages are the board's, contacts' the contacts'. */
 export function sectionOf(page: string, query: URLSearchParams) {
@@ -68,6 +65,7 @@ export function Sidebar({ page, section, account }: { page: string; section: str
   useShared();
   const offer = useStore(offerNav);
   const sections = useStore(sectionNav);
+  const phone = useStore(phoneWidth);
   const [mini, setMini] = useState(document.body.dataset.sidebar === "collapsed");
   useEffect(() => { initSidebars(); loadStashCount(); }, []);
   const toggle = () => {
@@ -84,10 +82,11 @@ export function Sidebar({ page, section, account }: { page: string; section: str
   // Drawn into the page's own <aside> (the shell's child, as the design system lays it out).
   return (
     <>
-      {/* On a phone: the logo, where you are, and the menu button (the design system's js/sidebar.js). */}
+      {/* On a phone: the logo, where you are, the top bar's tools, and the menu button (the design system's js/sidebar.js). */}
       <div className="al-sidebar__bar">
         <a className="brand" href="/" aria-label={`${siteName()}, the board`}><Logo /></a>
         <span className="al-sidebar__here" id="sidebar-here">{here}</span>
+        {phone && S.META ? <TopBarTools phone account={account} /> : null}
         <button type="button" className="al-button al-button--icon al-button--quiet al-sidebar__toggle" data-sidebar-menu-toggle aria-controls="sidebar-menu" aria-expanded="false" aria-label="Menu">
           <SysIcon name="menu" className="al-icon al-sidebar__open" /><SysIcon name="close" className="al-icon al-sidebar__close" />
         </button>
@@ -99,10 +98,9 @@ export function Sidebar({ page, section, account }: { page: string; section: str
           <span className="al-sidebar__label" translate={S.META?.about?.name ? "no" : undefined}>{siteName()}</span>
         </a>
         {account ? null : <CycleBox page={page} />}
-        {account || !S.META ? null : <div className="due-box"><DueMenu mini={mini} /></div>}
         <nav className="al-sidebar__nav app-nav" aria-label="Sections">
           <NavLink href="/stash" nav="stash" d={STASH} label="Stash" current={section === "stash"} mini={mini}>
-            {S.STASH ? <span className="nav-count" aria-label={`${S.STASH} to sort`}>{S.STASH}</span> : null}
+            {S.STASH ? <span className="nav-count al-badge al-badge--count" aria-label={`${S.STASH} to sort`}>{S.STASH}</span> : null}
           </NavLink>
           {SECTIONS.map(([href, nav, d, label]) => <NavLink key={nav} href={href} nav={nav} d={d} label={label} current={nav === section} mini={mini} />)}
           <NavLink href="/take-home" nav="take-home" d={TAKE_HOME} label="Pay calculator " current={section === "take-home"} mini={mini}>
@@ -122,21 +120,11 @@ export function Sidebar({ page, section, account }: { page: string; section: str
           </> : null}
         </nav>
         <div className="al-sidebar__foot">
-          {/* The theme and the language, a click away. */}
-          <QuickSettings />
-          <nav className="al-sidebar__nav" aria-label="Settings">
-            <NavLink href="/settings" nav="settings" d={SLIDERS} label="Settings" current={section === "settings"} mini={mini} />
-            <NavLink href="/admin" nav="admin" d={SHIELD} label="Admin" current={section === "admin"} hidden={!(M && isAdmin())} mini={mini} />
-            {/* Behind Cloudflare Access, its log out; signed in with hunt's own sign-in, hunt's. */}
-            <a className="al-sidebar__link" href={M?.tenancy?.account?.has_password ? "/logout" : "/cdn-cgi/access/logout"} id="logout"
-              hidden={!M || (!M.access && !M.tenancy?.account?.has_password)}
-              title={M?.access?.email ? `Signed in as ${M.access.email}` : mini ? t("Log out") : undefined}>
-              <svg className="al-icon" viewBox="0 0 24 24" aria-hidden="true"><path d={LOGOUT} /></svg><span className="al-sidebar__label">Log out</span>
-            </a>
-          </nav>
           <button type="button" className="al-sidebar__link al-sidebar__collapse" id="sidebar-toggle" aria-expanded={String(!mini) as "true" | "false"} title={mini ? t("Expand sidebar") : ""} onClick={toggle}>
             <SysIcon name="sidebar" className="al-icon al-mirror" /><span className="al-sidebar__label">{mini ? "Expand sidebar" : "Hide sidebar"}</span>
           </button>
+          {/* The theme and the language, a click away. */}
+          <QuickSettings />
           {/* The version, linked to its release on GitHub (tagged v0.2.0 …). */}
           <p className="app-version" id="version">
             {M?.version ? <a href={`https://github.com/ArabesqueLabs/hunt/releases/tag/v${M.version}`} target="_blank" rel="noreferrer" title={`Release notes for hunt ${M.version}`}>{`hunt ${M.version}`}<Icon name="external" /></a> : null}
@@ -147,27 +135,26 @@ export function Sidebar({ page, section, account }: { page: string; section: str
   );
 }
 
+const THEME_NEXT: Record<string, string> = { light: "dark", dark: "auto", auto: "light" };
+const THEME_NAME: Record<string, string> = { light: "Light", dark: "Dark", auto: "Match the system" };
+
 /**
- * In the sidebar's foot, on every page: the theme (light, dark, or as the
- * system is) and the language (the next one hunt
- * speaks, named in itself), each a click away.
+ * In the sidebar's foot, under Hide sidebar: the theme (light, dark, or as
+ * the system is) and the language (the next one hunt speaks, named in
+ * itself), each a click away.
  */
 function QuickSettings() {
   useShared();
   const now = currentTheme();
   const [busy, setBusy] = useState(false);
-  const M = S.META;
-  if (!M?.languages) return <div className="quick-settings" id="quick-settings" role="group" aria-label="Quick settings" />;
-  const THEME_NEXT: Record<string, string> = { light: "dark", dark: "auto", auto: "light" };
-  const themeName: Record<string, string> = { light: "Light", dark: "Dark", auto: "Match the system" };
-  const langs = M.languages;
+  const langs: Row[] = S.META?.languages || [];
   const here = S.PREFS.language || "en";
-  const other = langs[(langs.findIndex((l) => l.value === here) + 1) % langs.length];
+  const other = langs.length > 1 ? langs[(langs.findIndex((l) => l.value === here) + 1) % langs.length] : null;
   return (
-    <div className="quick-settings" id="quick-settings" role="group" aria-label="Quick settings">
-      <button className="al-sidebar__link quick-theme" type="button" title={`Theme: ${themeName[now]}`} aria-label={`Theme: ${themeName[now]}. Change to ${themeName[THEME_NEXT[now]]}`}
+    <div className="quick-settings" role="group" aria-label="Quick settings">
+      <button className="al-sidebar__link quick-theme" type="button" title={`Theme: ${THEME_NAME[now]}`} aria-label={`Theme: ${THEME_NAME[now]}. Change to ${THEME_NAME[THEME_NEXT[now]]}`}
         onClick={() => chooseTheme(THEME_NEXT[now])}>
-        <SysIcon name="theme" /><span className="al-sidebar__label">{themeName[now]}</span>
+        <SysIcon name="theme" /><span className="al-sidebar__label">{THEME_NAME[now]}</span>
       </button>
       {other && other.value !== here ? (
         <button className="al-sidebar__link quick-language" type="button" lang={other.value} title={other.label} aria-busy={busy ? "true" : undefined}

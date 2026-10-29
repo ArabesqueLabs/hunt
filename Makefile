@@ -35,7 +35,7 @@ WEB_SRC := $(shell find src/web/src -type f) $(wildcard src/web/*.css src/web/ve
 .DEFAULT_GOAL := dev
 .PHONY: help try try-demo doctor docker-up docker-down docker-logs docker-update k8s-up k8s-update k8s-down \
   install serve update backup backup-first restore \
-  web build release-build dev dev-demo dev-password dev-tenants dev-serve watch demo image image-try check doc uninstall clean \
+  web build release-build dev dev-demo watch demo image image-try check doc uninstall clean \
   test test-postgres test-mysql test-all db-up db-down lint fmt fmt-check ci
 
 help: # List the targets
@@ -48,7 +48,8 @@ help: # List the targets
 try: ## A new, empty hunt on ADDR (127.0.0.1:4848), on its launcher (HUNT_VERSION); ctrl-c ends it
 	docker run --rm -it -p $(ADDR):4848 $(IMAGE):$(HUNT_VERSION)
 
-try-demo: ## The same, with made-up data on every page
+try-demo: ## The same, with made-up data on every page: sign in as user@example.com, password huntdemo
+	@echo "sign in as user@example.com, password huntdemo"
 	docker run --rm -it --pull always -p $(ADDR):4848 $(IMAGE):demo
 
 ##@ Run hunt: on your own machine or server
@@ -160,47 +161,36 @@ release-build: web ## Build optimised, into target/release/hunt
 	$(CARGO) build --release
 
 # target/dev.db: dev's throwaway database, emptied each time dev starts,
-# filled by demo; dev-tenants, dev-password and watch serve it as it is.
-DEV_DB = target/dev.db
+# filled by demo; dev-demo and watch serve it as it is. hunt is always
+# signed in to: here, as its owner, made (or their password put back) as it
+# starts, the same account the demo's data is made for.
+DEV_DB       = target/dev.db
+DEV_EMAIL    ?= user@example.com
+DEV_PASSWORD ?= huntdemo
+AS_OWNER     = HUNT_ADMIN_EMAIL=$(DEV_EMAIL) HUNT_ADMIN_PASSWORD=$(DEV_PASSWORD)
+SIGN_IN      = @echo "sign in as $(DEV_EMAIL), password $(DEV_PASSWORD)"
 
 dev: web ## Run hunt as it is here, on an empty database each start: the launcher, every time (the default)
 	rm -f $(DEV_DB) $(DEV_DB)-wal $(DEV_DB)-shm
-	$(CARGO) run -- serve --addr $(ADDR) --db $(DEV_DB)
+	$(SIGN_IN)
+	$(AS_OWNER) $(CARGO) run -- serve --addr $(ADDR) --db $(DEV_DB)
 
-dev-demo: demo ## Like dev, with demo's made-up data each start, set up already
-	$(CARGO) run -- serve --addr $(ADDR) --db $(DEV_DB)
+dev-demo: demo ## Like dev, with demo's made-up data each start, set up already (the sign-in page says whom as)
+	$(SIGN_IN)
+	$(AS_OWNER) $(CARGO) run -- serve --addr $(ADDR) --db $(DEV_DB) --demo
 
-dev-password: web ## Serve dev's database, its owner dev@example.test (password dev-password) made from HUNT_ADMIN_EMAIL and _PASSWORD
-	HUNT_ADMIN_EMAIL=dev@example.test HUNT_ADMIN_PASSWORD=dev-password $(CARGO) run -- serve --addr $(ADDR) --db $(DEV_DB)
-
-demo: build ## Fill dev's database (target/dev.db, which watch serves) with made-up data, replacing it
-	scripts/demo.sh $(DEV_DB)
+demo: build ## Fill dev's database (target/dev.db) with made-up data, replacing it
+	DEMO_EMAIL=$(DEV_EMAIL) DEMO_PASSWORD=$(DEV_PASSWORD) scripts/demo.sh $(DEV_DB)
 	@! curl -fs -o /dev/null http://$(ADDR)/api/meta || echo "a hunt is running on $(ADDR): restart it to see the demo data"
-
-# Several people, locally: no Cloudflare Access, so who's asking is taken on
-# trust, from a header or the cookie /dev/as sets. ADMINS: the admins.
-ADMINS ?= admin@example.test
-comma := ,
-TENANTS_FLAGS = --admins $(ADMINS) --identity-header X-Hunt-User
-BE_SOMEONE = @echo "be the admin:   http://$(ADDR)/dev/as?email=$(firstword $(subst $(comma), ,$(ADMINS)))"; \
-  echo "be someone new: http://$(ADDR)/dev/as?email=someone@example.test"
-
-dev-tenants: web ## Serve dev's database for several people (ADMINS), as it is; be someone at /dev/as?email=…
-	$(BE_SOMEONE)
-	$(CARGO) run -- serve --addr $(ADDR) --db $(DEV_DB) $(TENANTS_FLAGS)
-
-dev-serve: web ## Like dev-tenants, on your own database (DB): never where others can reach it
-	$(BE_SOMEONE)
-	$(CARGO) run -- serve --addr $(ADDR) --db "$(DB)" $(TENANTS_FLAGS)
 
 # The web UI is rebuilt as it changes (vite build --watch) and served from
 # src/web/dist as it is then (HUNT_WEB_DIST), so it needs only a reload;
 # hunt is rebuilt and restarted when anything else in src changes.
-watch: web ## Like dev-tenants, rebuilt and restarted on every change, the UI's only reloaded (needs cargo-watch)
+watch: web ## Serve dev's database as it is, rebuilt and restarted on every change, the UI's only reloaded (needs cargo-watch)
 	@command -v cargo-watch >/dev/null || { echo "install it with: cargo install cargo-watch"; exit 1; }
-	$(BE_SOMEONE)
+	$(SIGN_IN)
 	(cd src/web && $(NPM) run watch) & \
-	HUNT_WEB_DIST=src/web/dist $(CARGO) watch -w src -i 'src/web/src/**' -i 'src/web/dist/**' -i 'src/web/node_modules/**' -x 'run -- serve --addr $(ADDR) --db $(DEV_DB) $(TENANTS_FLAGS)'
+	$(AS_OWNER) HUNT_WEB_DIST=src/web/dist $(CARGO) watch -w src -i 'src/web/src/**' -i 'src/web/dist/**' -i 'src/web/node_modules/**' -x 'run -- serve --addr $(ADDR) --db $(DEV_DB)'
 
 # The image as CI builds it, for this machine: TARGET=demo for the demo's.
 TARGET ?= hunt

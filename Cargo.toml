@@ -1,6 +1,6 @@
 [package]
 name = "hunt"
-version = "0.21.0"
+version = "0.22.0"
 edition = "2024"
 authors = ["Mosab Ibrahim <https://mosab.co.uk>", "Arabesque Labs <https://arabesquelabs.com>"]
 homepage = "https://careerhunt.app"

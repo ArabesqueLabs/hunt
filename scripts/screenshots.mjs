@@ -123,9 +123,9 @@ const SHOTS = [
 ];
 
 /** hunt's API: `api("POST", "lanes", {…})`, and what it gives back. */
-// The demo's hunt has an owner (made from HUNT_ADMIN_EMAIL and
-// HUNT_ADMIN_PASSWORD, below): its API is asked as them, as the CLI asks.
-const OWNER = { email: "demo@example.test", password: "screenshots" };
+// The demo's hunt has an owner (scripts/demo.sh makes them, its data
+// theirs): its API is asked as them, as the CLI asks.
+const OWNER = { email: "user@example.com", password: "huntdemo" };
 const AUTH = { Authorization: `Basic ${Buffer.from(`${OWNER.email}:${OWNER.password}`).toString("base64")}` };
 const get = (path) => fetch(`${BASE}/api/${path}`, { headers: AUTH });
 
@@ -193,7 +193,7 @@ const db = join(work, "demo.db");
 if (spawnSync("scripts/demo.sh", [db], { stdio: "inherit" }).status !== 0) process.exit(1);
 const server = spawn(HUNT, ["serve", "--addr", ADDR, "--db", db], {
   stdio: "ignore",
-  env: { ...process.env, HUNT_PASSWORD: "", HUNT_ADMIN_EMAIL: OWNER.email, HUNT_ADMIN_PASSWORD: OWNER.password },
+  env: { ...process.env, HUNT_PASSWORD: "", HUNT_ADMIN_EMAIL: "", HUNT_ADMIN_PASSWORD: "" },
 });
 const b = await browser();
 try {

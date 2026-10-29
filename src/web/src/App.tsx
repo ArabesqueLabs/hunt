@@ -20,6 +20,7 @@ import { newApplication } from "./components/NewApplication";
 import { Sidebar, sectionOf } from "./components/Sidebar";
 import { TagColoursHost } from "./components/tags";
 import { Toaster } from "./components/Toaster";
+import { TopBar } from "./components/TopBar";
 import { AccountScreen, AdminPage } from "./pages/Account";
 import { ActivityPage } from "./pages/Activity";
 import { ApplicationPage } from "./pages/Application";
@@ -172,7 +173,7 @@ export function App() {
   return (
     <>
       {createPortal(<Sidebar page={page} section={section} account={account} />, document.getElementById("sidebar")!)}
-      {createPortal(<><Announcement />{account ? <AccountScreen /> : <Page key={visit} page={page} arg={arg} />}</>, document.getElementById("view")!)}
+      {createPortal(<><TopBar account={account} /><Announcement />{account ? <AccountScreen /> : <Page key={visit} page={page} arg={arg} />}</>, document.getElementById("view")!)}
       <ModalHost />
       <DialogStack />
       <Toaster />

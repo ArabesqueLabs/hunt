@@ -167,7 +167,8 @@ impl Db {
             let sql = if *table == "stored_file" {
                 "SELECT * FROM stored_file WHERE sha256 IN (SELECT sha256 FROM version \
                  UNION SELECT logo FROM company WHERE logo IS NOT NULL \
-                 UNION SELECT photo FROM person WHERE photo IS NOT NULL)"
+                 UNION SELECT photo FROM person WHERE photo IS NOT NULL \
+                 UNION SELECT value FROM setting WHERE name = 'profile.photo' AND value IS NOT NULL)"
                     .to_string()
             } else {
                 format!("SELECT * FROM {table}{order}")

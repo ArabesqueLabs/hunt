@@ -366,7 +366,8 @@ pub(crate) fn adapt(sql: &str, dialect: Dialect, params: &[Sql]) -> String {
     static LIKE: LazyLock<Regex> = LazyLock::new(|| rx(r"(?i)\bLIKE\b"));
     static NOCASE: LazyLock<Regex> = LazyLock::new(|| rx(r"(?i)\s+COLLATE\s+NOCASE\b"));
 
-    let mut sql = sql.to_string();
+    // Comments aside: an apostrophe in one isn't a quote.
+    let mut sql = crate::scope::without_comments(sql).into_owned();
     // No column is NOCASE outside SQLite: case-insensitive comparisons are
     // written with lower(); MySQL's collations ignore case anyway.
     sql = NOCASE.replace_all(&sql, "").into_owned();

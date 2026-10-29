@@ -114,13 +114,11 @@ input.al-input, select.al-select:not([multiple]) { block-size: var(--al-field-he
 .board > .al-page-head { margin: 0; }
 .board-count { margin: 0; color: var(--al-color-text-muted); align-self: flex-end; padding-block-end: 0.4rem; }
 .board-kbd { margin-inline-start: var(--al-space-1); padding: 0 0.35em; border: 1px solid currentColor; border-radius: var(--al-radius-sm); font-size: var(--al-text-xs); opacity: 0.8; background: none; color: inherit; box-shadow: none; }
-.board-cycles { display: flex; flex-wrap: wrap; gap: var(--al-space-2) var(--al-space-3); align-items: center; }
-.board-cycles .al-segmented > button { display: inline-flex; align-items: center; gap: var(--al-space-1-5); }
 .board-empty { padding-block: var(--al-space-10); }
 .board-empty .al-empty__title { margin: 0; }
 
 /* Every column the same width, in every swimlane however many it has: the
-   page's width over the board's --board-columns (3 or 5); more than fit,
+   page's width over the board's --board-columns (3 to 6); more than fit,
    and they scroll. */
 .columns {
   --column-width: calc((100% - (var(--board-columns, 5) - 1) * var(--al-space-4)) / var(--board-columns, 5));
@@ -128,6 +126,30 @@ input.al-input, select.al-select:not([multiple]) { block-size: var(--al-field-he
   gap: var(--al-space-4); overflow-x: auto; align-items: start; padding-bottom: var(--al-space-2);
   scroll-snap-type: x proximity;
 }
+/* More columns than fit: a fade on each side with more, a step to them there,
+   staying mid-screen down a tall swimlane, and the stages as tabs above. While
+   a card's dragged the columns scroll themselves, so they don't snap back. */
+.lane-view { position: relative; }
+.columns { --fade-way: to right; --fade-before: 0px; --fade-after: 0px; }
+:dir(rtl) .columns { --fade-way: to left; }
+.columns[data-more-before] { --fade-before: 4rem; }
+.columns[data-more-after] { --fade-after: 4rem; }
+.columns:is([data-more-before], [data-more-after]) {
+  mask-image: linear-gradient(var(--fade-way), transparent, #000 var(--fade-before), #000 calc(100% - var(--fade-after)), transparent);
+}
+.lane-edge { position: absolute; inset-block: 0; inset-inline-start: 0; display: flex; pointer-events: none; z-index: 2; }
+.lane-edge--after { inset-inline-start: auto; inset-inline-end: 0; }
+.lane-step {
+  position: sticky; top: calc(50vh - 1rem); align-self: flex-start; margin-block-start: var(--al-space-10);
+  pointer-events: auto; border-radius: 999px; gap: var(--al-space-1); font-variant-numeric: tabular-nums;
+  background: var(--al-color-surface); border: 1px solid var(--al-color-line);
+}
+.lane-more > .stage-pager { display: flex; }
+/* There, the stages in view (most of them) outlined, those out of view quiet. */
+@media (min-width: 52.0625rem) {
+  .lane-more > .stage-pager button[aria-current="true"] { background: var(--al-color-surface); border-color: var(--al-color-text); color: var(--al-color-text); }
+}
+.board.is-dragging .columns { scroll-snap-type: none; }
 /* The stages as tabs, on a phone (where a column is the screen's width). */
 .stage-pager { display: none; gap: var(--al-space-1); overflow-x: auto; scrollbar-width: none; margin-bottom: calc(-1 * var(--al-space-2)); }
 .stage-pager button {
@@ -444,13 +466,13 @@ fieldset.group > legend { padding: 0; padding-inline-end: 0.5rem; font-size: 0.8
 .gbp { color: var(--al-color-accent); font-size: 0.875rem; white-space: nowrap; }
 
 /* the calendar */
-.calendar .page-head .al-search { width: min(22rem, 100%); }
-.cal-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 0.75rem 1.25rem; }
+/* Its head: the title, where it is, and the kinds, weekends and the view at the end, in one row. */
+.cal-head > h1 { margin-inline-end: var(--al-space-2); }
 .cal-nav { display: flex; align-items: center; flex-wrap: wrap; gap: 0.4rem; }
 /* No margin above or below, so it centres on the buttons' line. */
 .cal-month { font-size: 1.35rem; font-weight: 400; margin-block: 0; margin-inline: 0.5rem 0.75rem; min-width: 12rem; }
-/* At the bar's end: the kinds, weekends, and the view. */
-.cal-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1.25rem; margin-inline-start: auto; }
+/* At the head's end: what it shows, the view and its settings. */
+.cal-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem; margin-inline-start: auto; }
 .cal-filters > .al-segmented { align-self: center; }
 /* The key, under the calendar. */
 .cal-legend { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.4rem 1.5rem; font-size: 0.8125rem; color: var(--al-color-text-muted); }
@@ -460,10 +482,9 @@ fieldset.group > legend { padding: 0; padding-inline-end: 0.5rem; font-size: 0.8
 .cal-key-off { --kind: transparent; border: 1px solid var(--al-color-line); background: repeating-linear-gradient(135deg, color-mix(in oklab, var(--al-color-text) 18%, transparent) 0 1px, transparent 1px 4px); }
 .cal-key.late { --kind: var(--al-color-danger); }
 .cal-key-now { block-size: 0; border: 0; border-top: 2px solid var(--al-color-danger); background: none; }
-.cal-kind { align-items: center; font-size: 0.8125rem; }
-/* Which kinds show: each box in its kind's colour, so they're the key too. */
-.cal-kinds { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 1rem; }
-.cal-kinds input { accent-color: var(--kind); }
+/* What it shows, in a menu: each kind's tick in its colour, so they're the key too. */
+.cal-show { display: inline-flex; align-items: center; gap: var(--al-space-1-5); }
+.cal-show-menu { min-inline-size: 13rem; }
 .calendar select { width: auto; }
 /* Each kind its own colour, from the chart palette; red is kept for what's overdue. */
 .kind-step { --kind: var(--al-color-accent); }
@@ -641,7 +662,6 @@ fieldset.group > legend { padding: 0; padding-inline-end: 0.5rem; font-size: 0.8
 .card-tags { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.35rem; }
 .tags-cell { display: table-cell; }
 .tags-cell .al-tag { margin: 0 0 0.2rem; margin-inline-end: 0.2rem; white-space: nowrap; }
-.tag-filter { width: auto; flex: none; max-width: 12rem; }
 .board .card[hidden] { display: none; }
 
 /* Settings' tags: the tag (its name edited in place), its colour, remove; each in a column. */
@@ -717,10 +737,11 @@ fieldset.group > legend { padding: 0; padding-inline-end: 0.5rem; font-size: 0.8
 
 /* ---- email ----------------------------------------------------------------------------- */
 
+/* A count beside a section, as the bell's: round, in the text's colour. */
 .nav-count {
-  margin-inline-start: auto; min-width: 1.4rem; padding: 0 0.35rem; text-align: center;
-  font-size: 0.72rem; line-height: 1.4; border-radius: var(--al-radius-sm);
-  background: var(--al-color-accent); color: var(--al-color-on-accent);
+  margin-inline-start: auto; min-inline-size: 1.125rem; min-block-size: 1.125rem; padding-inline: 0.25rem;
+  font-size: 0.625rem; border-radius: var(--al-radius-full);
+  background: var(--al-color-text); color: var(--al-color-bg);
 }
 
 .email-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
@@ -1039,35 +1060,61 @@ fieldset.group > legend { padding: 0; padding-inline-end: 0.5rem; font-size: 0.8
 .table-app { text-decoration: none; color: inherit; }
 .table-app b { font-weight: 500; }
 
-/* ---- the Applications filters ----------------------------------------------------- */
-.filter-bar { display: flex; flex-direction: column; gap: 0.5rem; }
-.filter-row { display: flex; flex-wrap: wrap; gap: var(--al-space-3); align-items: center; }
-/* Search and the other filters: a magnifier at the row's end, opening them
-   in a dialog, how many are on in its badge; the fields there two across. */
-.filter-search-toggle { gap: var(--al-space-1-5); }
-.filter-search-toggle:not(:has(.al-badge)) { inline-size: var(--al-field-height); padding: 0; justify-content: center; }
-.filter-dialog .al-search { inline-size: 100%; }
-.filter-dialog .al-search > input { inline-size: 100%; }
-.filter-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: var(--al-space-3) var(--al-space-4); }
-.filter-fields select, .filter-fields input { inline-size: 100%; }
-.filter-dialog .set { border-color: var(--al-color-accent); box-shadow: 0 0 0 1px var(--al-color-accent); }
-.filter-dialog .check { align-items: center; font-size: 0.85rem; margin-block-start: var(--al-space-1); }
-.filter-dialog .check[hidden] { display: none; }
-.filter-dialog .al-dialog__actions { align-items: center; }
-.filter-dialog .filter-count { margin-inline-end: auto; font-variant-numeric: tabular-nums; }
-/* The filters that are on, as chips to take off; how many pass; and Clear all. */
-.filter-chips { display: flex; flex-wrap: wrap; gap: var(--al-space-2) var(--al-space-3); align-items: center; }
-.filter-chips ul { display: flex; flex-wrap: wrap; gap: var(--al-space-2); list-style: none; margin: 0; padding: 0; }
-.filter-chips .filter-count { font-size: var(--al-text-sm); font-variant-numeric: tabular-nums; }
-.filter-row .set { border-color: var(--al-color-accent); box-shadow: 0 0 0 1px var(--al-color-accent); }
-/* The page's own controls at the end of the filters' row: Compact or Detailed, Board or Table. */
-.filter-extra { margin-inline-start: auto; display: flex; flex-wrap: wrap; align-items: center; gap: var(--al-space-3); }
+/* ---- the search's field (in the top bar) ------------------------------------------ */
+/* The scope and the filters on as chips, then where to type; the list
+   under it, filters or results. */
+.filter-input {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--al-space-1-5);
+  padding-block: var(--al-space-1); padding-inline: var(--al-space-3) var(--al-space-2); cursor: text;
+}
+.filter-input > .al-icon { flex: none; color: var(--al-color-text-muted); }
+.filter-input.set { border-color: var(--al-color-accent); }
+.filter-input__text {
+  flex: 1 1 4rem; min-inline-size: 4rem; min-block-size: calc(var(--al-field-height) - 2 * var(--al-space-1) - 2px);
+  border: 0; outline: 0; padding: 0; background: none; color: inherit; font: inherit;
+}
+.filter-input__text::placeholder { color: var(--al-color-text-muted); opacity: 1; }
+.filter-input__text::-webkit-search-cancel-button { display: none; }
+.filter-kbd { flex: none; color: var(--al-color-text-muted); font-size: var(--al-text-xs); }
+.filter-input__text:placeholder-shown { text-overflow: ellipsis; }
+/* No keyboard, no key to press. */
+@media (hover: none) { .filter-kbd { display: none; } }
+.filter-chips { display: contents; list-style: none; }
+.filter-chips > li { display: flex; min-inline-size: 0; }
+.filter-chips .al-tag { min-block-size: 1.75rem; max-inline-size: 100%; background: var(--al-color-surface-sunk); }
+.filter-chips .al-tag::before { content: none; }
+.filter-chips .al-tag__remove { block-size: 1.75rem; inline-size: 1.75rem; }
+.filter-chip { all: unset; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.filter-chip:hover { text-decoration: underline; }
+.filter-chip:focus-visible { outline: var(--al-border-focus) solid var(--al-color-focus); border-radius: var(--al-radius-sm); }
+.filter-results { z-index: 20; inset-inline-end: auto; inline-size: max(100%, 22rem); max-inline-size: calc(100vw - 2rem); }
+.filter-hit { gap: var(--al-space-2); min-block-size: var(--al-size-control-sm); }
+.filter-hit__text { flex: 1; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.filter-hit__count { color: var(--al-color-text-muted); font-size: var(--al-text-sm); font-variant-numeric: tabular-nums; }
+.filter-hit__on { color: var(--al-color-accent); }
+.filter-hit__more { color: var(--al-color-text-muted); }
+.filter-hit.is-empty { color: var(--al-color-text-muted); }
+.filter-hit > .search-hit__text { flex: 1; }
+/* How a filter's typed (stage:, is:overdue): after what it says. */
+.filter-hit__keyword {
+  flex: none; max-inline-size: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--al-color-text-muted); font-size: var(--al-text-xs); font-family: var(--al-font-mono, ui-monospace, monospace);
+}
+/* The scope: what the field searches (the page's list), in the accent; × to search everything. */
+.filter-chips .search-scope { background: color-mix(in oklch, var(--al-color-accent) 14%, transparent); color: var(--al-color-accent); font-weight: 600; }
+.search-scope .filter-chip { cursor: default; }
+.search-scope .filter-chip:hover { text-decoration: none; }
+/* Under the list: the keywords, in the docs. */
+.search-help { margin: var(--al-space-1) 0 0; padding: var(--al-space-1-5) var(--al-space-3) var(--al-space-1); border-block-start: var(--al-border-hairline) solid var(--al-color-line); font-size: var(--al-text-xs); }
+.search-help a { display: inline-flex; align-items: center; gap: var(--al-space-1); color: var(--al-color-text-muted); }
+.search-help a:hover { color: var(--al-color-accent); }
+.filter-count { font-size: var(--al-text-sm); font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* In the field, at its end: how many pass, and clearing them all. */
+.filter-tail { display: flex; align-items: center; gap: var(--al-space-1-5); flex: 1 1 11rem; min-inline-size: min(11rem, 100%); }
+.filter-tail > .filter-count { flex: none; margin-inline-start: auto; }
+.filter-tail > .filter-clear { position: static; flex: none; }
 .switch { align-items: center; font-size: 0.85rem; user-select: none; }
 
-
-
-.filter-status { display: flex; gap: 0.75rem; align-items: baseline; font-size: 0.85rem; }
-.filter-status[hidden] { display: none; }
 .filter-count { color: var(--al-color-text-muted); }
 
 /* ---- pages for companies, people and documents ---------------------------------------- */
@@ -1291,7 +1338,7 @@ body.launching > .al-sidebar, body.launching .site-foot { display: none; }
 .launcher-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--al-space-3); padding-block-end: var(--al-space-4); }
 
 /* ---- several people: the account screen and the admin centre ------------------------- */
-body.no-account .al-sidebar__nav, body.no-account #logout + * { display: none; }
+body.no-account .al-sidebar__nav { display: none; }
 .account-page { max-width: 34rem; margin: 6vh auto 0; gap: 1rem; }
 .account-page h1 { font-size: 2.2rem; }
 .account-lead { font-family: var(--al-font-serif); font-size: 1.15rem; margin: 0; }
@@ -1627,6 +1674,7 @@ body:is(.admin-mode, .settings-mode) :is(.app-nav, #cycle-box) { display: none; 
 .app-step-card-when { display: flex; align-items: center; gap: var(--al-space-2); font-size: var(--al-text-sm); }
 .app-step-card-when .is-late { color: var(--al-color-warning); }
 .app-step-card.is-scheduled { border-color: var(--al-color-accent); }
+.app-step-card .app-more, .app-tl .app-more { margin-block-start: 0; font-family: var(--al-font-sans); font-size: var(--al-text-xs); }
 .app-step-card.is-cancelled h4 { color: var(--al-color-text-muted); text-decoration: line-through; }
 .app-company-name { gap: var(--al-space-2); font-weight: var(--al-weight-medium); }
 /* A posting, read: its first sentences, and Read more opens the rest in place, not in a box that scrolls. */
@@ -1695,8 +1743,6 @@ body:is(.admin-mode, .settings-mode) :is(.app-nav, #cycle-box) { display: none; 
    inside the switcher's border. */
 .al-segmented > label, .al-segmented > button { min-block-size: calc(var(--al-field-height) - 2 * var(--al-border-hairline)); }
 .al-segmented > button[aria-pressed="true"] .al-badge--accent { background: transparent; color: inherit; box-shadow: inset 0 0 0 1px currentColor; }
-.board-cycles .al-segmented { max-inline-size: 100%; overflow-x: auto; }
-.board-cycles .al-segmented > button { flex: none; }
 .admin-users { display: flex; flex-direction: column; gap: var(--al-space-4); }
 .admin-sub { margin: 0; font-size: var(--al-text-lg); }
 .admin-invite { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: var(--al-space-3); align-items: end; }
@@ -1728,7 +1774,6 @@ body:is(.admin-mode, .settings-mode) :is(.app-nav, #cycle-box) { display: none; 
 .list-tools > .al-search { flex: 1 1 16rem; max-inline-size: 22rem; }
 .list-tools > select { inline-size: auto; }
 /* Files: those sent with one application, chosen by name. */
-.list-tools > .list-app { inline-size: min(18rem, 100%); }
 .page.record-page.reading { gap: var(--al-space-5); }
 .profile-prose { font-size: 1rem; }
 .profile-picture { display: flex; align-items: center; gap: var(--al-space-3); flex-wrap: wrap; }
@@ -1761,10 +1806,6 @@ body:is(.admin-mode, .settings-mode) :is(.app-nav, #cycle-box) { display: none; 
 .past-cycles > summary { align-items: center; gap: var(--al-space-2); font-weight: 500; }
 .past-cycles .al-disclosure__body { display: flex; flex-direction: column; gap: var(--al-space-3); }
 /* The theme and the language, a click away, above Settings. */
-.quick-settings { display: flex; flex-direction: column; gap: var(--al-space-0-5); padding-block-end: var(--al-space-1); border-block-end: 1px solid var(--al-color-line); }
-.quick-settings .al-sidebar__link { color: var(--al-color-text-muted); }
-.quick-settings .al-sidebar__link:hover { color: var(--al-color-text); }
-@media (max-width: 52rem) { .quick-settings { flex-direction: row; border: 0; padding: 0; } }
 .board-welcome .al-empty { border: 0; background: none; padding-inline: 0; align-items: flex-start; text-align: start; }
 
 /* ---- rich text ------------------------------------------------------------------------- */
@@ -1848,13 +1889,87 @@ tr.loading td { padding-block: var(--al-space-3); }
 .log-item.deleted > :is(a, span:not(.log-icon)) { color: var(--al-color-danger); }
 .log-more { margin-block-start: var(--al-space-5); }
 
-/* ---- the sidebar: what's coming up, a menu away ------------------------------------------- */
-.due-box { margin-block-end: var(--al-space-2); }
-body:is(.admin-mode, .settings-mode) .due-box { display: none; }
-.due-button { position: relative; inline-size: 100%; }
-.due-count { margin-inline-start: auto; }
-/* Narrowed to its icons: the count on the bell's corner. */
-body[data-sidebar="collapsed"] .due-count { position: absolute; inset-block-start: 0; inset-inline-end: 0; min-inline-size: 1.1rem; padding-inline: 0.2rem; font-size: 0.65rem; }
+/* ---- the top bar: search, what's coming up, Settings, you ------------------------------
+   Along the top of the page, over it as it scrolls; the main column's
+   padding is the bar's to fill, edge to edge, its tools as wide as the
+   page under it (up to --page-max: 100% is the column's width). On a
+   phone it steps aside for the sidebar's bar, which has its tools. */
+.topbar {
+  position: sticky; inset-block-start: 0; z-index: var(--al-z-sticky);
+  display: flex; align-items: center; gap: var(--al-space-4);
+  min-block-size: 3.5rem;
+  margin: calc(-1 * var(--al-space-8)) calc(-1 * var(--al-space-gutter)) var(--al-space-6);
+  padding-block: var(--al-space-2);
+  padding-inline: var(--al-space-gutter) max(var(--al-space-gutter), calc(100% + var(--al-space-gutter) - var(--page-max)));
+  background: color-mix(in oklch, var(--al-color-bg) 90%, transparent);
+  backdrop-filter: blur(8px);
+  border-block-end: var(--al-border-hairline) solid var(--al-color-line);
+}
+.topbar-search { position: relative; flex: 1; max-inline-size: 42rem; min-inline-size: 0; }
+.topbar-search .al-input { inline-size: 100%; }
+.topbar-search .al-input:placeholder-shown { text-overflow: ellipsis; }
+.topbar-tools { display: flex; align-items: center; gap: var(--al-space-1); margin-inline-start: auto; }
+.topbar-button { position: relative; }
+/* How many are coming up, on the bell's corner: plain, or the warning colour when one's overdue. */
+.topbar-count {
+  position: absolute; inset-block-start: 0.125rem; inset-inline-end: 0.125rem;
+  min-inline-size: 1.125rem; min-block-size: 1.125rem; padding-inline: 0.25rem;
+  font-size: 0.625rem; border-radius: var(--al-radius-full); pointer-events: none;
+  background: var(--al-color-text); color: var(--al-color-bg);
+  box-shadow: 0 0 0 2px var(--al-color-bg);
+}
+.topbar-count.al-badge--warning { background: var(--al-color-warning); color: var(--al-color-on-accent); }
+/* You: your photo or initials, in the accent. */
+.topbar-me { all: unset; display: inline-grid; place-items: center; margin-inline-start: var(--al-space-1); border-radius: var(--al-radius-full); cursor: pointer; }
+.topbar-me:hover .me-avatar { box-shadow: 0 0 0 2px var(--al-color-line-strong); }
+.topbar-me:focus-visible { outline: var(--al-border-focus) solid var(--al-color-focus); outline-offset: 2px; }
+.me-avatar { background: var(--al-color-accent); color: var(--al-color-on-accent); object-fit: cover; }
+.me-avatar .al-icon, .me-avatar svg { inline-size: 60%; block-size: 60%; }
+.me-menu { min-inline-size: 15rem; }
+.me-who { display: flex; align-items: center; gap: var(--al-space-3); padding: var(--al-space-2) var(--al-space-3); }
+.me-who > div { display: flex; flex-direction: column; min-inline-size: 0; }
+.me-who :is(b, span) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.me-profile__who { display: flex; flex-direction: column; margin: 0 0 var(--al-space-2); }
+/* The results, under the search as you type: by kind, the best few of each. */
+.search-results {
+  position: absolute; inset-block-start: calc(100% + var(--al-space-1)); inset-inline: 0;
+  max-block-size: min(70vh, 34rem); overflow-y: auto; padding: var(--al-space-1);
+  background: var(--al-color-surface); border: var(--al-border-hairline) solid var(--al-color-line); border-radius: var(--al-radius-sm);
+  box-shadow: 0 12px 32px -12px color-mix(in oklch, var(--al-color-text) 30%, transparent);
+}
+.search-results ul { list-style: none; margin: 0; padding: 0; }
+.search-group + .search-group { margin-block-start: var(--al-space-1); padding-block-start: var(--al-space-1); border-block-start: var(--al-border-hairline) solid var(--al-color-line); }
+.search-group__title { display: block; padding: var(--al-space-1-5) var(--al-space-3) var(--al-space-1); font-size: var(--al-text-xs); color: var(--al-color-text-muted); }
+.search-hit { display: flex; align-items: center; gap: var(--al-space-3); min-block-size: var(--al-size-control-md); padding: var(--al-space-1) var(--al-space-3); border-radius: var(--al-radius-sm); cursor: pointer; }
+.search-hit[aria-selected="true"] { background: var(--al-color-surface-sunk); }
+.search-hit > .al-icon { flex: none; inline-size: 20px; color: var(--al-color-text-muted); }
+.search-hit__text { display: flex; flex-direction: column; min-inline-size: 0; }
+.search-hit__text > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.search-hit__text > span + span { font-size: var(--al-text-xs); color: var(--al-color-text-muted); }
+.search-hit--all { min-block-size: var(--al-size-control-sm); color: var(--al-color-accent); font-size: var(--al-text-sm); }
+.search-none { margin: 0; padding: var(--al-space-3); color: var(--al-color-text-muted); font-size: var(--al-text-sm); }
+/* On a phone: the search in a dialog of its own, near the top, its results under it. */
+.search-dialog { inline-size: calc(100vw - 2rem); max-inline-size: 36rem; margin: 4rem auto auto; padding: var(--al-space-3); overflow: visible; }
+.search-dialog .search-results { position: static; margin-block-start: var(--al-space-2); box-shadow: none; max-block-size: 60vh; }
+@media (max-width: 52rem) {
+  .al-sidebar__bar .topbar-tools { gap: 0; }
+  .al-sidebar__bar .al-sidebar__toggle { margin-inline-start: var(--al-space-1); }
+}
+/* The theme and the language, under Hide sidebar: quieter than the sections. */
+.quick-settings { display: flex; flex-direction: column; gap: var(--al-space-0-5); }
+.quick-settings .al-sidebar__link { color: var(--al-color-text-muted); }
+.quick-settings .al-sidebar__link:hover { color: var(--al-color-text); }
+@media (max-width: 52rem) { .quick-settings { flex-direction: row; } }
+/* A menu's item that's on or off: a box, ticked (in the item's --kind colour, if it has one). */
+.menu-check { display: flex; align-items: center; gap: var(--al-space-2); }
+.menu-check__box {
+  flex: none; display: inline-grid; place-items: center; inline-size: 1rem; block-size: 1rem;
+  border: 1.5px solid var(--kind, var(--al-color-accent)); border-radius: 3px; color: var(--al-color-on-accent);
+}
+.menu-check[aria-checked="true"] .menu-check__box { background: var(--kind, var(--al-color-accent)); }
+/* Its box is its mark: not the menu's own tick as well. */
+.menu-check[aria-checked="true"]::after { content: none; }
+.menu-check__box .al-icon { inline-size: 0.75rem; block-size: 0.75rem; stroke-width: 3; }
 .due-menu { max-inline-size: min(24rem, calc(100vw - 2rem)); min-inline-size: 18rem; }
 .due-menu > p { margin: 0; }
 .due-item > span:first-child { display: flex; align-items: center; gap: var(--al-space-2); font-weight: 500; }

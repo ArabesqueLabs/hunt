@@ -806,13 +806,15 @@ function Application({ id, s, editing, readLink }: { id: number; s: Loaded; edit
         : <p key="none" className="muted small">{postingLinks().length ? "No text yet: Refresh reads it from the posting." : "Nothing yet: add the posting's link, or write it in."}</p>);
   }
 
-  // Like a posting: its first few sentences, and Read more for the rest.
-  function readMore(key: string, text: string, className: string) {
-    const { lead, more } = postingLead(isRich(text) ? toPlain(text) : text);
+  // Like a posting: its first few sentences, and Read more for the rest;
+  // a label, if any, leads in on the same line.
+  function readMore(key: string, text: string, className: string, sentences = 3, label?: ReactNode) {
+    const { lead, more } = postingLead(isRich(text) ? toPlain(text) : text, sentences);
     const open = !more || opened.has(`more-${key}`);
+    const body = open ? <RichView className={className} value={text} /> : <p className={className}>{linkify(lead)}</p>;
     return (
       <div key={key} className="app-read-more">
-        {open ? <RichView className={className} value={text} /> : <p className={className}>{linkify(lead)}</p>}
+        {label ? <div>{label} {body}</div> : body}
         {more ? <button className="al-link app-more" type="button" aria-expanded={String(open) as "true" | "false"} onClick={() => toggle(`more-${key}`)}>{open ? "Show less" : "Read more"}</button> : null}
       </div>
     );
@@ -1356,9 +1358,10 @@ function Application({ id, s, editing, readLink }: { id: number; s: Loaded; edit
   /** An interview's link to join by, while it's still to come. */
   const joinButton = (x: Row) => (isUrl(x.place) && !isOverdue(x.at)
     ? <a className="al-button al-button--sm" href={hrefOf(x.place)} target="_blank" rel="noreferrer" title={x.place}>Join</a> : null);
-  /** Where an interview is, and what to prepare. */
+  /** Where an interview is, what to prepare, and how it went: long, the first sentences, and Read more. */
   const stepPlace = (x: Row) => (x.place ? (isUrl(x.place) ? <a className="al-link tl-sub" href={hrefOf(x.place)} target="_blank" rel="noreferrer">{x.place}</a> : <span className="tl-sub">{x.place}</span>) : null);
-  const stepPrep = (x: Row) => (x.prep_note ? <div className="tl-prep"><span className="tl-prep-label">Prepare:</span> <RichView className="tl-rich" value={x.prep_note} /></div> : null);
+  const stepPrep = (x: Row) => (x.prep_note ? <div className="tl-prep">{readMore(`step-prep-${x.id}`, x.prep_note, "tl-rich", 2, <span className="tl-prep-label">Prepare:</span>)}</div> : null);
+  const stepNote = (x: Row) => (x.note ? <div className="tl-note">{readMore(`step-note-${x.id}`, x.note, "tl-rich", 2)}</div> : null);
   const stepTone = (x: Row) => (x.status === "failed" ? "danger" : ["passed", "completed", "done"].includes(x.status) ? "success" : undefined);
 
   /** The timeline's entries, in order; compact, each a line, its details and an interview's buttons left to the cards. */
@@ -1444,12 +1447,12 @@ function Application({ id, s, editing, readLink }: { id: number; s: Loaded; edit
         cls: `app-tl-step is-${x.status}`, tone: stepTone(x), title: <span translate="no">{x.title}</span>,
         time: x.at ? fmtStamp(x.at) : "No date", datetime: x.at,
         tools: compact ? null : itemMenu("steps", x, x.title),
-        body: <><span className="tl-sub">{sub}</span>{x.note ? <span className="tl-note" translate="no">{x.note}</span> : null}</>,
+        body: <><span className="tl-sub">{sub}</span>{stepNote(x)}</>,
       });
     };
     const note = (n: Row) => {
       const day = n.happened_on || n.created_at.slice(0, 10);
-      return entry(`n${n.id}`, { cls: "app-tl-note", title: <RichView className="tl-serif" value={n.body} />, time: fmtDay(day), datetime: day, tools: itemMenu("notes", n, "this note") });
+      return entry(`n${n.id}`, { cls: "app-tl-note", title: compact ? <RichView className="tl-serif" value={n.body} /> : readMore(`note-${n.id}`, n.body, "tl-serif", 2), time: fmtDay(day), datetime: day, tools: itemMenu("notes", n, "this note") });
     };
 
     // What happened, oldest first, the stage it's in among it (at the end, if when it came in isn't known).
@@ -1500,7 +1503,7 @@ function Application({ id, s, editing, readLink }: { id: number; s: Loaded; edit
           {sub.length ? <span className="tl-sub">{sub}</span> : null}
           {coming ? stepPlace(x) : null}
           {coming ? stepPrep(x) : null}
-          {x.note ? <span className="tl-note" translate="no">{x.note}</span> : null}
+          {stepNote(x)}
         </article>
       );
     };

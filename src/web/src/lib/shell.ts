@@ -1,6 +1,6 @@
 // What pages tell the shell around them: the sections Settings and the
 // admin centre put in the sidebar, and whether there's an offer to
-// celebrate (its link in the sidebar).
+// celebrate (its link in the sidebar). And whether it's a phone's width.
 
 import { S, createStore } from "./state";
 
@@ -10,6 +10,14 @@ export const sectionNav = createStore<SectionNav | null>(null);
 
 /** An accepted offer's process, while there's one to celebrate. */
 export const offerNav = createStore<boolean>(false);
+
+/**
+ * Whether the page is a phone's width (the design system's md): the
+ * sidebar is a bar along the top then, and the top bar's tools are in it.
+ */
+const PHONE = matchMedia("(max-width: 52rem)");
+export const phoneWidth = createStore<boolean>(PHONE.matches);
+PHONE.addEventListener("change", (e) => phoneWidth.set(e.matches));
 
 /** The page's own title, as index.html has it. */
 const PAGE_TITLE = document.title;

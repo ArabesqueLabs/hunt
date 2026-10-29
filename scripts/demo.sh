@@ -3,8 +3,10 @@
 # (some archived), people, interview steps, notes, emails, files and tags,
 # spread over the last few months so Stats has weeks to draw. Every company,
 # person and address in it is made up (web and email on .example domains).
+# It's all its owner's, who signs in as user@example.com, password huntdemo
+# (DEMO_EMAIL and DEMO_PASSWORD).
 #
-#   scripts/demo.sh [DB]     (default: target/dev.db, what `make watch` serves)
+#   scripts/demo.sh [DB]     (default: target/dev.db, what `make dev-demo` serves)
 #
 # It's built in a fresh file through a hunt of its own on DEMO_ADDR, using the
 # CLI, then moved into place. Anything already in DB is replaced. Dates are
@@ -15,17 +17,22 @@ set -eu
 DB=${1:-target/dev.db}
 DEMO_ADDR=${DEMO_ADDR:-127.0.0.1:4849}
 HUNT=${HUNT:-target/debug/hunt}
+DEMO_EMAIL=${DEMO_EMAIL:-user@example.com}
+DEMO_PASSWORD=${DEMO_PASSWORD:-huntdemo}
 
 command -v sqlite3 >/dev/null || { echo "demo: needs sqlite3" >&2; exit 1; }
 [ -x "$HUNT" ] || { echo "demo: no $HUNT; run \`cargo build\` first" >&2; exit 1; }
 
 WORK=$(mktemp -d "${TMPDIR:-/tmp}/hunt-demo.XXXXXX")
 NEW="$WORK/demo.db"
-"$HUNT" serve --addr "$DEMO_ADDR" --db "$NEW" >"$WORK/serve.log" 2>&1 &
+HUNT_ADMIN_EMAIL="$DEMO_EMAIL" HUNT_ADMIN_PASSWORD="$DEMO_PASSWORD" \
+  "$HUNT" serve --addr "$DEMO_ADDR" --db "$NEW" >"$WORK/serve.log" 2>&1 &
 SERVER=$!
 trap 'kill $SERVER 2>/dev/null || true; rm -rf "$WORK"' EXIT INT TERM
 
-export HUNT_URL="http://$DEMO_ADDR"
+# The CLI, and curl, as the owner.
+export HUNT_URL="http://$DEMO_ADDR" HUNT_EMAIL="$DEMO_EMAIL" HUNT_PASSWORD="$DEMO_PASSWORD"
+AS="$DEMO_EMAIL:$DEMO_PASSWORD"
 i=0
 until curl -fs -o /dev/null "$HUNT_URL/api/meta"; do
   i=$((i + 1))
@@ -38,7 +45,7 @@ h() { "$HUNT" "$@" >/dev/null; }
 id() { "$HUNT" list "$1" -q "$2" | head -1 | sed -E 's/^#([0-9]+).*/\1/'; }
 # The API, for what the CLI doesn't do: `api POST cycles/start '{…}'`, and
 # the id in what it gives back.
-api() { curl -fs -X "$1" -H "Content-Type: application/json" -d "$3" "$HUNT_URL/api/$2"; }
+api() { curl -fs -u "$AS" -X "$1" -H "Content-Type: application/json" -d "$3" "$HUNT_URL/api/$2"; }
 num() { sed -E 's/.*"id":([0-9]+).*/\1/'; }
 # Backdating, applied once everything is in (see the end).
 AGES=""
@@ -480,10 +487,10 @@ h new stories "title=Disagreed with a staff engineer about the queue design" the
 
 # ---- settings ---------------------------------------------------------------------------------
 # Living in the UK (England), so Take-home pay opens on its calculator.
-curl -fs -o /dev/null -X PATCH -H "Content-Type: application/json" \
+curl -fs -u "$AS" -o /dev/null -X PATCH -H "Content-Type: application/json" \
   -d '{"uk_resident": true, "uk_region": "rest", "desired_take_home": 5000, "desired_take_home_per": "month"}' "$HUNT_URL/api/settings"
 # Set up already: the board, not a new hunt's launcher.
-curl -fs -o /dev/null -X POST "$HUNT_URL/api/setup/done"
+curl -fs -u "$AS" -o /dev/null -X POST "$HUNT_URL/api/setup/done"
 
 # ---- into place -----------------------------------------------------------------------------
 
@@ -512,4 +519,4 @@ mkdir -p "$(dirname "$DB")"
 rm -f "$DB" "$DB-wal" "$DB-shm"
 mv "$NEW" "$DB"
 for x in wal shm; do [ ! -f "$NEW-$x" ] || mv "$NEW-$x" "$DB-$x"; done
-echo "demo: done, in $DB"
+echo "demo: done, in $DB (sign in as $DEMO_EMAIL, password $DEMO_PASSWORD)"

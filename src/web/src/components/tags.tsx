@@ -10,7 +10,7 @@ import { S, changed, createStore, useShared, useStore } from "../lib/state";
 import { TAG_SHADES, tagColor, tagHueShade, tagNames, tagPaint } from "../lib/tags";
 import type { Row, Tag } from "../lib/types";
 import { Combo } from "./Combo";
-import { Icon, Select } from "./ui";
+import { Icon } from "./ui";
 
 /** A tag: the design system's, in its colour (repainted wherever it shows when that changes). */
 export function TagChip({ name, children }: { name: string; children?: ReactNode }) {
@@ -238,16 +238,5 @@ export function TagEditor({ resource, rec, onChange }: { resource: string; rec: 
         }} />
         : <button ref={plus} className="al-button al-button--quiet al-button--icon al-button--sm tag-plus" type="button" aria-label="Add a tag" title="Add a tag" onClick={() => setAdding(true)}><Icon name="plus" /></button>}
     </div>
-  );
-}
-
-/** A select of tags to filter by; `onPick(name)` ("" for all). */
-export function TagFilter({ current, onPick }: { current: string; onPick: (name: string) => void }) {
-  useShared();
-  return (
-    <Select className="tag-filter" aria-label="Filter by tag" value={current} onChange={(e) => onPick(e.target.value)}>
-      <option value="">All tags</option>
-      {S.TAGS.map((t) => <option key={t.id} value={t.name}>{t.name}</option>)}
-    </Select>
   );
 }

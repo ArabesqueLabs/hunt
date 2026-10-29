@@ -4,26 +4,33 @@
 import { useEffect, useRef, useState } from "react";
 import { attempt, del, enc, get, patch, post } from "../lib/api";
 import { fmtStamp } from "../lib/format";
+import { useAddressFilters, usePageScope } from "../lib/search";
 import { S, useShared } from "../lib/state";
 import { tagNames } from "../lib/tags";
 import { toast } from "../lib/toast";
 import type { Row } from "../lib/types";
 import { confirmDelete } from "../components/dialogs";
-import { TagChip, TagEditor, TagFilter } from "../components/tags";
+import { TagChip, TagEditor } from "../components/tags";
 import { RichText, RichView } from "../components/RichText";
 import { toPlain } from "../lib/rich";
 import { mayDiscard } from "../lib/unsaved";
-import { EmptyState, Icon, Input, LoadingBlock, SearchBox } from "../components/ui";
+import { EmptyState, Icon, Input, LoadingBlock } from "../components/ui";
 
 export function NotesPage() {
   useShared();
-  const [q, setQ] = useState("");
-  const [query, setQuery] = useState("");
-  const [tag, setTag] = useState("");
-  const [editing, setEditing] = useState<number | "new" | null>(null);
+  // From the top bar's search: ?q= searches the notes, ?note= opens one.
+  // Searched and filtered from the top bar's field (tag:).
+  const [start] = useState(() => new URLSearchParams(location.search));
+  const filters = useAddressFilters(["q", "tag"]);
+  const { q: query, tag } = filters.applied;
+  usePageScope({
+    key: "notes", name: "Notes", placeholder: "Search notes, or filter by tag", values: filters.values,
+    defs: [{ key: "tag", label: "Tag", keyword: "tag", choices: S.TAGS.map((t) => [t.name, t.name]), uncounted: true }],
+    commit: filters.commit, preview: filters.preview, clear: filters.clear,
+  });
+  const [editing, setEditing] = useState<number | "new" | null>(Number(start.get("note")) || null);
   const [notes, setNotes] = useState<Row[] | null>(null);
   const [version, setVersion] = useState(0);
-  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const load = () => setVersion((n) => n + 1);
   useEffect(() => {
     get(`memos?q=${enc(query)}${tag ? `&tag=${enc(tag)}` : ""}`).then(setNotes).catch((e) => toast(e.message, "error"));
@@ -55,11 +62,6 @@ export function NotesPage() {
           <button className="al-button al-button--primary" type="button" onClick={() => setEditing("new")}><Icon name="plus" /><span>New note</span></button>
         </div>
       </header>
-      <div className="list-tools">
-        <SearchBox placeholder="Search notes" aria-label="Search notes" value={q}
-          onValue={(v) => { setQ(v); clearTimeout(timer.current); timer.current = setTimeout(() => setQuery(v), 150); }} />
-        {S.TAGS.length ? <TagFilter current={tag} onPick={setTag} /> : null}
-      </div>
       <div className="notes-grid">
         {editing === "new" ? <NoteEditor note={null} done={done} cancel={() => setEditing(null)} /> : null}
         {notes == null ? <LoadingBlock tall={3} lines={0} /> : list.length || editing === "new"

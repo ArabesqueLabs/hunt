@@ -52,7 +52,7 @@ export function AccountScreen() {
   } else if (status === "signed-out") {
     body = <>{head("Sign in", "hunt is shared: sign in to use it.")}<p><a className="al-button al-button--primary" href="/">Sign in</a></p></>;
   } else if ((status === "none" || status === "rejected") && t?.signups_open === false) {
-    body = <>{head("The list is closed for now", "We aren't adding anyone to the early access list just now. Try again later.")}{who}</>;
+    body = <>{head("The list is closed for now", "We aren't adding anyone to the early access list just now. Try again later.")}{who}<SignInAgain /></>;
   } else if (status === "none") {
     body = <AskForAccount head={head("Join the early access list", "hunt is in early access: we're letting people in a few at a time, as it grows.")} who={who} />;
   } else if (status === "pending") {
@@ -64,6 +64,16 @@ export function AccountScreen() {
     body = <>{head("Your account is disabled", "Ask an admin if you think it shouldn't be.")}{who}</>;
   }
   return <div className="page account-page">{body}<ContactLine /></div>;
+}
+
+/**
+ * For someone with an account who lands here signed in as someone else (a
+ * session gone, or Access's cookie taken over by a service token's): out,
+ * to sign in again as themselves.
+ */
+function SignInAgain() {
+  const href = S.META.access ? "/cdn-cgi/access/logout" : "/logout";
+  return <p className="muted small">Already in? <a href={href}>Click here to sign in</a>.</p>;
 }
 
 function BeSomeone({ head }: { head: ReactNode }) {
@@ -106,6 +116,7 @@ function AskForAccount({ head, who }: { head: ReactNode; who: ReactNode }) {
       ) : null}
       <div className="actions"><button className="al-button al-button--primary" type="submit">Join the list</button></div>
     </form>
+    <SignInAgain />
   </>;
 }
 
