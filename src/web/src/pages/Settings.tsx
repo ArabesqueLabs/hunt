@@ -644,7 +644,7 @@ function showSecret(secret: string) {
 }
 
 /**
- * Personal access tokens: for apps that send to hunt from outside the
+ * Personal access tokens: for apps that stash to hunt from outside the
  * browser's session (the browser extension, an iOS Shortcut, a script).
  * Each acts as you, with what it's allowed; revoked, it stops at once.
  */
@@ -685,7 +685,7 @@ function TokenSettings() {
   const scopeLabel = (scope: string) => TOKEN_SCOPES.find(([v]) => v === scope)?.[1] || scope;
   return (
     <SettingsPanel title="Access tokens" className="tokens"
-      intro="For apps that send things to hunt: the browser extension, an iOS Shortcut, your own scripts. Each acts as you, with what you allow it.">
+      intro="For apps that stash things to hunt: the browser extension, an iOS Shortcut, your own scripts. Each acts as you, with what you allow it.">
       {!tokens ? <LoadingBlock /> : tokens.length ? (
         <div className="al-table-wrap" tabIndex={0} aria-label="Access tokens"><Table>
           <thead><tr><th>Name</th><th>Can</th><th>Made</th><th>Last used</th><th><span className="al-visually-hidden">Revoke</span></th></tr></thead>
@@ -709,7 +709,7 @@ function TokenSettings() {
 /** The browser extension: what it does, and connecting it. */
 const ExtensionSettings = () => (
   <SettingsPanel title="Browser extension" className="extension"
-    intro="Send the page you're on, a link, an image or what you've selected to your stash, from Chrome, Firefox, Edge or Safari: from its button, the right-click menu, or a keyboard shortcut. On someone's LinkedIn profile, it brings the profile in.">
+    intro="Stash the page you're on, a link, an image or what you've selected to your hunt's stash, from Chrome, Firefox, Edge or Safari: from its button, the right-click menu, or a keyboard shortcut. On someone's LinkedIn profile, it brings the profile in.">
     <ol className="steps-help">
       <li>Install hunt's extension in your browser.</li>
       <li>Make a token below that adds to your stash.</li>

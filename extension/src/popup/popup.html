@@ -2,7 +2,7 @@
 <html lang="en" dir="ltr">
 <head>
 <meta charset="utf-8">
-<title>Send to hunt</title>
+<title>hunt</title>
 <link rel="stylesheet" href="../vendor/arabesque/fonts/fonts.css">
 <link rel="stylesheet" href="../vendor/arabesque/arabesque.css">
 <link rel="stylesheet" href="popup.css">
@@ -18,6 +18,7 @@
   <symbol id="al-icon-warning" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="miter"><path d="M12 3.5l9 16H3z"/><path d="M12 10v4.5M12 16.5v1"/></symbol>
   <symbol id="al-icon-info" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="miter"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5M12 7.5v1"/></symbol>
   <symbol id="al-icon-external" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="miter"><path d="M14 4.5h5.5V10M19.5 4.5L11 13"/><path d="M17.5 13.5v6h-13v-13h6"/></symbol>
+  <symbol id="al-icon-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="miter"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17"/><ellipse cx="12" cy="12" rx="4.5" ry="8.5"/></symbol>
 </svg>
 
 <main class="hx-popup al-stack">
@@ -26,7 +27,7 @@
     <div class="al-cluster hx-brand">
       <!-- hunt's mark, decorative: the title beside it names the extension. -->
       <span class="hx-logo" aria-hidden="true"></span>
-      <h1 class="hx-title" data-i18n>Send to hunt</h1>
+      <h1 class="hx-title" data-i18n>hunt</h1>
     </div>
     <div class="al-cluster hx-head__end">
       <button class="al-button al-button--sm al-button--icon al-button--quiet"
@@ -87,8 +88,12 @@
     </label>
 
     <div class="al-cluster hx-actions">
-      <button class="al-button al-button--primary" id="keep" type="submit" data-i18n>Keep in stash</button>
+      <button class="al-button al-button--primary" id="keep" type="submit" data-i18n>Stash</button>
       <p class="hx-keys"><kbd class="al-kbd" id="mod">Ctrl</kbd> <kbd class="al-kbd">Enter</kbd></p>
+    </div>
+
+    <div class="al-notice__body">
+      <p><span data-i18n></span> <span id="who" translate="no"></span></p>
     </div>
   </form>
 
@@ -96,7 +101,7 @@
   <div class="al-notice al-notice--success" id="done" role="status" hidden>
     <svg class="al-icon" aria-hidden="true"><use href="#al-icon-success"/></svg>
     <div class="al-notice__body">
-      <p class="al-notice__title" data-i18n>Kept in your stash</p>
+      <p class="al-notice__title" data-i18n>Stash it</p>
       <p id="why" hidden></p>
       <div class="al-notice__actions">
         <a class="al-link al-link--arrow" id="open-stash" href="#" target="_blank" rel="noreferrer" data-i18n>Sort it in hunt</a>
@@ -116,8 +121,21 @@
   </div>
 
   <footer class="hx-footer" id="footer" hidden>
-    <p><span data-i18n>To</span> <span id="who" translate="no"></span></p>
+    <!-- <div class="hx-footer__site"> -->
+    <!--   <a class="al-link al-link--muted" href="https://careerhunt.app" target="_blank" rel="noreferrer"> -->
+    <!--     <svg class="al-icon" aria-hidden="true"><use href="#al-icon-globe"/></svg> -->
+    <!--     <span>careerhunt.app</span> -->
+    <!--   </a> -->
+    <!-- </div> -->
+    <p class="hx-footer__credit">
+      Made with <span class="hx-heart" aria-label="love">♥</span> by <a href="https://mosab.co.uk" target="_blank" rel="noreferrer">Mosab</a> at <a href="https://arabesquelabs.com/" target="_blank" rel="noreferrer">Arabesque Labs</a>
+    </p>
   </footer>
+  <!-- <footer class="hx-footer" id="footer" hidden> -->
+  <!--   <p class="hx-footer__credit"> -->
+  <!--     Made with <span class="hx-heart" aria-label="love">♥</span> by <a href="https://mosab.co.uk" target="_blank" rel="noreferrer">Mosab</a> at <a href="https://arabesquelabs.com/" target="_blank" rel="noreferrer">Arabesque Labs</a> -->
+  <!--   </p> -->
+  <!-- </footer> -->
 
 </main>
 

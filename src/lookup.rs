@@ -170,7 +170,7 @@ fn get(url: &str, accept: &str) -> Result<(Page, String)> {
     {
         return Err(Error::Fetch(
             "LinkedIn wouldn't show that page without signing in. For a profile, open it \
-             in your browser and use the Send to hunt extension (Settings → Connected apps); \
+             in your browser and use the hunt extension (Settings → Connected apps); \
              otherwise try another source, or fill the details in by hand."
                 .into(),
         ));

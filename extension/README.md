@@ -1,4 +1,4 @@
-# Send to hunt: the browser extension
+# hunt: the browser extension
 
 Keep the page you're on, a link, an image or what you've selected in your
 hunt [stash](../docs/cli/stash.md), to sort later. It works from:

@@ -16,13 +16,13 @@ chrome:
 	rm -rf dist/chrome && mkdir -p dist/chrome
 	cp src/manifest-chrome.json dist/chrome/manifest.json
 	cd src && cp -R $(PARTS) ../dist/chrome/
-	(cd dist/chrome && rm -f send-to-hunt.zip && zip -qr send-to-hunt.zip . -x send-to-hunt.zip)
+	(cd dist/chrome && rm -f hunt.zip && zip -qr hunt.zip . -x hunt.zip)
 
 firefox:
 	rm -rf dist/firefox && mkdir -p dist/firefox
 	cp src/manifest-firefox.json dist/firefox/manifest.json
 	cd src && cp -R $(PARTS) ../dist/firefox/
-	(cd dist/firefox && rm -f send-to-hunt.zip && zip -qr send-to-hunt.zip . -x send-to-hunt.zip)
+	(cd dist/firefox && rm -f hunt.zip && zip -qr hunt.zip . -x hunt.zip)
 
 # Safari: an Xcode project wrapping the Chrome build, in dist/safari/ (needs
 # a Mac with Xcode; signing it to share needs an Apple developer account).
@@ -33,7 +33,7 @@ SAFARI_DEV = $(shell xcode-select -p 2>/dev/null | grep -q CommandLineTools && t
 
 safari: chrome
 	$(SAFARI_DEV) xcrun safari-web-extension-converter dist/chrome --project-location dist/safari \
-		--app-name "Send to hunt" --bundle-identifier app.careerhunt.Send-to-hunt \
+		--app-name "hunt" --bundle-identifier app.careerhunt.hunt \
 		--macos-only --copy-resources --no-open --no-prompt --force
 
 # validate the manifests (and, with Mozilla's web-ext installed, the

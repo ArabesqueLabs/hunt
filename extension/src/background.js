@@ -10,10 +10,10 @@ import { bringIn } from './lib/linkedin.js';
 import { explain, setLanguage, t } from './lib/i18n.js';
 
 const MENUS = [
-  { id: 'send-page', title: 'Send this page to hunt', contexts: ['page', 'frame'] },
-  { id: 'send-link', title: 'Send this link to hunt', contexts: ['link'] },
-  { id: 'send-image', title: 'Send this image to hunt', contexts: ['image'] },
-  { id: 'send-selection', title: 'Send the selection to hunt', contexts: ['selection'] },
+  { id: 'send-page', title: 'Stash this page to hunt', contexts: ['page', 'frame'] },
+  { id: 'send-link', title: 'Stash this link to hunt', contexts: ['link'] },
+  { id: 'send-image', title: 'Stash this image to hunt', contexts: ['image'] },
+  { id: 'send-selection', title: 'Stash the selection to hunt', contexts: ['selection'] },
   {
     id: 'add-person',
     title: 'Add this person to hunt',
@@ -58,7 +58,7 @@ function badge(tab, ok, why) {
   chrome.action.setTitle(Object.assign({ title: ok ? t('Kept in your stash') : why }, target));
   setTimeout(function () {
     chrome.action.setBadgeText(Object.assign({ text: '' }, target));
-    chrome.action.setTitle(Object.assign({ title: t('Send to hunt') }, target));
+    chrome.action.setTitle(Object.assign({ title: t('hunt') }, target));
   }, BADGE_MS);
 }
 

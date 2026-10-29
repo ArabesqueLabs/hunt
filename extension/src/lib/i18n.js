@@ -33,7 +33,7 @@ const AR = {
     'تعذّر الوصول إلى hunt. هل يعمل على العنوان الموجود في الإعدادات؟',
 
   // The settings page.
-  'Send to hunt settings': 'إعدادات «أرسل إلى hunt»',
+  'hunt settings': 'إعدادات «hunt»',
   'Your hunt': 'hunt الخاص بك',
   'hunt’s address': 'عنوان hunt',
   'Where you open hunt: https://hunt.example.com, or http://localhost:4848.':
@@ -51,13 +51,13 @@ const AR = {
   'Client ID': 'معرّف العميل',
   'Client secret': 'سرّ العميل',
   'Keyboard shortcuts': 'اختصارات لوحة المفاتيح',
-  'Open Send to hunt': 'افتح «أرسل إلى hunt»',
+  'Open hunt': 'افتح «hunt»',
   'Keep the page you’re on in your stash, at once': 'احفظ الصفحة الحالية في حافظتك فورًا',
   'none set': 'غير محدّد',
   'Change them': 'غيّرها',
   'In the right-click menu': 'في قائمة النقر بالزر الأيمن',
-  'Right-click a page, a link, an image or what you’ve selected: Send to hunt keeps it in your stash.':
-    'انقر بالزر الأيمن على صفحة أو رابط أو صورة أو نص محدّد: «أرسل إلى hunt» يحفظه في حافظتك.',
+  'Right-click a page, a link, an image or what you’ve selected: Stash to your hunt.':
+    'انقر بالزر الأيمن على صفحة أو رابط أو صورة أو نص محدّد: «hunt» يحفظه في حافظتك.',
   'Give hunt’s address, as you open it.': 'أدخل عنوان hunt كما تفتحه.',
   'Give a token from hunt.': 'أدخل رمزًا من hunt.',
   'That isn’t a token from hunt: they start with hunt_.': 'هذا ليس رمزًا من hunt: رموزه تبدأ بـ hunt_.',
