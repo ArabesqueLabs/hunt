@@ -1,4 +1,4 @@
-/* Send to hunt's settings: a tab of its own, so a page's measure rather
+/* hunt's settings: a tab of its own, so a page's measure rather
    than the popup's width. As in popup.css, these rules are unlayered, so
    they win over the system's layers; every value is a token. */
 

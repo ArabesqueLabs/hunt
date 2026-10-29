@@ -114,8 +114,8 @@ disconnect.addEventListener('click', async function () {
 
 // What each does, as said here (the manifest's descriptions are English).
 const DOES = {
-  _execute_action: 'Open Send to hunt',
-  'send-page': 'Keep the page you’re on in your stash, at once',
+  _execute_action: 'Open hunt',
+  'send-page': 'Stash the page you’re on to your hunt',
 };
 
 // Set in the browser's own settings, not here: shown as they stand, with

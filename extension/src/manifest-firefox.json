@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Send to hunt",
-  "version": "0.1.0",
-  "description": "Keep pages, links, images and selections in your hunt stash, to sort later: from the toolbar, the right-click menu or a keyboard shortcut. And bring people in from their LinkedIn profiles.",
+  "name": "hunt",
+  "version": "0.2.0",
+  "description": "The companion browser extension to hunt, the job aplication tracking app",
   "icons": {
     "16": "icons/16.png",
     "32": "icons/32.png",
@@ -14,7 +14,7 @@
       "19": "icons/19.png",
       "38": "icons/38.png"
     },
-    "default_title": "Send to hunt",
+    "default_title": "hunt",
     "default_popup": "popup/popup.html",
     "theme_icons": [
       {
@@ -40,13 +40,13 @@
       "suggested_key": {
         "default": "Alt+Shift+H"
       },
-      "description": "Open Send to hunt"
+      "description": "Open hunt"
     },
     "send-page": {
       "suggested_key": {
         "default": "Alt+Shift+K"
       },
-      "description": "Keep the page you're on in your stash, at once"
+      "description": "Stash the current page to your Stash, at once"
     }
   },
   "permissions": [
@@ -68,7 +68,7 @@
   "browser_specific_settings": {
     "gecko": {
       "id": "send-to-hunt@careerhunt.app",
-      "strict_min_version": "128.0",
+      "strict_min_version": "140.0",
       "data_collection_permissions": {
         "required": [
           "browsingActivity",
@@ -77,7 +77,7 @@
       }
     },
     "gecko_android": {
-      "strict_min_version": "128.0"
+      "strict_min_version": "140.0"
     }
   }
 }

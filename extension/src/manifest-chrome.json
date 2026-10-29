@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Send to hunt",
+  "name": "hunt",
   "version": "0.1.0",
-  "description": "Keep pages, links, images and selections in your hunt stash, to sort later: from the toolbar, the right-click menu or a keyboard shortcut. And bring people in from their LinkedIn profiles.",
+  "description": "The companion browser extension to hunt, the job aplication tracking app",
   "icons": {
     "16": "icons/16.png",
     "32": "icons/32.png",
@@ -14,7 +14,7 @@
       "19": "icons/19.png",
       "38": "icons/38.png"
     },
-    "default_title": "Send to hunt",
+    "default_title": "hunt",
     "default_popup": "popup/popup.html"
   },
   "author": "Mosab Ibrahim",
@@ -28,13 +28,13 @@
       "suggested_key": {
         "default": "Alt+Shift+H"
       },
-      "description": "Open Send to hunt"
+      "description": "Open hunt"
     },
     "send-page": {
       "suggested_key": {
         "default": "Alt+Shift+K"
       },
-      "description": "Keep the page you're on in your stash, at once"
+      "description": "Stash the current page in your hunt"
     }
   },
   "permissions": [

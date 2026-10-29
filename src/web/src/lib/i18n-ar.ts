@@ -802,7 +802,7 @@ const ar: Catalog = {
     "12-hour (2:30 pm)": "١٢ ساعة (2:30 م)",
     "Monday": "الإثنين",
     "Sunday": "الأحد",
-    "Send to hunt": "أرسل إلى hunt",
+    "hunt": "hunt",
     "Couldn't copy; drag the button instead": "تعذّر النسخ؛ اسحب الزر بدلًا من ذلك",
     "hunt opens with what it found: their name, role, company, location, about and photo. Tick what to keep.": "يفتح hunt بما وجده: الاسم والدور والشركة والموقع والنبذة والصورة. حدّد ما تحتفظ به.",
     "Ask me": "اسألني",
