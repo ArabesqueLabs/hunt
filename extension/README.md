@@ -69,7 +69,8 @@ person: then it reads that profile's text, and opens hunt with it.
 make            # dist/chrome/ and dist/firefox/, unpacked and zipped (send-to-hunt.zip)
 make chrome     # or just one
 make firefox
-make validate   # the manifests are JSON, and the scripts parse
+make validate   # the manifests are JSON and agree on the version, and the scripts parse
+make version V=0.3.0   # the version, in both manifests (and so the Safari app)
 make safari     # an Xcode project for Safari, in dist/safari/ (needs Xcode)
 ```
 
@@ -88,7 +89,10 @@ To try it out without a store:
   Xcode: it joins the background script into one plain script (Safari's
   can't be a module), and sets the oldest macOS (`SAFARI_MACOS`, 12.0),
   the version (the manifest's), the build number (`SAFARI_BUILD`, higher
-  for each upload: `make safari SAFARI_BUILD=2`) and the app's icon.
+  for each upload: `make safari SAFARI_BUILD=2`), the team that signs it
+  (`SAFARI_TEAM`), its bundle ID (`SAFARI_ID`, app.careerhunt.safari: not
+  the mobile app's, so it's an app of its own in App Store Connect), its
+  App Store category (Productivity) and the app's icon.
   Behind Cloudflare Access, Safari may keep your sign-in from the
   extension: give it a service token.
 
