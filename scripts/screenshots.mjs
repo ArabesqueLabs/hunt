@@ -225,8 +225,10 @@ try {
     for (const s of SHOTS.filter((s) => !s.setup)) {
       const [width, height] = s.phone ? [390, 844] : [1440, 900];
       await b.size(width, height, !!s.phone);
-      // The language is the service's setting: set for the shot, then back.
-      await api("PATCH", "settings", { language: s.language || "en" });
+      // The language and theme are the account's settings, which win over
+      // this browser's: set for the shot (the theme as the pass's, or the
+      // first pass's would be kept with the account and shown in the next).
+      await api("PATCH", "settings", { language: s.language || "en", theme });
       await b.go(`${BASE}/settings`);
       // Each shot as a first visit: nothing folded, opened or chosen before.
       await b.eval(`localStorage.clear(); localStorage.setItem("theme", ${JSON.stringify(theme)}); localStorage.setItem("cardView", ${JSON.stringify(s.detailed ? "detailed" : "compact")}); localStorage.setItem("boardMode", "board"); return 1`);
