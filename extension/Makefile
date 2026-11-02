@@ -7,7 +7,7 @@ PARTS = background.js popup options lib icons vendor
 
 # clean
 clean:
-	rm -rf dist/chrome dist/firefox dist/safari
+	rm -rf dist/chrome dist/firefox dist/safari dist/safari-src
 
 # build both, unpacked in dist/<browser>/ and zipped for its store
 build: chrome firefox
@@ -31,10 +31,24 @@ firefox:
 XCODE ?= /Applications/Xcode.app/Contents/Developer
 SAFARI_DEV = $(shell xcode-select -p 2>/dev/null | grep -q CommandLineTools && test -d $(XCODE) && echo "DEVELOPER_DIR=$(XCODE)")
 
+# The oldest macOS the app installs on (Safari there needs to be 16.4 or
+# newer, which macOS 12 gets as an update), and its build number: each upload
+# to App Store Connect needs a higher one (make safari SAFARI_BUILD=2).
+SAFARI_MACOS ?= 12.0
+SAFARI_BUILD ?= 1
+
+# It's converted from a copy of the Chrome build, without the Chrome store's
+# zip and with the background script joined into one plain script (Safari's
+# can't be a module); then the project gets hunt's icon, SAFARI_MACOS, the
+# manifest's version and SAFARI_BUILD (safari/adapt.py).
 safari: chrome
-	$(SAFARI_DEV) xcrun safari-web-extension-converter dist/chrome --project-location dist/safari \
+	rm -rf dist/safari-src && cp -R dist/chrome dist/safari-src && rm dist/safari-src/hunt.zip
+	python3 safari/adapt.py extension dist/safari-src
+	$(SAFARI_DEV) xcrun safari-web-extension-converter dist/safari-src --project-location dist/safari \
 		--app-name "hunt" --bundle-identifier app.careerhunt.hunt \
 		--macos-only --copy-resources --no-open --no-prompt --force
+	python3 safari/adapt.py project dist/safari/hunt $(SAFARI_MACOS) $(SAFARI_BUILD)
+	@echo "Open it in Xcode: open dist/safari/hunt/hunt.xcodeproj"
 
 # validate the manifests (and, with Mozilla's web-ext installed, the
 # Firefox build: npx web-ext lint)

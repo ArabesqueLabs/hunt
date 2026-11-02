@@ -5,8 +5,8 @@
 // says how it went, for a few seconds: ✓, or ! (its tooltip says why, and
 // the settings open when there's nothing to send to yet).
 import { connected, load } from './lib/settings.js';
-import { keep } from './lib/hunt.js';
-import { bringIn } from './lib/linkedin.js';
+import { keepOrLink } from './lib/hunt.js';
+import { bringInOrKeep } from './lib/linkedin.js';
 import { explain, setLanguage, t } from './lib/i18n.js';
 
 const MENUS = [
@@ -50,12 +50,15 @@ chrome.storage.onChanged.addListener(function (changes, area) {
   }
 });
 
-/** The toolbar button, for a moment: how it went. */
+/**
+ * The toolbar button, for a moment: how it went. `why` is its tooltip:
+ * what went wrong, or, when it was kept, how (the link alone).
+ */
 function badge(tab, ok, why) {
   const target = tab && tab.id !== undefined ? { tabId: tab.id } : {};
   chrome.action.setBadgeBackgroundColor(Object.assign({ color: ok ? '#2f7d4f' : '#b3261e' }, target));
   chrome.action.setBadgeText(Object.assign({ text: ok ? '✓' : '!' }, target));
-  chrome.action.setTitle(Object.assign({ title: ok ? t('Kept in your stash') : why }, target));
+  chrome.action.setTitle(Object.assign({ title: ok ? why || t('Kept in your stash') : why }, target));
   setTimeout(function () {
     chrome.action.setBadgeText(Object.assign({ text: '' }, target));
     chrome.action.setTitle(Object.assign({ title: t('hunt') }, target));
@@ -70,14 +73,17 @@ async function send(tab, capture) {
     return;
   }
   try {
-    await keep(settings, capture);
-    badge(tab, true);
+    const item = await keepOrLink(settings, capture);
+    badge(tab, true, item.asLink ? t('hunt couldn’t take it all, so its link alone is in your stash.') : null);
   } catch (error) {
     badge(tab, false, explain(error));
   }
 }
 
-/** Bring the LinkedIn profile open in `tab` into hunt, in a tab beside it. */
+/**
+ * Bring the LinkedIn profile open in `tab` into hunt, in a tab beside it,
+ * or, when that doesn't work, keep its link in the stash.
+ */
 async function addPerson(tab) {
   const settings = await load();
   setLanguage(settings.language);
@@ -86,7 +92,10 @@ async function addPerson(tab) {
     return;
   }
   try {
-    await bringIn(settings, tab);
+    const item = await bringInOrKeep(settings, tab);
+    if (item) {
+      badge(tab, true, t('Couldn’t read this profile, so its link is in your stash: make them a person from there.'));
+    }
   } catch (error) {
     badge(tab, false, explain(error));
   }

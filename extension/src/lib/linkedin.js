@@ -4,7 +4,7 @@
 // hunt with it (/linkedin?d=…), where hunt reads it and you tick what to
 // keep. It only collects text: reading it is hunt's, so when LinkedIn
 // changes its pages, hunt changes, not the extension.
-import { page } from './hunt.js';
+import { HuntError, keep, page } from './hunt.js';
 import { t } from './i18n.js';
 
 /** Whether an address is someone's LinkedIn profile. */
@@ -65,4 +65,25 @@ export async function bringIn(settings, tab) {
     url: page(settings, '/linkedin?d=' + encodeURIComponent(JSON.stringify(profile))),
     index: tab.index + 1,
   });
+}
+
+/**
+ * Bring the profile open in `tab` into hunt, or, when that doesn't work
+ * (the page can't be read, or hunt won't open with it), keep the profile's
+ * link in the stash instead, to make them a person from later. Returns
+ * null when hunt opened with them, or the stash item, with `asLink: true`,
+ * when it kept the link. Throws when hunt can't be reached or won't let
+ * the extension in: keeping the link wouldn't work either.
+ */
+export async function bringInOrKeep(settings, tab) {
+  try {
+    await bringIn(settings, tab);
+    return null;
+  } catch (error) {
+    if (error instanceof HuntError || !tab || !isProfile(tab.url)) {
+      throw error;
+    }
+    const item = await keep(settings, { url: tab.url.split('?')[0], title: tab.title || null });
+    return Object.assign(item, { asLink: true });
+  }
 }
