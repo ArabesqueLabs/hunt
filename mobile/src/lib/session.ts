@@ -75,8 +75,28 @@ function signedIn(): boolean {
   return !!t.signed_in;
 }
 
+/**
+ * The App Store's screenshots (scripts/app-screenshots.mjs), on a simulator
+ * nothing can type into or tap: a build bundled with
+ * EXPO_PUBLIC_SCREENSHOTS=1, launched with -huntServer, -huntToken and
+ * -huntRoute, is signed in as those say and opens at that screen. Other
+ * builds leave this out.
+ */
+export function screenshotArgs(): { server: string; token: string; route: string | null } | null {
+  if (!process.env.EXPO_PUBLIC_SCREENSHOTS || Platform.OS !== "ios") return null;
+  const { Settings } = require("react-native") as typeof import("react-native");
+  const [server, token, route] = [Settings.get("huntServer"), Settings.get("huntToken"), Settings.get("huntRoute")];
+  if (typeof server !== "string" || typeof token !== "string") return null;
+  return { server, token, route: typeof route === "string" ? route : null };
+}
+
 /** As the app opens: the server and token kept, if they still work. */
 export async function restore() {
+  const shot = screenshotArgs();
+  if (shot) {
+    await SecureStore.setItemAsync(SERVER, shot.server);
+    await SecureStore.setItemAsync(TOKEN, shot.token);
+  }
   const server = await SecureStore.getItemAsync(SERVER);
   token = await SecureStore.getItemAsync(TOKEN);
   if (!server) {

@@ -2,12 +2,12 @@
 // screen that connects to a hunt. Sharing to hunt from another app opens
 // the share screen over either.
 
-import { Stack } from "expo-router";
+import { Stack, router } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { ShareIntentProvider } from "expo-share-intent";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
-import { restore, useSession } from "@/lib/session";
+import { restore, screenshotArgs, useSession } from "@/lib/session";
 import { useColors } from "@/lib/theme";
 
 SplashScreen.preventAutoHideAsync();
@@ -18,6 +18,11 @@ export default function Root() {
 
   useEffect(() => { restore(); }, []);
   useEffect(() => { if (s.status !== "loading") SplashScreen.hideAsync(); }, [s.status]);
+  // The App Store's screenshots: opened at the screen asked for (see screenshotArgs).
+  useEffect(() => {
+    const route = s.status === "in" && screenshotArgs()?.route;
+    if (route) setTimeout(() => router.push(route as never), 0);
+  }, [s.status]);
 
   // The splash stays up until it's known whether hunt is signed in.
   const signedIn = s.status === "in";
