@@ -86,6 +86,25 @@ export function keep(settings, capture) {
   return call(settings, 'POST', '/api/stash', Object.assign({ source: 'extension' }, capture));
 }
 
+/**
+ * Keep something, and if hunt won't take it as it is, keep its link alone
+ * (`{url}`): the page is what matters, and it's sorted later anyway. Only
+ * when hunt itself turned it down ('failed'): when hunt can't be reached,
+ * or won't let the extension in, a link alone fares no better, and that's
+ * said as it is. Kept as a link alone, the item has `asLink: true`.
+ */
+export async function keepOrLink(settings, capture) {
+  try {
+    return await keep(settings, capture);
+  } catch (error) {
+    if (!(error instanceof HuntError) || error.kind !== 'failed' || !capture.url || (!capture.title && !capture.body)) {
+      throw error;
+    }
+    const item = await keep(settings, { url: capture.url });
+    return Object.assign(item, { asLink: true });
+  }
+}
+
 /** Whose stash it is: `{email, name, language, token: {name, scope}}`. */
 export function whoami(settings) {
   return call(settings, 'GET', '/api/stash/me');

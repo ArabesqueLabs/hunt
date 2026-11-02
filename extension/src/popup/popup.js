@@ -1,6 +1,6 @@
 import { connected, load, save } from '../lib/settings.js';
-import { keep, page, whoami } from '../lib/hunt.js';
-import { bringIn, isProfile } from '../lib/linkedin.js';
+import { keepOrLink, page, whoami } from '../lib/hunt.js';
+import { bringInOrKeep, isProfile } from '../lib/linkedin.js';
 import { explain, localise, suggestionText, t } from '../lib/i18n.js';
 
 const form = document.getElementById('form');
@@ -13,6 +13,7 @@ const withLinkChoice = document.getElementById('with-link-choice');
 const keepButton = document.getElementById('keep');
 const done = document.getElementById('done');
 const why = document.getElementById('why');
+const asLink = document.getElementById('as-link');
 const openStash = document.getElementById('open-stash');
 const problem = document.getElementById('problem');
 const problemText = document.getElementById('problem-text');
@@ -61,10 +62,12 @@ function showProblem(error) {
   const ways = {
     token: [t('Open settings'), openSettings],
     permission: [t('Open settings'), openSettings],
-    access: [t('Open hunt to sign in'), function () {
-      chrome.tabs.create({ url: page(settings, '/stash') });
-      window.close();
-    }],
+    access: location.protocol === 'safari-web-extension:'
+      ? [t('Open settings'), openSettings]
+      : [t('Open hunt to sign in'), function () {
+        chrome.tabs.create({ url: page(settings, '/stash') });
+        window.close();
+      }],
   };
   problemText.textContent = explain(error);
   const way = ways[error.kind];
@@ -74,6 +77,22 @@ function showProblem(error) {
     fix.onclick = way[1];
   }
   problem.hidden = false;
+}
+
+/**
+ * Kept: what hunt thinks it could become, and the way to it. `howAsLink`
+ * says why only the link was kept, when it was.
+ */
+function kept(item, howAsLink) {
+  form.hidden = true;
+  asLink.textContent = item.asLink ? howAsLink : '';
+  asLink.hidden = !item.asLink;
+  const said = suggestionText(item.suggestion);
+  why.textContent = said || '';
+  why.hidden = !said;
+  openStash.href = page(settings, '/stash');
+  done.hidden = false;
+  openStash.focus();
 }
 
 async function send() {
@@ -93,14 +112,7 @@ async function send() {
   keepButton.setAttribute('aria-disabled', 'true');
   problem.hidden = true;
   try {
-    const item = await keep(settings, capture);
-    form.hidden = true;
-    const said = suggestionText(item.suggestion);
-    why.textContent = said || '';
-    why.hidden = !said;
-    openStash.href = page(settings, '/stash');
-    done.hidden = false;
-    openStash.focus();
+    kept(await keepOrLink(settings, capture), t('hunt couldn’t take it all, so its link alone is in your stash.'));
   } catch (error) {
     showProblem(error);
   } finally {
@@ -112,8 +124,12 @@ async function send() {
 addPerson.addEventListener('click', async function () {
   problem.hidden = true;
   try {
-    await bringIn(settings, tab);
-    window.close();
+    const item = await bringInOrKeep(settings, tab);
+    if (!item) {
+      window.close();
+      return;
+    }
+    kept(item, t('Couldn’t read this profile, so its link is in your stash: make them a person from there.'));
   } catch (error) {
     showProblem(error);
   }

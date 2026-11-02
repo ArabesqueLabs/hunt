@@ -80,10 +80,17 @@ To try it out without a store:
 - **Firefox:** `about:debugging#/runtime/this-firefox` → **Load Temporary
   Add-on** → `dist/firefox/manifest.json`. `npx web-ext lint --source-dir
   dist/firefox` checks it as addons.mozilla.org will.
-- **Safari:** `make safari`, open the project in Xcode and run it. Then
-  enable the extension in Safari's settings (Developer → Allow unsigned
-  extensions, until it's signed). Sharing it needs an Apple developer
-  account.
+- **Safari:** `make safari`, then `open dist/safari/hunt/hunt.xcodeproj`
+  and run it (⌘R). Then enable the extension in Safari's settings
+  (Developer → Allow unsigned extensions, until it's signed). Sharing it
+  needs an Apple developer account. `make safari` makes the project anew
+  each time, so change it in the Makefile or `safari/adapt.py`, not in
+  Xcode: it joins the background script into one plain script (Safari's
+  can't be a module), and sets the oldest macOS (`SAFARI_MACOS`, 12.0),
+  the version (the manifest's), the build number (`SAFARI_BUILD`, higher
+  for each upload: `make safari SAFARI_BUILD=2`) and the app's icon.
+  Behind Cloudflare Access, Safari may keep your sign-in from the
+  extension: give it a service token.
 
 ## Layout
 
@@ -99,6 +106,7 @@ To try it out without a store:
 | `src/lib/i18n.js` | the Arabic, looked up by the English, as hunt's web UI does |
 | `src/icons/` | hunt's logo (`mark.svg`, from `src/web/img/logo.svg`) at each size, and reversed for Firefox's dark toolbars |
 | `src/vendor/arabesque/` | the design system's CSS and fonts |
+| `safari/` | the Safari build's own steps (`adapt.py`), and the Mac app's icon (`app-icon.svg`, drawn to `app-icon.png`) |
 
 The icons are drawn from the logo with `rsvg-convert` (`brew install
 librsvg`): in ink, and white for `*-reversed.png`.

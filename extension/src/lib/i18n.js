@@ -29,6 +29,8 @@ const AR = {
     'لم يسمح المتصفح للإضافة بالوصول إلى hunt. اربطه من جديد في الإعدادات.',
   'Your hunt is behind Cloudflare Access: sign in to it in this browser, then try again.':
     'hunt خلف Cloudflare Access: سجّل الدخول إليه في هذا المتصفح، ثم أعد المحاولة.',
+  'Your hunt is behind Cloudflare Access, and Safari may not let the extension use your sign-in to it. Give it a service token in the settings, under Behind Cloudflare Access.':
+    'hunt خلف Cloudflare Access، وقد لا يسمح Safari للإضافة باستخدام تسجيل دخولك إليه. أعطها رمز خدمة في الإعدادات، تحت «خلف Cloudflare Access».',
   'Couldn’t reach your hunt. Is it running, at the address in the settings?':
     'تعذّر الوصول إلى hunt. هل يعمل على العنوان الموجود في الإعدادات؟',
 
@@ -78,6 +80,8 @@ const AR = {
   'Send the selection to hunt': 'أرسل النص المحدّد إلى hunt',
   'An image on {x}': 'صورة في {x}',
   'Only web pages can be kept.': 'لا يُحفظ إلا صفحات الويب.',
+  'hunt couldn’t take it all, so its link alone is in your stash.':
+    'لم يستطع hunt أخذه كله، فحُفظ رابطه وحده في حافظتك.',
 
   // Someone's LinkedIn profile.
   'Add this person to hunt': 'أضف هذا الشخص إلى hunt',
@@ -87,6 +91,8 @@ const AR = {
   'Add to hunt’s people': 'أضف إلى أشخاص hunt',
   'Couldn’t read this profile. Let the page finish loading, then try again.':
     'تعذّرت قراءة هذا الملف. انتظر حتى تكتمل الصفحة، ثم أعد المحاولة.',
+  'Couldn’t read this profile, so its link is in your stash: make them a person from there.':
+    'تعذّرت قراءة هذا الملف، فحُفظ رابطه في حافظتك: أضف الشخص من هناك.',
 
   // What hunt thinks something could become.
   'It’s in hunt already: {x}.': 'إنه في hunt بالفعل: {x}.',
@@ -174,12 +180,20 @@ export function suggestionText(s) {
   }
 }
 
+/**
+ * Whether this is Safari. Its tracking prevention may keep the browser's
+ * cookies from the extension's requests, and so the Cloudflare Access sign-in.
+ */
+const safari = typeof location !== 'undefined' && location.protocol === 'safari-web-extension:';
+
 /** Why a request to hunt didn't work (a HuntError, from hunt.js), said. */
 export function explain(error) {
   const messages = {
     token: t('hunt didn’t take the token: it may have been revoked. Make a new one in hunt’s Settings → Connected apps.'),
     permission: t('The browser hasn’t allowed the extension to reach your hunt. Connect it again in the settings.'),
-    access: t('Your hunt is behind Cloudflare Access: sign in to it in this browser, then try again.'),
+    access: safari
+      ? t('Your hunt is behind Cloudflare Access, and Safari may not let the extension use your sign-in to it. Give it a service token in the settings, under Behind Cloudflare Access.')
+      : t('Your hunt is behind Cloudflare Access: sign in to it in this browser, then try again.'),
     unreachable: t('Couldn’t reach your hunt. Is it running, at the address in the settings?'),
   };
   return messages[error && error.kind] || (error && error.message) || String(error);
