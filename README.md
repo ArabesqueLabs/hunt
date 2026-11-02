@@ -115,10 +115,11 @@ what needs signing in".
 
 | Tag | What it is |
 |---|---|
-| `release` | the newest release: the default |
+| `release`, `latest` | the newest release: the default |
 | `v0.17.0`, `v0.17` | a release, to stay on until you choose to move |
-| `latest`, `sha-…` | main's newest build, ahead of any release |
-| `demo` | main's, with made-up data, for looking around |
+| `demo` | the newest release, with made-up data, for looking around |
+| `dev`, `sha-…` | main's newest build, ahead of any release |
+| `dev-demo` | the same, with made-up data |
 
 Choose one with `HUNT_VERSION` in `.env`. Each release's notes are on
 [GitHub](https://github.com/ArabesqueLabs/hunt/releases).
@@ -178,7 +179,7 @@ cp .secrets.example .secrets    # HUNT_ADMIN_EMAIL and _PASSWORD, HUNT_DB: each 
 ```
 
 Which hunt runs is `newTag` in `kustomization.yaml` (`release`, a version
-to stay on, or `latest`).
+to stay on, or `dev`).
 
 ### 2. Deploy it
 
@@ -215,7 +216,7 @@ and what needs signing in".
 ### Updating
 
 Back up first (`make backup`, through the port-forward). Then, on a moving
-tag (`release`, `latest`), restart it to pull the newest:
+tag (`release`, `dev`), restart it to pull the newest:
 
 ```sh
 kubectl -n hunt rollout restart deployment/hunt     # or make k8s-update

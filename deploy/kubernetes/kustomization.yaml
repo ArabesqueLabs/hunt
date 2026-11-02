@@ -4,7 +4,7 @@
 #   kubectl apply -k .                                     # or, in a clone: make k8s-up
 #
 # Which hunt: newTag below (`release`, a version to stay on such as
-# v0.17.0, or `latest`, main's newest build). To reach it from elsewhere,
+# v0.17.0, or `dev`, main's newest build). To reach it from elsewhere,
 # see ingress.example.yaml.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization

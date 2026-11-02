@@ -2,17 +2,35 @@
 # linux/amd64 and linux/arm64 (each built natively, then joined into one
 # multi-platform tag). Tests run first.
 #
-#   ghcr.io/arabesquelabs/hunt:latest, :sha-…   main's newest build
-#   ghcr.io/arabesquelabs/hunt:v0.17.0, :v0.17   a release (a v* git tag: `make publish`)
-#   ghcr.io/arabesquelabs/hunt:release           the newest release
-#   ghcr.io/arabesquelabs/hunt:demo              main's, with made-up data (the Dockerfile's `demo`)
+# Main's pushes build; a release builds nothing. Its tag (`make publish`)
+# only gives the images main already built for its commit their release's
+# tags: what's released is what was tested, to the byte.
+#
+#   ghcr.io/arabesquelabs/hunt:dev, :sha-…            main's newest build
+#   ghcr.io/arabesquelabs/hunt:dev-demo, :sha-…-demo  the same, with made-up data (the Dockerfile's `demo`)
+#   ghcr.io/arabesquelabs/hunt:v0.17.0                a release (a v* git tag)
+#   ghcr.io/arabesquelabs/hunt:v0.17                  that minor version's newest
+#   ghcr.io/arabesquelabs/hunt:latest, :release       the newest release
+#   ghcr.io/arabesquelabs/hunt:demo                   the newest release, with made-up data
+#
+# A pre-release tag (v0.18.0-rc.1) gets its own tag only.
 name: image
 
 on:
   push:
     branches: [main]
+    # The docs reach careerhunt.app from main itself, not from an image.
+    paths-ignore: ["docs/**", "**.md"]
     tags: ["v*"]
+  # Builds the branch it's run on; only main's are published.
   workflow_dispatch:
+
+# One run per branch or tag at a time. On main, a newer push cancels an
+# older run, so :dev is never left on an older build; a release's tags are
+# never cancelled.
+concurrency:
+  group: image-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref == 'refs/heads/main' }}
 
 permissions:
   contents: read
@@ -23,6 +41,7 @@ env:
 
 jobs:
   test:
+    if: github.ref_type == 'branch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -86,9 +105,12 @@ jobs:
           path: /tmp/digests/*
           retention-days: 1
 
-  # Each image's platforms, joined under its tags.
+  # Each image's platforms, joined under main's tags: :dev and :sha-… for
+  # the image, :dev-demo and :sha-…-demo for the demo. The sha tags are
+  # what a release's tags are later given from.
   publish:
     needs: build
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -105,24 +127,42 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.IMAGE }}
-          # The image: main's as latest (and its sha); a release as its
-          # version, its minor version and `release`. The demo: main's only.
-          tags: |
-            type=raw,value=latest,enable=${{ matrix.target == 'hunt' && github.ref == 'refs/heads/main' }}
-            type=sha,enable=${{ matrix.target == 'hunt' && github.ref == 'refs/heads/main' }}
-            type=semver,pattern=v{{version}},enable=${{ matrix.target == 'hunt' }}
-            type=semver,pattern=v{{major}}.{{minor}},enable=${{ matrix.target == 'hunt' }}
-            type=raw,value=release,enable=${{ matrix.target == 'hunt' && startsWith(github.ref, 'refs/tags/v') }}
-            type=raw,value=demo,enable=${{ matrix.target == 'demo' && github.ref == 'refs/heads/main' }}
-      - if: steps.meta.outputs.tags != ''
-        working-directory: /tmp/digests
+      - working-directory: /tmp/digests
+        env:
+          SUFFIX: ${{ matrix.target == 'demo' && '-demo' || '' }}
         run: |
           docker buildx imagetools create \
-            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            -t "$IMAGE:dev$SUFFIX" -t "$IMAGE:sha-${GITHUB_SHA::7}$SUFFIX" \
             $(printf "$IMAGE@sha256:%s " *)
-      - if: steps.meta.outputs.tags != ''
-        run: docker buildx imagetools inspect "$(jq -r '.tags[0]' <<< "$DOCKER_METADATA_OUTPUT_JSON")"
+          docker buildx imagetools inspect "$IMAGE:dev$SUFFIX"
+
+  # A release: its commit's images (main built them, and `make publish`
+  # checked they're there), given the release's tags. Nothing is rebuilt.
+  release:
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          src="$IMAGE:sha-${GITHUB_SHA::7}"
+          for image in "$src" "$src-demo"; do
+            docker buildx imagetools inspect "$image" >/dev/null || {
+              echo "::error::no $image: main hasn't built $VERSION's commit (${GITHUB_SHA::7})"
+              exit 1
+            }
+          done
+          tags=(-t "$IMAGE:$VERSION")
+          case "$VERSION" in
+            *-*) prerelease=1 ;;
+            *) prerelease=; tags+=(-t "$IMAGE:${VERSION%.*}" -t "$IMAGE:latest" -t "$IMAGE:release") ;;
+          esac
+          docker buildx imagetools create "${tags[@]}" "$src"
+          [ -n "$prerelease" ] || docker buildx imagetools create -t "$IMAGE:demo" "$src-demo"
+          docker buildx imagetools inspect "$IMAGE:$VERSION"

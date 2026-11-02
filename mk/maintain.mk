@@ -38,19 +38,26 @@ release: ## Ready a release in the working copy: VERSION=x.y.z (then commit, pus
 	@echo; echo "hunt $(VERSION), ready in the working copy. Next:"; \
 	echo "  1. edit $(call NOTES,$(VERSION)): what people will notice, first"; \
 	echo "  2. jj commit -m 'hunt $(VERSION)', and push main"; \
-	echo "  3. make publish   (once CI's green on main)"
+	echo "  3. make publish   (once the image workflow's green on main: it checks)"
 
-# The release on main, published: its tag (which builds :vX.Y.Z and
-# :release), and its GitHub release (the sidebar's "hunt X.Y.Z" links there).
+# The release on main, published: its tag (which gives the images main
+# built for its commit :vX.Y.Z, :vX.Y, :latest, :release and :demo), and its
+# GitHub release (the sidebar's "hunt X.Y.Z" links there).
 publish: ## Tag main's release, push the tag, and make its GitHub release (DRY_RUN=1 to see)
 	@v=$$(jj file show -r main@origin Cargo.toml | grep -m1 '^version' | cut -d '"' -f2); \
 	[ "$$v" = "$(CURRENT)" ] || { echo "main (on GitHub) is at $$v, here $(CURRENT): push the release first"; exit 1; }; \
 	[ -f $(call NOTES,$(CURRENT)) ] || { echo "no $(call NOTES,$(CURRENT)): make release VERSION=$(CURRENT) drafts it"; exit 1; }; \
-	! git ls-remote --exit-code --tags origin "v$$v" >/dev/null || { echo "v$$v is already published"; exit 1; }
+	! git ls-remote --exit-code --tags origin "v$$v" >/dev/null || { echo "v$$v is already published"; exit 1; }; \
+	sha=$$(jj log --no-graph -r main@origin -T 'commit_id.short(7)'); \
+	for image in $(IMAGE):sha-$$sha $(IMAGE):sha-$$sha-demo; do \
+	  docker buildx imagetools inspect $$image >/dev/null 2>&1 || { \
+	    echo "no $$image yet: wait for the image workflow on main to go green"; \
+	    echo "(if main's newest change was docs alone, nothing was built: gh workflow run image.yml --ref main)"; exit 1; }; \
+	done
 	$(RUN) jj tag set v$(CURRENT) -r main@origin
 	$(RUN) git push origin refs/tags/v$(CURRENT)
 	$(RUN) gh release create v$(CURRENT) --verify-tag --title "hunt $(CURRENT)" --notes-file $(call NOTES,$(CURRENT))
-	@echo "$(if $(DRY_RUN),would publish,published) hunt $(CURRENT): the image workflow builds :v$(CURRENT) and :release"
+	@echo "$(if $(DRY_RUN),would publish,published) hunt $(CURRENT): the image workflow tags main's images :v$(CURRENT), :latest and :release"
 
 screenshots: build ## Photograph the demo's pages into docs/screenshots, for docs/screenshots.md and careerhunt.app (needs Chrome and Node)
 	node scripts/screenshots.mjs

@@ -13,8 +13,9 @@ spec:
       securityContext: { fsGroup: 65532 }
       containers:
         - name: hunt
-          image: ghcr.io/arabesquelabs/hunt
-          # `release` and `latest` move: a restart takes the newest.
+          # kustomization.yaml's newTag says which; `release` without it.
+          image: ghcr.io/arabesquelabs/hunt:release
+          # `release` and `dev` move: a restart takes the newest.
           imagePullPolicy: Always
           ports: [{ containerPort: 4848 }]
           envFrom:

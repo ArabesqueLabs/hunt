@@ -104,10 +104,11 @@ docker run -d --name hunt --restart unless-stopped \
 
 | الوسم | ما هو |
 |---|---|
-| `release` | أحدث إصدار: الافتراضي |
+| `release`، `latest` | أحدث إصدار: الافتراضي |
 | `v0.17.0`، `v0.17` | إصدار، تبقى عليه حتى تختار الانتقال |
-| `latest`، `sha-…` | أحدث بناء من main، قبل أي إصدار |
-| `demo` | بناء main، ببيانات مُختلَقة، للتجوّل فيه |
+| `demo` | أحدث إصدار، ببيانات مُختلَقة، للتجوّل فيه |
+| `dev`، `sha-…` | أحدث بناء من main، قبل أي إصدار |
+| `dev-demo` | البناء نفسه، ببيانات مُختلَقة |
 
 اختر واحدًا بـ`HUNT_VERSION` في `.env`. وملاحظات كل إصدار على
 [GitHub](https://github.com/ArabesqueLabs/hunt/releases).
@@ -160,7 +161,7 @@ cp .env.example .env            # settings (none needed for one person on SQLite
 cp .secrets.example .secrets    # HUNT_ADMIN_EMAIL and _PASSWORD, HUNT_DB: each optional
 ```
 
-وأي hunt يعمل هو `newTag` في `kustomization.yaml` (`release`، أو إصدار تبقى عليه، أو `latest`).
+وأي hunt يعمل هو `newTag` في `kustomization.yaml` (`release`، أو إصدار تبقى عليه، أو `dev`).
 
 ### 2. انشره
 
@@ -192,7 +193,7 @@ kubectl -n hunt port-forward svc/hunt 4848
 
 ### التحديث
 
-انسخ احتياطيًّا أولًا (`make backup`، عبر تحويل المنفذ). ثم، على وسم متحرك (`release`، `latest`)،
+انسخ احتياطيًّا أولًا (`make backup`، عبر تحويل المنفذ). ثم، على وسم متحرك (`release`، `dev`)،
 أعد تشغيله ليجلب الأحدث:
 
 ```sh
