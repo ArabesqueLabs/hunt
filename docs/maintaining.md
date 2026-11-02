@@ -16,18 +16,24 @@ a branch: that stays yours, with jj.
 3. **Edit the notes:** what people will notice first; anything they must
    do (a setting, a backup before updating).
 4. **Commit and push it:** `jj commit -m 'hunt 0.17.0'`, then push main.
-   Wait for the image workflow to go green.
+   The image workflow tests it and builds its images, as `:dev` and
+   `:sha-<commit>` (and `-demo`): wait for it to go green.
 5. **Publish it:** `make publish` (`DRY_RUN=1` says what it would do). It
    checks that main on GitHub is at that version and the notes are there,
    then:
+   - checks that main's images for that commit are there;
    - tags main's commit `v0.17.0`, and pushes the tag: the image workflow
-     builds `:v0.17.0`, `:v0.17` and `:release`, for amd64 and arm64;
+     gives those images `:v0.17.0`, `:v0.17`, `:latest`, `:release` and
+     (the demo's) `:demo`. It builds nothing: what's released is what was
+     tested;
    - makes the GitHub release, with the notes (the app's sidebar links to
      it, as "hunt 0.17.0").
 
 Self-hosters' compose files and Kustomize folders run `:release`, so a
-release reaches them when they update. Main's pushes reach only `:latest`
-and `:demo`.
+release reaches them when they update. Main's pushes reach only `:dev`,
+`:dev-demo` and the `:sha-…` tags. A push of docs alone builds nothing:
+if that's main's newest change at release time, build it with
+`gh workflow run image.yml --ref main` before `make publish`.
 
 ## The docs
 

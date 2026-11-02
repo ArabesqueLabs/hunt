@@ -7,7 +7,7 @@
 #   ADDR          where hunt listens, or is reached (backup, restore, try)
 #   DB            serve's database: a SQLite file, or a postgres://… or mysql://… address
 #   BACKUPS       where backup saves to
-#   HUNT_VERSION  which image try runs: release, a version (v0.17.0), or latest
+#   HUNT_VERSION  which image try runs: release, a version (v0.17.0), or dev (main's newest build)
 ADDR         ?= 127.0.0.1:4848
 DB           ?= $(HOME)/.hunt/hunt.db
 BACKUPS      ?= backups
