@@ -1,0 +1,59 @@
+{
+  "expo": {
+    "name": "hunt",
+    "slug": "hunt",
+    "scheme": "hunt",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "bundleIdentifier": "app.careerhunt.hunt",
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "app.careerhunt.hunt",
+      "adaptiveIcon": {
+        "backgroundColor": "#EFEFEB",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-web-browser",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 160,
+          "backgroundColor": "#EFEFEB",
+          "dark": {
+            "image": "./assets/splash-icon.png",
+            "backgroundColor": "#0E121A"
+          }
+        }
+      ],
+      [
+        "expo-share-intent",
+        {
+          "iosActivationRules": {
+            "NSExtensionActivationSupportsText": true,
+            "NSExtensionActivationSupportsWebURLWithMaxCount": 1,
+            "NSExtensionActivationSupportsWebPageWithMaxCount": 1
+          },
+          "iosShareExtensionName": "hunt",
+          "androidIntentFilters": [
+            "text/*"
+          ]
+        }
+      ],
+      "expo-font"
+    ]
+  }
+}
