@@ -133,13 +133,15 @@ function translateTree(node: Node) {
 
 // What's drawn from now on is translated as it appears. A translation set
 // here changes the page again; the second pass finds nothing left to do.
-const translator = new MutationObserver((changes) => {
+// Made on first use, so this file loads where there's no page (the mobile app).
+let translator: MutationObserver | null = null;
+const observer = () => (translator ??= new MutationObserver((changes) => {
   for (const c of changes) {
     if (c.type === "childList") c.addedNodes.forEach(translateTree);
     else if (c.type === "characterData") translateText(c.target as Text);
     else if (c.type === "attributes" && !(c.target as Element).closest(KEEP)) translateAttrs(c.target as Element);
   }
-});
+}));
 
 /**
  * Speak `lang` (a code from META.languages), writing numbers in `digits`
@@ -154,17 +156,17 @@ export function setLanguage(lang: string, digits = "auto") {
   root.lang = LANG;
   // English, and any language without a catalog, reads left to right.
   root.dir = cat?.dir || "ltr";
-  translator.disconnect();
+  observer().disconnect();
   EXACT = new Map(Object.entries(cat?.phrases || {}));
   PATTERNS = compilePatterns(cat?.patterns || []);
   if (LANG === "en" && DIGITS !== "arab") return;
   translateTree(document.head);
   translateTree(document.body);
-  translator.observe(root, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ATTRS });
+  observer().observe(root, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ATTRS });
 }
 
 // Boxes the browser draws itself say the same in the reader's language.
-{
+if (typeof window !== "undefined" && typeof window.confirm === "function") {
   const ask = window.confirm.bind(window);
   window.confirm = (message?: string) => ask(t(String(message ?? "")));
 }

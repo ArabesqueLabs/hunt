@@ -40,6 +40,7 @@ export function boardCycle(): string {
 
 /** An ended cycle being looked at (?cycle= on the board), or null. */
 export function viewedCycle(): Cycle | null {
+  if (typeof location === "undefined") return null;
   const id = new URLSearchParams(location.search).get("cycle");
   const c = id && cycleById(id);
   return c && c.ended_on ? c : null;

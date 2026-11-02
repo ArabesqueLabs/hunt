@@ -14,7 +14,8 @@ export function LOC(): string | undefined {
   const base: string | undefined = S.PREFS.locale || (LANG !== "en" ? LANG : undefined);
   const digits = S.PREFS.numerals && S.PREFS.numerals !== "auto" ? S.PREFS.numerals : CATALOGS[LANG]?.digits;
   if (!digits || base?.includes("-u-")) return base;
-  return `${base || navigator.language}-u-nu-${digits}`;
+  const own = base || globalThis.navigator?.language;
+  return own ? `${own}-u-nu-${digits}` : undefined;
 }
 
 /** A number as the region writes it; a dash for none. */
@@ -128,7 +129,7 @@ export const curSym = (code: string | null | undefined): string | undefined =>
   ({ GBP: "£", USD: "$", EUR: "€", JPY: "¥", INR: "₹" } as Record<string, string>)[(code || "").toUpperCase()];
 
 /** Text that reads left to right (an amount: £85k–100k/yr), kept whole on a right-to-left page. */
-export const ltr = (s: string) => (document.documentElement.dir === "rtl" && s ? `⁦${s}⁩` : s);
+export const ltr = (s: string) => (typeof document !== "undefined" && document.documentElement.dir === "rtl" && s ? `⁦${s}⁩` : s);
 
 /** An amount in the home currency, short: £150k, €95k, CHF 120k. */
 export function homeK(n: number | null | undefined): string {

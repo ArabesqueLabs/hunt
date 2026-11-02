@@ -33,7 +33,10 @@ const touched = (e: Event) => {
   const controls = controlsOf(form);
   snapshots.set(form, { controls, state: stateOf(controls) });
 };
-for (const type of ["pointerdown", "keydown", "paste", "drop"]) document.addEventListener(type, touched, true);
+// Only on a page: this file also loads in the mobile app, which has none.
+if (typeof document !== "undefined") {
+  for (const type of ["pointerdown", "keydown", "paste", "drop"]) document.addEventListener(type, touched, true);
+}
 
 /** Whether `form` (or the form `el` is in) has changes not yet saved. */
 export function unsaved(el: Element | null | undefined): boolean {
@@ -57,4 +60,6 @@ export function mayDiscard(el: Element | null | undefined): boolean {
 }
 
 // Closing the tab, or reloading it, asks too.
-window.addEventListener("beforeunload", (e) => { if (anyUnsaved()) { e.preventDefault(); e.returnValue = ""; } });
+if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+  window.addEventListener("beforeunload", (e) => { if (anyUnsaved()) { e.preventDefault(); e.returnValue = ""; } });
+}

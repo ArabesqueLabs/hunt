@@ -16,8 +16,10 @@ const OUTSIDE = /^\/(api|cdn-cgi|dev|app|ar)(\/|$)|^\/(login|logout|healthz|abou
 
 export const here = () => location.pathname + location.search;
 
-// Where we were, to go back to when leaving would lose changes.
-let lastUrl = here();
+// Where we were, to go back to when leaving would lose changes: set as
+// routing starts (not as this file loads, so it loads where there's no
+// address bar: the mobile app).
+let lastUrl = "";
 /** The address now is where we are (a page that changed it itself, as the calendar does). */
 export const settle = () => { lastUrl = here(); };
 
@@ -76,6 +78,7 @@ export function opensEditing(query: URLSearchParams) {
 export function startRouting() {
   // An old address, with the page after #: the same page, at its new address.
   if (location.hash.startsWith("#/")) history.replaceState(null, "", location.hash.slice(1));
+  settle();
   window.addEventListener("popstate", route);
   document.addEventListener("click", (e) => {
     if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
