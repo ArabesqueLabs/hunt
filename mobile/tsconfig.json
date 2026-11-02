@@ -4,10 +4,15 @@
     "strict": true,
     "noUnusedLocals": true,
     "paths": {
-      "@/*": ["./src/*"],
-      // The web UI's data layer (src/web/src/lib), shared: see metro.config.js.
-      "@web/*": ["../src/web/src/lib/*"]
+      "@/*": [
+        "./src/*"
+      ],
+      "@web/*": [
+        "../src/web/src/lib/*"
+      ]
     }
   },
-  "include": ["src", "expo-env.d.ts", ".expo/types/**/*.ts"]
+  "include": [
+    "src"
+  ]
 }
