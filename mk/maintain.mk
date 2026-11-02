@@ -14,7 +14,7 @@ RUN = $(if $(DRY_RUN),@echo "would run:",)
 CURRENT = $(shell grep -m1 '^version' Cargo.toml | cut -d '"' -f2)
 NOTES   = target/release-notes-v$(1).md
 
-.PHONY: release publish screenshots cli-docs logo audit deps dev-hosted
+.PHONY: release publish screenshots extension-screenshots cli-docs logo audit deps dev-hosted
 
 ##@ Maintain hunt
 
@@ -61,6 +61,9 @@ publish: ## Tag main's release, push the tag, and make its GitHub release (DRY_R
 
 screenshots: build ## Photograph the demo's pages into docs/screenshots, for docs/screenshots.md and careerhunt.app (needs Chrome and Node)
 	node scripts/screenshots.mjs
+
+extension-screenshots: build ## The Safari extension's App Store screenshots and preview, into docs/app-store/mac (needs Chrome, Node and ffmpeg)
+	node scripts/extension-screenshots.mjs
 
 cli-docs: build ## Write each CLI command's help into its page, docs/cli/<command>.md
 	scripts/cli-docs.sh

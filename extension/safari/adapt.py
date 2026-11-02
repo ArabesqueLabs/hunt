@@ -2,7 +2,7 @@
 """The Safari build's own steps, around Xcode's converter (see the Makefile).
 
     adapt.py extension <dir>             before converting: the extension in <dir>
-    adapt.py project <dir> <macos> <build>  after: the Xcode project in <dir>
+    adapt.py project <dir> <macos> <build> <team> <id>  after: the Xcode project in <dir>
 
 Before: Safari doesn't take a background service worker that's an ES module
 ("type": "module"), so the background script and the lib/ modules it uses
@@ -12,8 +12,14 @@ popup and the settings page stay modules: pages may be.
 After: the project the converter makes targets the newest macOS for the app
 (it leaves the project's own default in place), and versions it 1.0. Both
 targets are set to <macos>, the version to the manifest's, the build number
-to <build> (each upload to App Store Connect needs a higher one), and the
-app gets hunt's icon (app-icon.png, drawn from app-icon.svg).
+to <build> (each upload to App Store Connect needs a higher one), both
+targets are signed by the Apple developer team <team> (automatic signing),
+the app's bundle ID is <id> and the extension's <id>.Extension (the
+converter makes the app's from the ID it's given, less its last part, and
+the app's name: app.careerhunt.hunt, the mobile app's, whatever it's given),
+the app's App Store category is Productivity, it says it uses no
+encryption of its own (ITSAppUsesNonExemptEncryption), and the app gets hunt's icon
+(app-icon.png, drawn from app-icon.svg).
 """
 
 import json
@@ -74,7 +80,11 @@ def extension(root):
         f.write('\n')
 
 
-def project(root, macos, build):
+# The app's category on the App Store.
+CATEGORY = 'public.app-category.productivity'
+
+
+def project(root, macos, build, team, bundle_id):
     with open(os.path.join(HERE, '..', 'src', 'manifest-chrome.json')) as f:
         version = json.load(f)['version']
 
@@ -89,6 +99,23 @@ def project(root, macos, build):
         text, n = re.subn(rf'(\b{key} = )[^;]*;', rf'\g<1>{value};', text)
         if not n:
             die(f'no {key} in {path}')
+    text, n = re.subn(r'(\bPRODUCT_BUNDLE_IDENTIFIER = )[^;]*?(\.Extension)?;',
+                      lambda m: m.group(1) + bundle_id + (m.group(2) or '') + ';', text)
+    if n != 4:
+        die(f'expected 4 bundle IDs in {path}, found {n}')
+    # Each target's configurations sign automatically: each gets the team,
+    # and the app's (the one with NSPrincipalClass) the category, and says
+    # it uses no encryption of its own (it's Safari's HTTPS alone), so App
+    # Store Connect doesn't ask with each build.
+    text, n = re.subn(r'^(\s*)(CODE_SIGN_STYLE = Automatic;\n)',
+                      rf'\g<1>\g<2>\g<1>DEVELOPMENT_TEAM = {team};\n', text, flags=re.M)
+    if n != 4:
+        die(f'expected 4 target configurations signing automatically in {path}, found {n}')
+    text, n = re.subn(r'^(\s*)(INFOPLIST_KEY_NSPrincipalClass = NSApplication;\n)',
+                      rf'\g<1>\g<2>\g<1>INFOPLIST_KEY_LSApplicationCategoryType = "{CATEGORY}";\n'
+                      r'\g<1>INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;\n', text, flags=re.M)
+    if n != 2:
+        die(f'expected the app\'s 2 configurations in {path}, found {n}')
     with open(path, 'w') as f:
         f.write(text)
 
@@ -120,7 +147,7 @@ def resize(source, side, target):
 if __name__ == '__main__':
     if sys.argv[1:2] == ['extension'] and len(sys.argv) == 3:
         extension(sys.argv[2])
-    elif sys.argv[1:2] == ['project'] and len(sys.argv) == 5:
+    elif sys.argv[1:2] == ['project'] and len(sys.argv) == 7:
         project(*sys.argv[2:])
     else:
-        die('usage: adapt.py extension <dir> | adapt.py project <dir> <macos> <build>')
+        die('usage: adapt.py extension <dir> | adapt.py project <dir> <macos> <build> <team> <id>')
