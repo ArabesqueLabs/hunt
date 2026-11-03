@@ -9,6 +9,18 @@
 - **صفحة الشركة** تسرد طلباتها، كلٌّ بمرحلته (مرحلة أحدث عملية نشطة له، أو أحدث عملية، مؤرشفةً،
   ولماذا) ووسومه؛ ثم الأشخاص فيها.
 
+![الشركات: القائمة، قابلة للبحث](../screenshots/companies-light.png#gh-light-mode-only)
+![الشركات: القائمة، قابلة للبحث](../screenshots/companies-dark.png#gh-dark-mode-only)
+
+![صفحة شركة: تفاصيلها، وطلباتها بمراحلها ووسومها، والأشخاص فيها](../screenshots/company-light.png#gh-light-mode-only)
+![صفحة شركة: تفاصيلها، وطلباتها بمراحلها ووسومها، والأشخاص فيها](../screenshots/company-dark.png#gh-dark-mode-only)
+
+![الأشخاص: القائمة، قابلة للبحث](../screenshots/people-light.png#gh-light-mode-only)
+![الأشخاص: القائمة، قابلة للبحث](../screenshots/people-dark.png#gh-dark-mode-only)
+
+![صفحة شخص](../screenshots/person-light.png#gh-light-mode-only)
+![صفحة شخص](../screenshots/person-dark.png#gh-dark-mode-only)
+
 ## استيراد شركة أو شخص
 
 «الاستيراد من رابط…» على شركة أو شخص جديد، أو في صفحتهما، أو في لوحة الشركة في العملية.

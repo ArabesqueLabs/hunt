@@ -25,6 +25,9 @@ Stats can show one search's numbers, or every search's.
   its processes can't be moved, closed or edited, and nothing new goes into
   it.
 
+![A cycle that ended: its board, read-only, as it was when it ended](../screenshots/past-cycle-light.png#gh-light-mode-only)
+![A cycle that ended: its board, read-only, as it was when it ended](../screenshots/past-cycle-dark.png#gh-dark-mode-only)
+
 ## Starting another
 
 Starting a new cycle can bring back processes from ended ones: a company
@@ -40,3 +43,6 @@ a cycle: the recruiter you met two searches ago is still in your contacts.
 
 Cycles are on their own page (`/cycles`): each with its weeks, its
 applications and how it ended, and links to its board and its stats.
+
+![Cycles: the job searches running side by side, and one that has ended, each with its weeks and applications](../screenshots/cycles-light.png#gh-light-mode-only)
+![Cycles: the job searches running side by side, and one that has ended, each with its weeks and applications](../screenshots/cycles-dark.png#gh-dark-mode-only)

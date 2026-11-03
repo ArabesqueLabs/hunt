@@ -37,6 +37,9 @@ keeps a streak. The Tasks page can show one application's (search for it
 under **For**), and the ones not done yet are on the calendar, on their
 own date or their interview's day.
 
+![Tasks: what to read, practise and rehearse, around the interviews coming up](../screenshots/prep-light.png#gh-light-mode-only)
+![Tasks: what to read, practise and rehearse, around the interviews coming up](../screenshots/prep-dark.png#gh-dark-mode-only)
+
 **Stories** are for behavioural questions: things that happened at work,
 as situation, task, action and result, written once and told in any
 interview that asks.

@@ -12,6 +12,9 @@ left or on Enter; Escape puts it back), and says so, with Undo.
 Undo is offered for a change, a move or a removal, for 5 seconds (or as
 long as Admin → General says); adding something is said, without Undo.
 
+![Settings, General: your profile, appearance, language and region](../screenshots/settings-light.png#gh-light-mode-only)
+![Settings, General: your profile, appearance, language and region](../screenshots/settings-dark.png#gh-dark-mode-only)
+
 - **Profile:** your photo, if you'd like one (PNG, JPEG, GIF, WebP, SVG
   or ICO). It's on your badge at the top of every page; without one,
   your initials are. It's kept with your data, and in its backups.
@@ -114,3 +117,6 @@ Companies, people, files, and the Applications table:
 ## Activity
 
 Every change, newest first.
+
+![The Audit Log: every change, newest first](../screenshots/activity-light.png#gh-light-mode-only)
+![The Audit Log: every change, newest first](../screenshots/activity-dark.png#gh-dark-mode-only)

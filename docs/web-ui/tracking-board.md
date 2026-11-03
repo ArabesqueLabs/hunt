@@ -29,6 +29,9 @@ foot of the sidebar, under "Hide sidebar".
   mode, source, when applied and last changed, and tags. Sort by any
   column; open one by its row.
 
+![Applications as a table: each one's stage, pay, location, work mode, source, dates and tags, sortable by any column](../screenshots/table-light.png#gh-light-mode-only)
+![Applications as a table: each one's stage, pay, location, work mode, source, dates and tags, sortable by any column](../screenshots/table-dark.png#gh-dark-mode-only)
+
 ## Filters
 
 Both views share their filters, which carry over between them. They're in
@@ -63,6 +66,14 @@ suggests the filters your words could mean (see
   see [Adding applications](adding-applications.md).
 - The board's rows are swimlanes, and its columns can be divided into sub
   stages: see [Swimlanes and sub stages](swimlanes-and-sub-stages.md).
+
+![The board, detailed: a column per stage and a card per process, with what's next on each](../screenshots/board-light.png#gh-light-mode-only)
+![The board, detailed: a column per stage and a card per process, with what's next on each](../screenshots/board-dark.png#gh-dark-mode-only)
+
+On a phone, a swimlane shows one stage at a time, its stages as tabs above it:
+
+![On a phone: Active Processes, its stages as tabs, and Backlog's cards in its sub stages](../screenshots/phone-board-light.png#gh-light-mode-only)
+![On a phone: Active Processes, its stages as tabs, and Backlog's cards in its sub stages](../screenshots/phone-board-dark.png#gh-dark-mode-only)
 
 ## Getting started
 

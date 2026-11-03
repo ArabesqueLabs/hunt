@@ -13,6 +13,9 @@ divide a column.
   (open, unless switched on), and opening or folding it on the board is
   remembered in this browser.
 
+![The board's swimlanes open: active processes, offers and the closed, each stage a column; Interviewing divided into sub stages, and the closed folded into piles](../screenshots/swimlanes-light.png#gh-light-mode-only)
+![The board's swimlanes open: active processes, offers and the closed, each stage a column; Interviewing divided into sub stages, and the closed folded into piles](../screenshots/swimlanes-dark.png#gh-dark-mode-only)
+
 ## Sub stages
 
 - A stage's column can be divided, top to bottom. A new hunt has three,
@@ -29,6 +32,9 @@ divide a column.
   Default switch). A card going into the stage without one said (Move to,
   a new application, the CLI, Reopen) goes there; one dropped on the
   column's top stays at the top.
+
+![Settings, Board: the swimlanes, and each stage with its sub stages indented under it, its swimlane, and its Terminal stage, Folded and Default switches](../screenshots/settings-board-light.png#gh-light-mode-only)
+![Settings, Board: the swimlanes, and each stage with its sub stages indented under it, its swimlane, and its Terminal stage, Folded and Default switches](../screenshots/settings-board-dark.png#gh-dark-mode-only)
 
 ## From the command line
 

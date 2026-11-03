@@ -24,3 +24,9 @@ take home after income tax and National Insurance: from a salary (with a
 bonus, shares and benefits), or a contractor's day or hourly rate, inside
 and outside IR35. Set the take-home pay you want, and the take-home
 figures are set against it.
+
+![Take-home pay: what a salary leaves after income tax and National Insurance, and what it costs the employer](../screenshots/take-home-light.png#gh-light-mode-only)
+![Take-home pay: what a salary leaves after income tax and National Insurance, and what it costs the employer](../screenshots/take-home-dark.png#gh-dark-mode-only)
+
+![Take-home pay, three ways: a day rate as an employee, and as a contractor inside and outside IR35, side by side](../screenshots/take-home-compare-light.png#gh-light-mode-only)
+![Take-home pay, three ways: a day rate as an employee, and as a contractor inside and outside IR35, side by side](../screenshots/take-home-compare-dark.png#gh-dark-mode-only)

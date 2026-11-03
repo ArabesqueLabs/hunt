@@ -43,3 +43,6 @@ wraps up the rest of the search, and hunt celebrates it with you.
   the process, to thank.
 - "Back to the board" returns the board to the home page (in this
   browser); "Your offer" in the sidebar shows the celebration again.
+
+![The home page after an offer is accepted: the role, pay and note, then how the search went](../screenshots/celebrate-light.png#gh-light-mode-only)
+![The home page after an offer is accepted: the role, pay and note, then how the search went](../screenshots/celebrate-dark.png#gh-dark-mode-only)

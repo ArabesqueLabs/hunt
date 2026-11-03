@@ -13,6 +13,9 @@ filters by kind, and by application (those sent with its processes; an
 application's **View all files** opens it so, with **Back to application**
 above), and a new file's kind is guessed from its name.
 
+![Files: resumes, cover letters, offers and more, each with its versions](../screenshots/files-light.png#gh-light-mode-only)
+![Files: resumes, cover letters, offers and more, each with its versions](../screenshots/files-dark.png#gh-dark-mode-only)
+
 - Drop files anywhere on the page, or choose them (the drop zone is under
   the list): a file named like a document becomes its next version, and
   anything else becomes a new document, its kind guessed from the name.
@@ -22,6 +25,9 @@ above), and a new file's kind is guessed from its name.
 - Tag versions ("rust-focused"), and see which processes each was sent
   with. A process records which versions went with it, and previews them
   too.
+
+![A file: its versions, beside a preview](../screenshots/file-light.png#gh-light-mode-only)
+![A file: its versions, beside a preview](../screenshots/file-dark.png#gh-dark-mode-only)
 
 ## Email
 
@@ -41,3 +47,6 @@ but switched off for now: `GMAIL` in `src/web/app.js`.
 
 General notes, about the search rather than one application (what you want
 next, questions to ask): searchable, taggable, edited in place.
+
+![Notes about the search, searchable and tagged](../screenshots/notes-light.png#gh-light-mode-only)
+![Notes about the search, searchable and tagged](../screenshots/notes-dark.png#gh-dark-mode-only)

@@ -13,6 +13,9 @@ into it:
 - or give just the company (it autocompletes, and offers to create one it
   doesn't know), the role and the source.
 
+![Adding an application: from a job posting's link, or by hand, onto the board](../screenshots/new-application-light.png#gh-light-mode-only)
+![Adding an application: from a job posting's link, or by hand, onto the board](../screenshots/new-application-dark.png#gh-dark-mode-only)
+
 An existing application can import its posting too ("Import from link…"),
 choosing what to take.
 
