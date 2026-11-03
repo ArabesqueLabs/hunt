@@ -182,6 +182,55 @@ mod tests {
     }
 
     #[test]
+    fn the_docs_show_every_screenshot() {
+        // `make screenshots` takes scripts/screenshots.mjs's shots (listed
+        // in docs/screenshots.json); the docs' pages show each, light and
+        // dark, and only those. extension/'s popups are named by
+        // docs/extensions before any script takes them (careerhunt.app
+        // leaves out a picture it hasn't got).
+        const NOT_TAKEN_YET: [&str; 2] = ["extension-connect", "extension-linkedin"];
+        #[derive(serde::Deserialize)]
+        struct Shot {
+            name: String,
+        }
+        let shots: Vec<Shot> =
+            serde_json::from_str(include_str!("../docs/screenshots.json")).unwrap();
+        let docs = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("docs");
+        let mut pages = String::new();
+        let mut dirs = vec![docs.clone()];
+        while let Some(dir) = dirs.pop() {
+            for entry in std::fs::read_dir(&dir).unwrap() {
+                let path = entry.unwrap().path();
+                if path.is_dir() {
+                    dirs.push(path);
+                } else if path.extension().is_some_and(|e| e == "md")
+                    && path != docs.join("screenshots.md")
+                {
+                    pages.push_str(&std::fs::read_to_string(&path).unwrap());
+                }
+            }
+        }
+        for shot in &shots {
+            for theme in ["light", "dark"] {
+                let picture = format!(
+                    "../screenshots/{}-{theme}.png#gh-{theme}-mode-only)",
+                    shot.name
+                );
+                assert!(pages.contains(&picture), "no page in docs/ shows {picture}");
+            }
+        }
+        let named =
+            regex::Regex::new(r"\.\./screenshots/([a-z0-9-]+?)-(?:light|dark)\.png").unwrap();
+        for m in named.captures_iter(&pages) {
+            let name = &m[1];
+            assert!(
+                shots.iter().any(|s| s.name == name) || NOT_TAKEN_YET.contains(&name),
+                "docs/ shows screenshots/{name}, which scripts/screenshots.mjs doesn't take"
+            );
+        }
+    }
+
+    #[test]
     fn each_web_ui_page_is_in_both_languages() {
         // careerhunt.app shows docs/web-ui/'s pages, in index.json's order,
         // under The web UI: each in English and in Arabic.

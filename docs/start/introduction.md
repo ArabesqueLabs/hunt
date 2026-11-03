@@ -4,6 +4,9 @@ hunt tracks a job search as a board of hiring processes: every application
 you're making, how far each has got, and what's next for it, in one place
 that's yours.
 
+![hunt's board: applications by stage, each with what's next, and the cycles running side by side](../screenshots/board-light.png#gh-light-mode-only)
+![hunt's board: applications by stage, each with what's next, and the cycles running side by side](../screenshots/board-dark.png#gh-dark-mode-only)
+
 ## What it does
 
 - **A board of your applications.** A card for each hiring process, in a

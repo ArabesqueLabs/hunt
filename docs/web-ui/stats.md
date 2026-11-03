@@ -14,4 +14,7 @@ What's coming up first, then:
 - how long things take, and activity day by day;
 - and what's gone quiet.
 
+![Interview stats: how far applications got, what was added each week, why processes ended, and more](../screenshots/stats-light.png#gh-light-mode-only)
+![Interview stats: how far applications got, what was added each week, why processes ended, and more](../screenshots/stats-dark.png#gh-dark-mode-only)
+
 Every chart's numbers are also a table.

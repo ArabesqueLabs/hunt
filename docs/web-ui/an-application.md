@@ -37,6 +37,14 @@ timeline is a line an entry, beside the interviews as cards; **Full
 timeline**, beneath it, opens it whole. The role's details and posting
 links take a narrow column, with About the job in a wide one beside.
 
+![An application's page: its stage and what's next, its timeline, and beside them its pay, details, postings, links and people](../screenshots/application-light.png#gh-light-mode-only)
+![An application's page: its stage and what's next, its timeline, and beside them its pay, details, postings, links and people](../screenshots/application-dark.png#gh-dark-mode-only)
+
+On a phone, it's one column, the timeline first:
+
+![On a phone: an application's page, with Add, Stage and Close, then its timeline](../screenshots/phone-application-light.png#gh-light-mode-only)
+![On a phone: an application's page, with Add, Stage and Close, then its timeline](../screenshots/phone-application-dark.png#gh-dark-mode-only)
+
 ## Adding and editing
 
 - Reading, the page shows no forms: **Add**, at the top before Stage,

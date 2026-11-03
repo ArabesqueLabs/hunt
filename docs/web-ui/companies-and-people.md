@@ -11,6 +11,18 @@ their own, and can be read in from their sites and LinkedIn.
   of its newest active process, or else its newest, archived, and why) and
   its tags; then the people there.
 
+![Companies: the list, searchable](../screenshots/companies-light.png#gh-light-mode-only)
+![Companies: the list, searchable](../screenshots/companies-dark.png#gh-dark-mode-only)
+
+![A company's page: its details, its applications with their stages and tags, and its people](../screenshots/company-light.png#gh-light-mode-only)
+![A company's page: its details, its applications with their stages and tags, and its people](../screenshots/company-dark.png#gh-dark-mode-only)
+
+![People: the list, searchable](../screenshots/people-light.png#gh-light-mode-only)
+![People: the list, searchable](../screenshots/people-dark.png#gh-dark-mode-only)
+
+![A person's page](../screenshots/person-light.png#gh-light-mode-only)
+![A person's page](../screenshots/person-dark.png#gh-dark-mode-only)
+
 ## Importing a company or person
 
 "Import from link…" on a new company or person, on their page, or in a

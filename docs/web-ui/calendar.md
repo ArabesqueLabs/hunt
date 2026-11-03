@@ -3,6 +3,9 @@
 Interviews and application deadlines of active processes (`/calendar`), by
 month, week, day or as an agenda, searched by company, role or title.
 
+![The calendar, by month: interviews, next actions and deadlines](../screenshots/calendar-light.png#gh-light-mode-only)
+![The calendar, by month: interviews, next actions and deadlines](../screenshots/calendar-dark.png#gh-dark-mode-only)
+
 ## Weeks and days
 
 - The week and the day run midnight to midnight, each event at its time.
@@ -10,6 +13,9 @@ month, week, day or as an agenda, searched by company, role or title.
   hours can run beside yours: both in Settings → Calendar, which the icon
   by the page's title opens.
 - "Weekends" shows or hides Saturdays and Sundays.
+
+![A week: each event at its time, the hours outside working hours hatched](../screenshots/calendar-week-light.png#gh-light-mode-only)
+![A week: each event at its time, the hours outside working hours hatched](../screenshots/calendar-week-dark.png#gh-dark-mode-only)
 
 ## What it shows
 
