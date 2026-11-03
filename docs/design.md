@@ -14,8 +14,9 @@ clients, so a rule lives in one place: the service.
 ```
 src/
   schema.sql      tables (version 3); comments say what each is for
-  migrate_v2.sql  version 1 to 2
-  migrate_v3.sql  version 2 to 3: more about companies
+  migrations/     upgrades, one per version: migrate_v2.sql (version 1
+                  to 2), migrate_v3.sql (2 to 3: more about companies), and
+                  so on, with _postgres and _mysql forms from version 11
   resource.rs     each resource's fields: name, label, kind, required, fixed
   db.rs           open, version and upgrade the file; generic
                   list/get/create/update/delete; the change log
