@@ -3,8 +3,9 @@
 
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { attempt, get } from "../lib/api";
-import { LOC, daysFromToday, fmtTime, parseLocal, zonedNow } from "../lib/format";
-import { R } from "../lib/meta";
+import { LOC, daysFromToday, fmtDay, fmtTime, isOverdue, parseLocal, zonedNow } from "../lib/format";
+import { R, optionLabel } from "../lib/meta";
+import { hostName } from "../lib/platforms";
 import { here, settle } from "../lib/router";
 import { usePageScope } from "../lib/search";
 import { S } from "../lib/state";
@@ -12,6 +13,10 @@ import { store, stored } from "../lib/storage";
 import type { Row } from "../lib/types";
 import { EmptyState, Icon, LoadingBlock, Logo, SysIcon } from "../components/ui";
 import { MenuButton, MenuCheck } from "../components/Menu";
+import { closeModal, openModal } from "../components/dialogs";
+import { RichView } from "../components/RichText";
+import { PlatformMark, StepView, linkHref, minutesText } from "./Interview";
+import { isDone } from "./Prep";
 
 /** What the calendar shows, of active processes: all that's coming up, each kind in its colour, and what each is called beside its checkbox. */
 const CAL_KINDS: [string, string][] = [["step", "Interviews"], ["next", "Next actions"], ["task", "Tasks"], ["closes", "Deadlines"]];
@@ -100,7 +105,12 @@ export function CalendarPage() {
     preview: (next) => setF({ ...f, q: (next.q || "").trim() }),
     clear: () => search(""),
   });
-  useEffect(() => { keep(f, at, { push: false }); }, []);
+  useEffect(() => {
+    // Opened on an event (/calendar?date=…&event=step-12, from an interview's application): it, whole, over its day.
+    const event = new URLSearchParams(location.search).get("event");
+    keep(f, at, { push: false });
+    if (event) openEventByKey(event);
+  }, []);
   // Weekends can be hidden from the month and the week only: a day and the
   // agenda show what there is.
   const hasWeekends = f.view === "month" || f.view === "week";
@@ -197,9 +207,150 @@ export function CalendarPage() {
   );
 }
 
-/** Where an event leads: a task to Tasks (its application's, if it has one); else its process, or its application. */
-const eventHref = (e: Row) => (e.kind === "task" ? `/tasks${e.process_id ? `?for=${e.process_id}` : ""}`
-  : e.process_id ? `/p/${e.process_id}` : `/applications/${e.application_id}`);
+/** What each kind of event is called. */
+const KIND_LABELS: Record<string, string> = { step: "Interview", next: "Next action", task: "Task", closes: "Deadline", applied: "Applied", posted: "Posted" };
+const kindLabel = (k: string) => KIND_LABELS[k] || k;
+
+/** An event's name in the address (?event=step-12): its kind and its record. */
+const eventKey = (kind: string, id: number) => `${kind}-${id}`;
+
+/** The calendar's address as it is, with an event open over it (or none). */
+function eventUrl(key: string | null) {
+  const q = new URLSearchParams(location.search);
+  if (key) q.set("event", key); else q.delete("event");
+  return location.pathname + (q.toString() ? `?${q}` : "");
+}
+
+/** Where an event leads: its own view, over the calendar. */
+const eventHref = (e: Row) => eventUrl(eventKey(e.kind, e.ref_id));
+
+/** An event clicked: it opens in its view, here (a new tab, as links do). */
+function onEventClick(ev: React.MouseEvent, e: Row) {
+  if (ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey || ev.button) return;
+  ev.preventDefault();
+  openEvent(e);
+}
+
+/**
+ * An event opened from the address (?event=task-6&date=…): its row, as the
+ * calendar has it, from its day; whatever its cycle, filters or outcome.
+ */
+async function openEventByKey(key: string) {
+  const m = /^([a-z]+)-(\d+)$/.exec(key);
+  if (!m) return;
+  const [, kind, id] = m;
+  const day = new URLSearchParams(location.search).get("date") || isoDay(zonedNow());
+  const query = new URLSearchParams({ from: day, to: day, kinds: kind, status: "all", cancelled: "true" });
+  const list: Row[] | undefined = await attempt(() => get(`calendar?${query}`));
+  const e = list?.find((x) => x.ref_id === Number(id));
+  if (e) openEvent(e);
+}
+
+/**
+ * An event, whole, in the modal, under its company and role, with the way
+ * to its application: an interview as its application shows it, the rest
+ * with what they are. The address says which, while it's open.
+ */
+async function openEvent(e: Row) {
+  const view = e.kind === "step" ? await stepEvent(e) : await otherEvent(e);
+  if (!view) return;
+  const key = eventKey(e.kind, e.ref_id);
+  if (here() !== eventUrl(key)) history.replaceState(null, "", eventUrl(key));
+  settle();
+  openModal(view, {
+    onClose: () => { if (location.pathname === "/calendar" && here() !== eventUrl(null)) { history.replaceState(null, "", eventUrl(null)); settle(); } },
+  });
+}
+
+/** Its application's page (its process's, if it has one), if it has an application. */
+const appHrefOf = (e: Row) => (e.application_id ? `/applications/${e.application_id}${e.process_id ? `?process=${e.process_id}` : ""}` : null);
+
+/** What an event's for, in its view: its company's logo, name and role, to its application; a general task, "General". */
+function EventAbout({ e }: { e: Row }) {
+  const href = appHrefOf(e);
+  if (!e.company) return <span>General</span>;
+  const name = <><b translate="no">{e.company}</b>{e.role ? <span translate="no">{` — ${e.role}`}</span> : null}</>;
+  return <>{eventLogo(e, 20)}{href ? <a href={href}>{name}</a> : <span>{name}</span>}
+    {e.stage ? <span>{` · ${e.status === "archived" ? "closed at " : ""}${e.stage}`}</span> : null}</>;
+}
+
+/** The view's buttons, after Close: more of its own, then its application. */
+const eventActions = (e: Row, more?: ReactNode) => {
+  const href = appHrefOf(e);
+  return <>{more}{href ? <a className="al-button al-button--primary" href={href}><span>Open application</span></a> : null}</>;
+};
+
+/** An interview: its details whole, as its application's page shows them. */
+async function stepEvent(e: Row) {
+  const pid = e.process_id;
+  const got = await attempt(() => Promise.all([get(`processes/${pid}/detail`), get(`prep?process_id=${pid}`)]));
+  if (!got) return null;
+  const [detail, prep] = got as [Row, Row[]];
+  const step = (detail.steps || []).find((x: Row) => x.id === e.ref_id);
+  if (!step) return null;
+  return <StepView step={step} prep={prep.filter((x) => x.step_id === step.id)} canEdit={false}
+    about={<EventAbout e={e} />} actions={eventActions(e)} />;
+}
+
+/** A next action, a task or a deadline (or when it was applied for, or posted): what it is, when, and its details. */
+async function otherEvent(e: Row) {
+  // Its record, for what the calendar's row hasn't: a task's details, a posting's link.
+  const rec: Row | undefined = e.kind === "task" ? await attempt(() => get(`prep/${e.ref_id}`))
+    : ["closes", "posted", "applied"].includes(e.kind) && e.application_id ? await attempt(() => get(`applications/${e.application_id}`))
+      : e.kind === "next" ? await attempt(() => get(`reminders/${e.ref_id}`)) : {};
+  if (!rec) return null;
+  const forStep: Row | undefined = e.kind === "task" && rec.step_id ? await attempt(() => get(`steps/${rec.step_id}`)) : undefined;
+  const { time } = eventLabel(e);
+  const done = (e.kind === "next" && !!rec.done_at) || (e.kind === "task" && isDone(rec));
+  const late = !done && ["next", "task", "closes"].includes(e.kind) && isOverdue(e.at);
+  const days = daysFromToday(parseLocal(e.at.slice(0, 10)));
+  const opts = (res: string, name: string) => R(res).fields.find((x) => x.name === name)?.options || [];
+  const fact = (term: string, value: ReactNode) => (value ? <><dt>{term}</dt><dd>{value}</dd></> : null);
+  const link = (url: string | null | undefined, text?: string) => (url
+    ? <a className="step-link" href={linkHref(url)} target="_blank" rel="noreferrer" title={url}><PlatformMark url={url} /><span translate="no">{text || hostName(url) || url}</span></a> : null);
+  const tone = late ? "warning" : done ? "success" : undefined;
+  const state = done ? "Done" : late ? (e.kind === "closes" ? "Passed" : "Overdue")
+    : e.kind === "closes" ? (days === 0 ? "Closes today" : `Closes in ${days} day${days === 1 ? "" : "s"}`) : null;
+  return (
+    <div className="al-dialog__inner step-view event-view">
+      <div className="step-view-head">
+        <h2 className="al-dialog__title" id="modal-title" translate="no">{e.title}</h2>
+        <span className="al-badge">{kindLabel(e.kind)}</span>
+        {state ? <span className={`al-badge${tone ? ` al-badge--${tone}` : ""}`}>{state}</span> : null}
+      </div>
+      <div className="step-view-about"><EventAbout e={e} /></div>
+      <div className="al-dialog__body step-view-body">
+        <div className="step-view-when"><Icon name="cal" />
+          <span className={`step-when${late ? " is-late" : ""}`}><time dateTime={e.at}>{fmtDay(e.at.slice(0, 10))}</time>{time ? <span translate="no">{time}</span> : null}</span>
+        </div>
+        <dl className="app-facts step-view-facts">
+          {e.kind === "task" ? <>
+            {fact("Kind", rec.kind ? optionLabel(opts("prep", "kind"), rec.kind) : null)}
+            {fact("Status", rec.status ? optionLabel(opts("prep", "status"), rec.status) : null)}
+            {fact("Priority", rec.priority ? optionLabel(opts("prep", "priority"), rec.priority) : null)}
+            {fact("Takes about", minutesText(rec.minutes))}
+            {/* Its interview, in its own view (it has the same application). */}
+            {fact("For", forStep ? <a href={eventUrl(eventKey("step", forStep.id))} translate="no"
+              onClick={(ev) => onEventClick(ev, { ...e, kind: "step", ref_id: forStep.id, at: forStep.at || e.at, title: forStep.title, detail: forStep.status })}>{forStep.title}</a> : null)}
+            {fact("Link", link(rec.url))}
+          </> : null}
+          {["closes", "posted", "applied"].includes(e.kind) ? <>
+            {fact("Posted", e.kind !== "posted" && rec.posted_on ? fmtDay(rec.posted_on) : null)}
+            {fact("Closes", e.kind !== "closes" && rec.closes_on ? fmtDay(rec.closes_on) : null)}
+            {fact("Location", rec.location ? <span translate="no">{rec.location}</span> : null)}
+            {fact("Posting", link(rec.url, rec.url_label || undefined))}
+          </> : null}
+        </dl>
+        {e.kind === "task" && rec.description ? <section className="step-view-part"><h3>Description</h3><RichView className="tl-rich step-view-text" value={rec.description} /></section> : null}
+      </div>
+      <div className="al-dialog__actions">
+        <button className="al-button" type="button" onClick={closeModal}>Close</button>
+        {eventActions(e, e.kind === "task" ? <a className="al-button" href={`/tasks${e.process_id ? `?for=${e.process_id}` : ""}`}><span>Open in Tasks</span></a> : null)}
+      </div>
+    </div>
+  );
+}
+
 /** What an event's for, after its title: its company and role (a general task has neither). */
 const eventFor = (e: Row) => (e.company ? ` — ${e.company}${e.role ? `, ${e.role}` : ""}` : "");
 /** Its company's logo, if it has a company. */
@@ -241,7 +392,7 @@ function MonthGrid({ from, to, month, events, weekends }: { from: Date; to: Date
               const { time, late } = eventLabel(e);
               const outcome = stepOutcome(e);
               return (
-                <a key={i} className={`ev ${eventClass(e, late)}`} href={eventHref(e)} title={`${e.title}${eventFor(e)}${outcome ? ` (${outcome})` : ""}`}>
+                <a key={i} className={`ev ${eventClass(e, late)}`} href={eventHref(e)} onClick={(ev) => onEventClick(ev, e)} title={`${e.title}${eventFor(e)}${outcome ? ` (${outcome})` : ""}`}>
                   {eventLogo(e, 14)}
                   {time ? <span className="ev-time">{time}</span> : null}<span className="ev-text">{e.company ? `${e.company} · ${e.title}` : e.title}</span>
                 </a>
@@ -302,7 +453,7 @@ function TimeGrid({ days, events, name }: { days: Date[]; events: Row[]; name: s
     const { time, late } = eventLabel(e);
     const outcome = stepOutcome(e);
     return (
-      <a key={key} className={`ev ev-block ${eventClass(e, late)}`} href={eventHref(e)} style={style} title={`${e.title}${eventFor(e)}${outcome ? ` (${outcome})` : ""}`}>
+      <a key={key} className={`ev ev-block ${eventClass(e, late)}`} href={eventHref(e)} onClick={(ev) => onEventClick(ev, e)} style={style} title={`${e.title}${eventFor(e)}${outcome ? ` (${outcome})` : ""}`}>
         {/* The time and title on one line, so an hour holds the company too. */}
         <span className="ev-line">{time ? <span className="ev-time">{time}</span> : null}
           <span className="ev-title" translate="no">{e.title}{outcome ? <span className="ev-outcome">{` · ${outcome}`}</span> : null}</span></span>
@@ -397,7 +548,6 @@ function TimeGrid({ days, events, name }: { days: Date[]; events: Row[]; name: s
 
 function Agenda({ events }: { events: Row[] }) {
   if (!events.length) return <EmptyState title="Nothing this month" text="Nothing matches these filters: try another month, or other filters." />;
-  const kindLabel = (k: string) => ({ step: "Interview", next: "Next action", task: "Task", closes: "Deadline", applied: "Applied", posted: "Posted" } as Record<string, string>)[k] || k;
   const badge = (e: Row) => {
     const outcome = stepOutcome(e);
     if (!outcome) return null;
@@ -423,7 +573,7 @@ function Agenda({ events }: { events: Row[] }) {
                 <li key={i} className={eventClass(e, late)}>
                   <span className="agenda-time">{time || "All day"}</span>
                   <span className="agenda-kind">{kindLabel(e.kind)}</span>
-                  <a className="agenda-what" href={eventHref(e)}><b>{e.title}</b>{badge(e)}</a>
+                  <a className="agenda-what" href={eventHref(e)} onClick={(ev) => onEventClick(ev, e)}><b>{e.title}</b>{badge(e)}</a>
                   <span className="agenda-who">{e.company ? <>{eventLogo(e, 20)}{e.company}</> : <span className="muted">General</span>}{e.role ? <span className="muted">{` — ${e.role}`}</span> : null}
                     {e.stage ? <span className="muted small">{` · ${e.status === "archived" ? "closed at " : ""}${e.stage}`}</span> : null}</span>
                   {late ? <span className="due late">overdue</span> : null}

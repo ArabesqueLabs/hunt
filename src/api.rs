@@ -716,6 +716,16 @@ pub fn serve(
                 let _ = crate::fx::ensure_rate(&pending, &home, false);
             }
         });
+        // Whether a newer hunt is out: now, and every so often.
+        if crate::releases::enabled() {
+            tokio::spawn(async move {
+                let mut tick = tokio::time::interval(crate::releases::EVERY);
+                loop {
+                    tick.tick().await;
+                    let _ = tokio::task::spawn_blocking(crate::releases::check).await;
+                }
+            });
+        }
         let alive = state.clone();
         tokio::spawn(async move {
             let mut tick = tokio::time::interval(std::time::Duration::from_secs(60));
@@ -1483,6 +1493,8 @@ async fn meta(v: Viewer, headers: HeaderMap) -> ApiResult {
         "tag_colors": resource::TAG_COLORS.iter().map(|(v, l)| json!({"value": v, "label": l})).collect::<Vec<_>>(),
         "calendar_kinds": service::CALENDAR_KINDS.iter().map(|(v, l)| json!({"value": v, "label": l})).collect::<Vec<_>>(),
         "version": env!("CARGO_PKG_VERSION"),
+        // A newer release of hunt, if there's one (checked in the background).
+        "newer_version": crate::releases::newer(),
         "clocks": service::CLOCKS.iter().map(|(v, l)| json!({"value": v, "label": l})).collect::<Vec<_>>(),
         "week_starts": service::WEEK_STARTS.iter().map(|(v, l)| json!({"value": v, "label": l})).collect::<Vec<_>>(),
         "weekdays": service::WEEKDAYS.iter().map(|(v, l)| json!({"value": v, "label": l})).collect::<Vec<_>>(),

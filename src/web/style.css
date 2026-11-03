@@ -1185,6 +1185,9 @@ td.row-icons { padding-block: 0.25rem; }
 .sidebar .app-version a { display: inline-flex; align-items: center; gap: 0.3rem; color: inherit; text-decoration: none; }
 .sidebar .app-version a:hover { color: var(--al-color-accent); text-decoration: underline; text-underline-offset: 0.2em; }
 .sidebar .app-version svg { width: 12px; height: 12px; }
+.sidebar .app-version { display: flex; flex-wrap: wrap; align-items: center; gap: var(--al-space-2); }
+.sidebar .app-version a.app-update { display: inline-flex; color: var(--al-color-info, inherit); text-decoration: none; }
+.sidebar .app-version a.app-update:hover { text-decoration: underline; text-underline-offset: 0.2em; }
 
 /* ---- lanes: a stage's column divided by outcome ------------------------------------- */
 .column.has-lanes .cards.unlaned.empty { min-height: 0.25rem; padding: 0; }
@@ -1635,6 +1638,10 @@ body:is(.admin-mode, .settings-mode) :is(.app-nav, #cycle-box) { display: none; 
 .composer-foot { display: flex; flex-wrap: wrap; gap: var(--al-space-2) var(--al-space-3); align-items: center; }
 .tl-serif { font-family: var(--al-font-serif); white-space: pre-line; }
 .tl-sub { font-size: var(--al-text-sm); color: var(--al-color-text-muted); }
+/* Its format, and beside it (at the line's end) the way to its day in the calendar. */
+.step-format { display: flex; flex-wrap: wrap; align-items: center; gap: var(--al-space-1) var(--al-space-3); }
+.step-format-cal { display: inline-flex; align-items: center; gap: var(--al-space-1); margin-inline-start: auto; }
+.step-format-cal .al-icon, .step-format-cal svg { inline-size: 1em; block-size: 1em; }
 .tl-prep, .tl-note { font-size: var(--al-text-sm); font-family: var(--al-font-serif); padding-inline-start: var(--al-space-3); border-inline-start: 2px solid var(--al-color-line); margin-block-start: var(--al-space-1); white-space: pre-line; }
 /* The timeline, the system's, made compact: smaller markers, closer
    entries, and each entry's buttons and time on its title's line. The
@@ -2149,6 +2156,8 @@ tr.loading td { padding-block: var(--al-space-3); }
 .step-view-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--al-space-2) var(--al-space-3); }
 .step-view-head { padding-block-end: var(--al-space-3); border-block-end: 1px solid var(--al-color-line); }
 .step-view-head .al-dialog__title { margin: 0; padding: 0; border: 0; }
+.step-view-about { display: flex; flex-wrap: wrap; align-items: center; gap: var(--al-space-2); padding-block-start: var(--al-space-2); font-size: var(--al-text-sm); color: var(--al-color-text-muted); }
+.step-view-about b { color: var(--al-color-text); font-weight: var(--al-weight-medium); }
 .step-view-body { display: flex; flex-direction: column; gap: var(--al-space-4); }
 .step-view-when { display: flex; flex-wrap: wrap; align-items: center; gap: var(--al-space-2); font-size: var(--al-text-base); }
 .step-view-actions { display: inline-flex; gap: var(--al-space-1-5); margin-inline-start: auto; }

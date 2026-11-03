@@ -2491,6 +2491,8 @@ const ar: Catalog = {
     ["At {x}", "في {x}"],
     ["{x} {n} ({n2}%)", "{x} {n} ({n2}٪)"],
     ["Release notes for hunt {v}", "ملاحظات إصدار hunt {v}"],
+    ["{v} available", "{v} متاح"],
+    ["hunt {v} is out: see what's new", "صدر hunt {v}: اطّلع على الجديد"],
     ["{n} cards", "{n} بطاقات"],
     ["New {x}", "{x} جديد"],
     // ---- cycles, prep, reminders, links ----

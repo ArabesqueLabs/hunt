@@ -22,12 +22,23 @@ month, week, day or as an agenda, searched by company, role or title.
 - Interviews already held are quieter, and cancelled ones are left out.
 - A deadline shows until you apply.
 - A key under the calendar says what its colours mean.
+- Everything opens in its own view, over the calendar, under its company
+  and role, with "Open application" to go to it:
+  - an interview: when, the format, with whom, where, its links, what to
+    prepare and how it went;
+  - a next action: when, and whether it's overdue;
+  - a task: its kind, status, priority, how long it takes, its interview,
+    link and description, and "Open in Tasks";
+  - a deadline: how long until it, and the posting.
+- On an application's page, "Open in calendar" beside an interview's
+  format opens it here, on its day.
 
 ## In the address
 
 The view and the weekend choice are in the address
 (`/calendar?view=week&weekends=hide`), so Back undoes a change, and
-they're remembered.
+they're remembered. So is what's open in its view
+(`/calendar?date=2026-11-03&event=step-12`), so it can be bookmarked.
 
 ## Coming up
 

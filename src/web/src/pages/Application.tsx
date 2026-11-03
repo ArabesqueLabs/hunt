@@ -38,7 +38,7 @@ import { Field, Icon, Input, Label, LoadingPage, Logo, Notice, Optional, Photo, 
 import { acceptOffer, atOffer, isAcceptedLane } from "./Celebrate";
 import { PRIORITY_ORDER, isDone, openPrepAdding } from "./Prep";
 import { PayPanel } from "./TakeHome";
-import { CallButtons, JoinButton, StepForm, StepView, WhenText, addressOf, isUrl, linkHref, linkTitle, minutesText, PlatformMark, type StepLink } from "./Interview";
+import { CallButtons, JoinButton, StepForm, StepView, WhenText, stepCalendarHref, addressOf, isUrl, linkHref, linkTitle, minutesText, PlatformMark, type StepLink } from "./Interview";
 
 // ---- formatting text that was pasted in ---------------------------------------
 
@@ -1524,7 +1524,12 @@ function Application({ id, s, editing, readLink }: { id: number; s: Loaded; edit
           {stepLinks(x, coming)}
           {coming ? stepPrep(x) : null}
           {stepNote(x)}
-          {x.format ? <span className="tl-sub step-format"><span>Format:</span> <span>{x.format}</span></span> : null}
+          {x.format || stepCalendarHref(x) ? (
+            <span className="tl-sub step-format">
+              {x.format ? <span><span>Format:</span> <span>{x.format}</span></span> : null}
+              {stepCalendarHref(x) ? <a className="step-format-cal" href={stepCalendarHref(x)!}><Icon name="cal" /><span>Open in calendar</span></a> : null}
+            </span>
+          ) : null}
         </article>
       );
     };

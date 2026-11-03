@@ -20,6 +20,8 @@ services:
       HUNT_ADMIN_PASSWORD: ${HUNT_ADMIN_PASSWORD:-}
       # Empty: SQLite, in the volume.
       HUNT_DB: ${HUNT_DB:-/data/hunt.db}
+      # `off`: don't ask GitHub whether a newer hunt is out.
+      HUNT_UPDATE_CHECK: ${HUNT_UPDATE_CHECK:-}
     restart: unless-stopped
 volumes:
   # The same volume `docker run -v hunt-data:/data` uses.

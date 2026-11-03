@@ -128,6 +128,8 @@ export function Sidebar({ page, section, account }: { page: string; section: str
           {/* The version, linked to its release on GitHub (tagged v0.2.0 …). */}
           <p className="app-version" id="version">
             {M?.version ? <a href={`https://github.com/ArabesqueLabs/hunt/releases/tag/v${M.version}`} target="_blank" rel="noreferrer" title={`Release notes for hunt ${M.version}`}>{`hunt ${M.version}`}<Icon name="external" /></a> : null}
+            {/* A newer release, when there's one: to its notes. */}
+            {M?.newer_version ? <a className="al-badge al-badge--info app-update" href={`https://github.com/ArabesqueLabs/hunt/releases/tag/v${M.newer_version}`} target="_blank" rel="noreferrer" title={`hunt ${M.newer_version} is out: see what's new`}>{`${M.newer_version} available`}</a> : null}
           </p>
         </div>
       </div>
