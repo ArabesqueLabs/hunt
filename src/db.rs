@@ -21,7 +21,7 @@ const SCHEMA_POSTGRES: &str = include_str!("schema_postgres.sql");
 const SCHEMA_MYSQL: &str = include_str!("schema_mysql.sql");
 /// "hunt" in ASCII: marks a database as ours.
 const APP_ID: i64 = 0x6875_6e74;
-pub const SCHEMA_VERSION: i64 = 32;
+pub const SCHEMA_VERSION: i64 = 33;
 /// The version schema*.sql describe: a new database is made at it, then
 /// brought up to [`SCHEMA_VERSION`] by the migrations after it.
 const SCHEMA_BASE: i64 = 14;
@@ -60,6 +60,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("migrate_v30.sql"),
     include_str!("migrate_v31.sql"),
     include_str!("migrate_v32.sql"),
+    include_str!("migrate_v33.sql"),
 ];
 /// Upgrades PostgreSQL and MySQL databases can take: (version reached, its
 /// SQL for PostgreSQL, for MySQL). They start at version 8.
@@ -183,6 +184,11 @@ const SERVER_MIGRATIONS: &[(i64, &str, &str)] = &[
         32,
         include_str!("migrate_v32_postgres.sql"),
         include_str!("migrate_v32_mysql.sql"),
+    ),
+    (
+        33,
+        include_str!("migrate_v33_postgres.sql"),
+        include_str!("migrate_v33_mysql.sql"),
     ),
 ];
 
@@ -661,6 +667,7 @@ impl Db {
         }
         if r.entity == "step" {
             self.attach_step_people(&mut rows)?;
+            self.attach_step_links(&mut rows)?;
         }
         Ok(rows)
     }
@@ -694,6 +701,40 @@ impl Db {
             let id = rec.get("id").and_then(Value::as_i64).unwrap_or(0);
             rec.insert(
                 "people".into(),
+                Value::Array(by_step.remove(&id).unwrap_or_default()),
+            );
+        }
+        Ok(())
+    }
+
+    /// Give each step its links: `links`, as `{label, url}`, in their order.
+    fn attach_step_links(&self, rows: &mut [Record]) -> Result<()> {
+        let ids: Vec<String> = rows
+            .iter()
+            .filter_map(|r| r.get("id").and_then(Value::as_i64))
+            .map(|id| id.to_string())
+            .collect();
+        let mut by_step: std::collections::HashMap<i64, Vec<Value>> =
+            std::collections::HashMap::new();
+        if !ids.is_empty() {
+            for r in self.query(
+                &format!(
+                    "SELECT step_id, label, url FROM step_link WHERE step_id IN ({}) ORDER BY position, id",
+                    ids.join(", ")
+                ),
+                &[],
+            )? {
+                let step = r["step_id"].as_i64().unwrap_or(0);
+                by_step
+                    .entry(step)
+                    .or_default()
+                    .push(json!({ "label": r["label"], "url": r["url"] }));
+            }
+        }
+        for rec in rows {
+            let id = rec.get("id").and_then(Value::as_i64).unwrap_or(0);
+            rec.insert(
+                "links".into(),
                 Value::Array(by_step.remove(&id).unwrap_or_default()),
             );
         }
@@ -987,7 +1028,7 @@ impl Db {
                 "id" | "created_at" | "updated_at" | "position"
                     // Derived, not set: a company's logo has its own endpoint,
                     // and GBP figures follow the pay.
-                    | "tags" | "people" | "mail_label" | "emails" | "logo" | "logo_type" | "photo" | "photo_type" | "salary_min_gbp" | "salary_max_gbp" | "gbp_rate" | "gbp_rate_on"
+                    | "tags" | "people" | "links" | "mail_label" | "emails" | "logo" | "logo_type" | "photo" | "photo_type" | "salary_min_gbp" | "salary_max_gbp" | "gbp_rate" | "gbp_rate_on"
                     // A daily prep item's streak follows from ticking it off.
                     | "streak" | "last_done_on"
             ) {

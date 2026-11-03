@@ -34,6 +34,7 @@ pub const OWNED: &[&str] = &[
     "step",
     "note",
     "step_person",
+    "step_link",
     "document",
     "version",
     "process_file",

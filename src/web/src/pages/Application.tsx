@@ -10,7 +10,7 @@
 // they're typed, and Save sends what differs from how it was.
 
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { attempt, del, get, patch, post, put } from "../lib/api";
+import { attempt, del, get, patch, post } from "../lib/api";
 import { cycleById, loadCycles, runningCycles } from "../lib/cycles";
 import { LOC, fmtDay, fmtSize, fmtStamp, HOME, isOverdue, isoToday, parseLocal, zonedNow } from "../lib/format";
 import { R, closedWhy, listOf, optionLabel } from "../lib/meta";
@@ -31,11 +31,14 @@ import { looksLikeProfile, openImport, personFromProfile, POSTING_FIELDS, postin
 import { warnIfSamePosting } from "../components/NewApplication";
 import { RichText, RichView } from "../components/RichText";
 import { isRich, toPlain } from "../lib/rich";
-import { TagEditor } from "../components/tags";
+import { store, stored } from "../lib/storage";
+import { TagChip, TagEditor } from "../components/tags";
+import { tagNames } from "../lib/tags";
 import { Field, Icon, Input, Label, LoadingPage, Logo, Notice, Optional, Photo, Select, Table, TextArea, dotted } from "../components/ui";
 import { acceptOffer, atOffer, isAcceptedLane } from "./Celebrate";
 import { PRIORITY_ORDER, isDone, openPrepAdding } from "./Prep";
 import { PayPanel } from "./TakeHome";
+import { CallButtons, JoinButton, StepForm, StepView, WhenText, addressOf, isUrl, linkHref, linkTitle, minutesText, PlatformMark, type StepLink } from "./Interview";
 
 // ---- formatting text that was pasted in ---------------------------------------
 
@@ -293,7 +296,6 @@ const APP_KEYS = ["company_id", "title", "reference", "url", "location", "work_m
 const COMPANY_KEYS = ["website", "industry", "size", "headquarters", "description"];
 const PROCESS_KEYS = ["stage_id", "applied_on"];
 const POSTING_KEYS = ["url", "description"];
-const STEP_KEYS = ["title", "at", "status", "format", "minutes", "place", "prep_note", "attendees", "note"];
 const EVENT_KEYS = ["body", "happened_on"];
 
 interface Loaded {
@@ -327,7 +329,7 @@ async function loadApplication(id: number, processId: number | null): Promise<Lo
 
 interface Draft {
   app: Row; company: Row; companyName: string; companyLogo: string | null;
-  postings: Row[]; process: Row | null; steps: Row[]; events: Row[];
+  postings: Row[]; process: Row | null; events: Row[];
 }
 
 /** What a section's editing starts from: the editable parts, copied. */
@@ -339,7 +341,6 @@ function draftOf(s: Loaded): Draft {
     companyLogo: s.company.logo,
     postings: s.postings.map((p) => ({ id: p.id, ...pickKeys(p, POSTING_KEYS) })),
     process: s.process ? pickKeys(s.process, PROCESS_KEYS) : null,
-    steps: (s.detail?.steps || []).map((x: Row) => ({ id: x.id, ...pickKeys(x, STEP_KEYS), people: (x.people || []).map((p: Row) => ({ id: p.id, name: p.name })) })),
     events: (s.detail?.notes || []).map((x: Row) => ({ id: x.id, ...pickKeys(x, EVENT_KEYS), happened_on: x.happened_on || x.created_at.slice(0, 10) })),
   };
 }
@@ -415,7 +416,7 @@ function Application({ id, s, editing, readLink }: { id: number; s: Loaded; edit
     // The section being edited, if one: each is edited on its own.
     section: (editing ? "role" : null) as string | null,
     // On the timeline, the one interview or note being edited.
-    item: null as { kind: "step" | "event"; id: number } | null,
+    item: null as { kind: "event"; id: number } | null,
     orig: draftOf(s),
     draft: null as unknown as Draft,
     // What's open: add forms, sections edited as they're changed (people,
@@ -568,8 +569,8 @@ function Application({ id, s, editing, readLink }: { id: number; s: Loaded; edit
   /** A timeline entry's other buttons: Edit, Move, Delete. */
   const itemMenu = (what: "notes" | "steps", x: Row, name: string) => (ended() ? null : (
     <MenuButton className="al-button al-button--sm al-button--quiet" label={`More for ${name}`} items={(close) => <>
-      <MenuItem close={close} onClick={() => editSection("timeline", `.app-timeline [data-${what === "steps" ? "step" : "event"}-id="${x.id}"] :is(input, .rich)`,
-        { kind: what === "steps" ? "step" : "event", id: x.id })}>Edit</MenuItem>
+      <MenuItem close={close} onClick={() => (what === "steps" ? editStep(x) : editSection("timeline", `.app-timeline [data-event-id="${x.id}"] :is(input, .rich)`,
+        { kind: "event", id: x.id }))}>Edit</MenuItem>
       <MenuItem close={close} onClick={() => transfer(what, x.id, what === "steps" ? `“${x.title}”` : "this note")}>Move to another application…</MenuItem>
       <hr className="al-menu__separator" />
       <MenuItem close={close} danger onClick={() => removeItem(what, x)}>Delete</MenuItem>
@@ -806,15 +807,13 @@ function Application({ id, s, editing, readLink }: { id: number; s: Loaded; edit
         : <p key="none" className="muted small">{postingLinks().length ? "No text yet: Refresh reads it from the posting." : "Nothing yet: add the posting's link, or write it in."}</p>);
   }
 
-  // Like a posting: its first few sentences, and Read more for the rest;
-  // a label, if any, leads in on the same line.
-  function readMore(key: string, text: string, className: string, sentences = 3, label?: ReactNode) {
+  // Like a posting: its first few sentences, and Read more for the rest.
+  function readMore(key: string, text: string, className: string, sentences = 3) {
     const { lead, more } = postingLead(isRich(text) ? toPlain(text) : text, sentences);
     const open = !more || opened.has(`more-${key}`);
-    const body = open ? <RichView className={className} value={text} /> : <p className={className}>{linkify(lead)}</p>;
     return (
       <div key={key} className="app-read-more">
-        {label ? <div>{label} {body}</div> : body}
+        {open ? <RichView className={className} value={text} /> : <p className={className}>{linkify(lead)}</p>}
         {more ? <button className="al-link app-more" type="button" aria-expanded={String(open) as "true" | "false"} onClick={() => toggle(`more-${key}`)}>{open ? "Show less" : "Read more"}</button> : null}
       </div>
     );
@@ -895,7 +894,7 @@ function Application({ id, s, editing, readLink }: { id: number; s: Loaded; edit
   async function refreshDetail() {
     if (!s.process) return;
     s.detail = await get(`processes/${s.process.id}/detail`);
-    Object.assign(st.orig, { steps: draftOf(s).steps, events: draftOf(s).events });
+    Object.assign(st.orig, { events: draftOf(s).events });
     if (!st.section) st.draft = structuredClone(st.orig);
     render();
   }
@@ -1044,20 +1043,6 @@ function Application({ id, s, editing, readLink }: { id: number; s: Loaded; edit
         const pfields = changed(d.process!, o.process!, ["applied_on"]);
         if (Object.keys(pfields).length) {
           Object.assign(o.process!, pickKeys(await patch(`processes/${pid}`, pfields), PROCESS_KEYS));
-        }
-        const before = new Map(o.steps.map((x) => [x.id, (x.people || []).map((p: Row) => p.id).sort().join(",")]));
-        await saveList("steps", d.steps, o.steps, STEP_KEYS, (x) => !x.title, { process_id: pid });
-        // Who each step is with: new names become people, at this company.
-        for (const x of d.steps) {
-          if (x.id == null) continue;
-          for (const p of x.people) {
-            if (p.id == null) p.id = (await post("people", { name: p.name, company_id: d.app.company_id })).id;
-          }
-          const ids = x.people.map((p: Row) => p.id);
-          if (ids.slice().sort().join(",") !== (before.get(x.id) || "")) {
-            await put(`steps/${x.id}/people`, { person_ids: ids });
-            before.set(x.id, ids.slice().sort().join(","));
-          }
         }
         await saveList("notes", d.events, o.events, EVENT_KEYS, (x) => !x.body, { process_id: pid });
       }
@@ -1297,14 +1282,6 @@ function Application({ id, s, editing, readLink }: { id: number; s: Loaded; edit
   }
 
   const steps = (): Row[] => s.detail?.steps || [];
-  const isUrl = (v: string | null | undefined) => /^(https?:\/\/|[\w-]+\.[\w.-]+\/)/i.test(v || "");
-  const hrefOf = (v: string) => (/^https?:/i.test(v) ? v : `https://${v}`);
-  /** A step's length: as Admin's list names it, or in minutes and hours. */
-  const minutesText = (n: number | null | undefined) => {
-    if (!n) return null;
-    const named = listOf("step_length").find(([v]) => Number(v) === Number(n));
-    return named ? named[1] : n % 60 === 0 && n >= 60 ? `${n / 60} hr` : `${n} min`;
-  };
   const withWhom = (x: Row) => (x.people?.length || x.attendees
     ? <span><span>with</span>{" "}<span translate="no">{x.people?.length ? x.people.map((pe: Row) => pe.name).join(", ") : x.attendees}</span></span> : null);
 
@@ -1342,7 +1319,7 @@ function Application({ id, s, editing, readLink }: { id: number; s: Loaded; edit
   const logOutcome = (x: Row, gone: boolean) => {
     const statuses = optionsOf("steps", "status");
     return (
-      <MenuButton className={`al-button al-button--sm${gone ? "" : " al-button--quiet"}`} items={(close) => <>
+      <MenuButton className={`al-button al-button--sm step-outcome${gone ? " al-button--primary" : ""}`} items={(close) => <>
         <div className="al-menu__label">How did it go?</div>
         {statuses.filter(([v]) => v !== "scheduled").map(([v, l]) => (
           <MenuItem key={v} close={close} onClick={async () => {
@@ -1352,15 +1329,31 @@ function Application({ id, s, editing, readLink }: { id: number; s: Loaded; edit
             }
           }}>{l}</MenuItem>
         ))}
-      </>}><span>Log outcome</span></MenuButton>
+      </>}><span>Outcome</span><Icon name="chevron" /></MenuButton>
     );
   };
-  /** An interview's link to join by, while it's still to come. */
-  const joinButton = (x: Row) => (isUrl(x.place) && !isOverdue(x.at)
-    ? <a className="al-button al-button--sm" href={hrefOf(x.place)} target="_blank" rel="noreferrer" title={x.place}>Join</a> : null);
-  /** Where an interview is, what to prepare, and how it went: long, the first sentences, and Read more. */
-  const stepPlace = (x: Row) => (x.place ? (isUrl(x.place) ? <a className="al-link tl-sub" href={hrefOf(x.place)} target="_blank" rel="noreferrer">{x.place}</a> : <span className="tl-sub">{x.place}</span>) : null);
-  const stepPrep = (x: Row) => (x.prep_note ? <div className="tl-prep">{readMore(`step-prep-${x.id}`, x.prep_note, "tl-rich", 2, <span className="tl-prep-label">Prepare:</span>)}</div> : null);
+  /**
+   * An interview's other links, each its logo and name; an address to go
+   * to, written out (its link to join by, phone and map are beside its
+   * title).
+   */
+  const stepLinks = (x: Row, withPlace = true) => {
+    const address = withPlace ? addressOf(x) : null;
+    // A maps link is the map icon beside Join, not written out.
+    const written = address && !isUrl(address) ? address : null;
+    const where = written ? <span className="tl-sub step-address" translate="no">{written}</span> : null;
+    const links: StepLink[] = x.links || [];
+    return where || links.length ? <>
+      {where}
+      {links.length ? <div className="step-links">
+        {links.map((l, i) => (
+          <a key={i} className="step-link" href={linkHref(l.url)} target="_blank" rel="noreferrer" title={l.url}>
+            <PlatformMark url={l.url} /><span translate="no">{linkTitle(l)}</span></a>
+        ))}
+      </div> : null}
+    </> : null;
+  };
+  const stepPrep = (x: Row) => (x.prep_note ? <div className="tl-prep"><Clamped key={`step-prep-${x.id}`} value={x.prep_note} className="tl-rich" /></div> : null);
   const stepNote = (x: Row) => (x.note ? <div className="tl-note">{readMore(`step-note-${x.id}`, x.note, "tl-rich", 2)}</div> : null);
   const stepTone = (x: Row) => (x.status === "failed" ? "danger" : ["passed", "completed", "done"].includes(x.status) ? "success" : undefined);
 
@@ -1411,10 +1404,10 @@ function Application({ id, s, editing, readLink }: { id: number; s: Loaded; edit
       return entry(`s${x.id}`, {
         cls: "app-tl-step", tone: "accent", marker: <Icon name="cal" />, title: <span translate="no">{x.title}</span>,
         time: x.at ? fmtStamp(x.at) : "Date not set", datetime: x.at, late: gone,
-        tools: ended() || compact ? null : <>{joinButton(x)}{logOutcome(x, gone)}{itemMenu("steps", x, x.title)}</>,
-        body: sub.length || x.place || x.prep_note ? <>
+        tools: ended() || compact ? null : <><JoinButton step={x} /><CallButtons step={x} />{logOutcome(x, gone)}{itemMenu("steps", x, x.title)}</>,
+        body: sub.length || addressOf(x) || x.phone || x.links?.length || x.prep_note ? <>
           {sub.length ? <span className="tl-sub">{sub}</span> : null}
-          {stepPlace(x)}
+          {stepLinks(x)}
           {stepPrep(x)}
         </> : null,
       });
@@ -1480,32 +1473,85 @@ function Application({ id, s, editing, readLink }: { id: number; s: Loaded; edit
     return [...past.map((c) => c.node), ...coming.map((c) => c.node), ...future];
   }
 
-  /** The interviews, each a card: those to come first, the soonest first; then those that happened, the latest first. */
+  /** An interview, whole, in a dialog; Edit turns it into its form, and Back returns. */
+  function openStep(x: Row) {
+    const prep = (s.prep || []).filter((it: Row) => it.step_id === x.id);
+    openModal(<StepView step={x} prep={prep} canEdit={!ended()} onEdit={() => editStep(x, () => openStep(x))} />);
+  }
+  /** An interview's form, in the dialog: `back` to go back to its details, without, Cancel closes it. */
+  function editStep(x: Row, back?: () => void) {
+    openModal(<StepForm p={s.process!} step={x} companyId={s.app.company_id} saving={saving} cancel={back}
+      done={async () => {
+        closeModal();
+        await refreshDetail();
+        if (back) { const fresh = steps().find((y) => y.id === x.id); if (fresh) openStep(fresh); }
+      }} />);
+  }
+
+  /**
+   * The interviews, each a card: those to come first, the soonest first;
+   * then those that happened, the latest first. Each list folds, by its
+   * heading's button, to a line a card: its title, when, and how it went;
+   * this browser remembers which are folded.
+   */
   function stepCards() {
     const statuses = optionsOf("steps", "status");
     const upcoming = steps().filter((x) => x.status === "scheduled").sort((a, b) => (a.at || "9").localeCompare(b.at || "9"));
     const done = steps().filter((x) => x.status !== "scheduled").sort((a, b) => (b.at || b.created_at).localeCompare(a.at || a.created_at));
+    const folded = foldedSteps();
+    const outcome = (x: Row) => {
+      const tone = stepTone(x);
+      return <span className={`al-badge${tone ? ` al-badge--${tone}` : ""}`}>{optionLabel(statuses, x.status)}</span>;
+    };
+    // The title opens it whole; its second line says when, start to end, and how long.
+    const title = (x: Row) => (
+      <h4><button className="app-step-card-title" type="button" aria-haspopup="dialog" onClick={() => openStep(x)} translate="no">{x.title}</button></h4>
+    );
     const card = (x: Row) => {
       const coming = x.status === "scheduled";
       const gone = coming && isOverdue(x.at);
-      const sub = dotted([x.format, minutesText(x.minutes), withWhom(x)]);
-      const tone = stepTone(x);
+      const sub = dotted([withWhom(x)]);
       return (
         <article key={x.id} className={`al-card app-step-card is-${x.status}`} data-step-id={x.id}>
           <div className="app-step-card-head">
-            <h4 translate="no">{x.title}</h4>
-            {ended() ? null : <span className="app-tl-tools">{coming ? <>{joinButton(x)}{logOutcome(x, gone)}</> : null}{itemMenu("steps", x, x.title)}</span>}
+            {title(x)}
+            {coming ? null : outcome(x)}
+            {ended() ? null : <span className="app-tl-tools">{coming ? <><JoinButton step={x} /><CallButtons step={x} />{logOutcome(x, gone)}</> : null}{itemMenu("steps", x, x.title)}</span>}
           </div>
-          <div className="app-step-card-when">
-            {coming ? <Icon name="cal" /> : <span className={`al-badge${tone ? ` al-badge--${tone}` : ""}`}>{optionLabel(statuses, x.status)}</span>}
-            <span className={gone ? "is-late" : undefined}>{x.at ? <time dateTime={x.at}>{fmtStamp(x.at)}</time> : coming ? "Date not set" : "No date"}</span>
-          </div>
+          <div className="app-step-card-when"><Icon name="cal" /><WhenText step={x} fallback={coming ? "Date not set" : "No date"} /></div>
+          {tagNames(x.tags).length ? <div className="step-tag-chips">{tagNames(x.tags).map((t: string) => <TagChip key={t} name={t} />)}</div> : null}
           {sub.length ? <span className="tl-sub">{sub}</span> : null}
-          {coming ? stepPlace(x) : null}
+          {stepLinks(x, coming)}
           {coming ? stepPrep(x) : null}
           {stepNote(x)}
+          {x.format ? <span className="tl-sub step-format"><span>Format:</span> <span>{x.format}</span></span> : null}
         </article>
       );
+    };
+    // Folded, a line: its title, when (if set), and how it went (once it has).
+    const line = (x: Row) => {
+      const coming = x.status === "scheduled";
+      const gone = coming && isOverdue(x.at);
+      return (
+        <article key={x.id} className={`al-card app-step-card is-line is-${x.status}`} data-step-id={x.id}>
+          {title(x)}
+          {x.at ? <time className={`app-step-card-at${gone ? " is-late" : ""}`} dateTime={x.at}>{fmtStamp(x.at)}</time> : null}
+          {coming ? null : outcome(x)}
+        </article>
+      );
+    };
+    const list = (which: "upcoming" | "past", heading: string, rows: Row[]) => {
+      if (!rows.length) return null;
+      const fold = folded.has(which);
+      return <>
+        <div className="app-step-cards-head">
+          <h4 className="app-step-cards-sub" id={`step-cards-${which}`}>{heading}</h4>
+          <button className="al-button al-button--quiet al-button--sm app-step-cards-fold" type="button" aria-expanded={fold ? "false" : "true"}
+            aria-controls={`step-cards-${which}-list`} aria-describedby={`step-cards-${which}`} onClick={() => { foldSteps(which, !fold); render(); }}>
+            <Icon name="chevron" className={fold ? undefined : "is-open"} /><span>{fold ? "Expand" : "Collapse"}</span></button>
+        </div>
+        <div className={`app-step-cards-list${fold ? " is-folded" : ""}`} id={`step-cards-${which}-list`}>{rows.map(fold ? line : card)}</div>
+      </>;
     };
     const add = ended() ? null : (
       <button className="al-button al-button--quiet al-button--sm" type="button" onClick={() => openAdding("step", s, saving, (fresh) => { if (fresh) refreshDetail(); else reload(); })}>
@@ -1513,8 +1559,8 @@ function Application({ id, s, editing, readLink }: { id: number; s: Loaded; edit
     );
     return (
       <section className="app-step-cards" aria-label="Interviews">
-        {upcoming.length ? <><h4 className="app-step-cards-sub">Upcoming Interviews</h4>{upcoming.map(card)}</> : null}
-        {done.length ? <><h4 className="app-step-cards-sub">Past Interviews</h4>{done.map(card)}</> : null}
+        {list("upcoming", "Upcoming Interviews", upcoming)}
+        {list("past", "Past Interviews", done)}
         {upcoming.length || done.length ? null : <p className="muted small">No interviews yet.</p>}
         {add ? <div className="app-panel-tools">{add}</div> : null}
       </section>
@@ -1523,75 +1569,25 @@ function Application({ id, s, editing, readLink }: { id: number; s: Loaded; edit
 
   /** An interview or note on the timeline, edited on its own, in a dialog. */
   function itemForm() {
-    const statuses = optionsOf("steps", "status");
-    const lengths = listOf("step_length");
     const it = st.item!;
-    const i = (it.kind === "step" ? draft.steps : draft.events).findIndex((x) => x.id === it.id);
+    const i = draft.events.findIndex((x) => x.id === it.id);
     if (i < 0) return null;
-    const stepRow = (x: Row) => (
-      <li key={`s${x.id}`} className={`is-${x.status}`} data-step={i} data-step-id={x.id}>
-        <span className="dot" aria-hidden="true" />
-        <div className="app-step-edit">
-          {input(x, "title", { placeholder: "A step, e.g. Recruiter screen", "aria-label": "Step" })}
-          <div className="app-grid app-step-fields">
-            {labeled("When", input(x, "at", { type: "datetime-local", step: 900, "aria-label": "When" }))}
-            {labeled("Status", select(x, "status", statuses, { empty: null, label: "Status" }))}
-            {labeled("Format", input(x, "format", { placeholder: "e.g. Video call", "aria-label": "Format", list: "app-step-formats" }))}
-            {labeled("Length", select(x, "minutes", lengths, { label: "Length" }))}
-            {labeled("Joining link or address", input(x, "place", { placeholder: "meet.example/… or an office address", "aria-label": "Joining link or address" }), true)}
-          </div>
-          {stepPeople(x, i)}
-          <div className="app-field"><span>What to prepare</span>{rich(x, "prep_note", "What to prepare", "Topics they mentioned, things to bring", 2)}</div>
-          {labeled("Notes", input(x, "note", { multiline: true, rows: 2, placeholder: "Questions asked, feedback…", "aria-label": "Notes" }))}
-        </div>
-      </li>
-    );
-    const eventRow = (x: Row) => (
-      <li key={`e${x.id}`} className="is-event" data-event-id={x.id}>
-        <span className="dot" aria-hidden="true" />
-        <div className="app-event-edit">
-          {input(x, "happened_on", { type: "date", "aria-label": "When" })}
-          {rich(x, "body", "Note", "What happened", 4)}
-        </div>
-      </li>
-    );
-    const step = it.kind === "step";
+    const x = draft.events[i];
     return (
-      <PageDialog key={`item-${st.formKey}`} title={step ? "Edit the interview" : "Edit the note"} dismiss={() => editSection(null)} actions={<>
+      <PageDialog key={`item-${st.formKey}`} title="Edit the note" dismiss={() => editSection(null)} actions={<>
         <button className="al-button" type="button" onClick={() => editSection(null)}>Cancel</button>
         <button className="al-button al-button--primary" type="button" aria-busy={st.saving ? "true" : undefined} onClick={save}>Save</button>
       </>}>
-        <ol className="app-steps app-timeline">{step ? stepRow(draft.steps[i]) : eventRow(draft.events[i])}</ol>
-        {step ? <datalist id="app-step-formats">{listOf("step_format").map(([v]) => <option key={v} value={v} />)}</datalist> : null}
+        <ol className="app-steps app-timeline">
+          <li key={`e${x.id}`} className="is-event" data-event-id={x.id}>
+            <span className="dot" aria-hidden="true" />
+            <div className="app-event-edit">
+              {input(x, "happened_on", { type: "date", "aria-label": "When" })}
+              {rich(x, "body", "Note", "What happened", 4)}
+            </div>
+          </li>
+        </ol>
       </PageDialog>
-    );
-  }
-
-  /** Who a step is with: people from People, or new names, made on Save. */
-  function stepPeople(x: Row, i: number) {
-    const refocus = () => focus(`.app-timeline [data-step="${i}"] .app-with input`);
-    const people = refSource("people");
-    return (
-      <div className="app-with">
-        <span className="app-with-label">With</span>
-        {x.people.map((p: Row, j: number) => (
-          <span key={`${p.id}-${p.name}`} className="al-tag" title={p.id == null ? "Added to People when you save" : undefined}>{p.name}{p.id == null ? " (new)" : ""}
-            <button className="al-tag__remove" type="button" aria-label={`Remove ${p.name}`} onClick={() => { x.people.splice(j, 1); render(); refocus(); }}>×</button></span>
-        ))}
-        <Combo key={x.people.length} label="With whom" placeholder={x.people.length ? "Add someone else…" : "With whom: someone from People, or a new name"} allowCreate
-          source={async (q) => (await people(q)).filter((it) => !x.people.some((p: Row) => p.id === it.value))}
-          onPick={(it) => {
-            if (it.create) {
-              if (!x.people.some((p: Row) => p.id == null && p.name.toLowerCase() === it.value.toLowerCase())) x.people.push({ id: null, name: it.value });
-            } else {
-              x.people.push({ id: it.value, name: it.label.replace(/ \([^)]*\)$/, "") });
-            }
-            render();
-            refocus();
-          }} />
-        {x.attendees ? <p className="muted small app-with-before">{`Written before: “${x.attendees}” `}
-          <button className="al-button al-button--sm al-button--quiet" type="button" onClick={() => { x.attendees = null; render(); }}>Clear</button></p> : null}
-      </div>
     );
   }
 
@@ -1988,6 +1984,40 @@ function EmailMessage({ m, who, load, onMove, onRemoved }: { m: Row; who: string
   );
 }
 
+// ---- the interview cards' lists, folded or not, kept in this browser ----
+
+/** Which of the interview lists are folded to a line a card: "upcoming", "past". */
+const foldedSteps = (): Set<string> => {
+  try { return new Set(JSON.parse(stored("interviewFolds") || "[]")); } catch { return new Set(); }
+};
+const foldSteps = (which: string, fold: boolean) => {
+  const now = foldedSteps();
+  if (fold) now.add(which); else now.delete(which);
+  store("interviewFolds", JSON.stringify([...now]));
+};
+
+/** Rich text cut to its first few lines, and Read more for the rest, in place; none when it all fits. */
+function Clamped({ value, className, lines = 3 }: { value: string; className?: string; lines?: number }) {
+  const box = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const [over, setOver] = useState(false);
+  useLayoutEffect(() => {
+    const el = box.current;
+    if (!el || open) return;
+    const check = () => setOver(el.scrollHeight > el.clientHeight + 1);
+    check();
+    const watch = new ResizeObserver(check);
+    watch.observe(el);
+    return () => watch.disconnect();
+  }, [value, open]);
+  return (
+    <div className="app-read-more">
+      <div ref={box} className={open ? undefined : "app-clamp"} style={{ WebkitLineClamp: lines }}><RichView className={className} value={value} /></div>
+      {over || open ? <button className="al-link app-more" type="button" aria-expanded={open ? "true" : "false"} onClick={() => setOpen(!open)}>{open ? "Show less" : "Read more"}</button> : null}
+    </div>
+  );
+}
+
 // ---- adding to the timeline, in a dialog of its own ----------------------------------------
 
 type Saving = <T>(fn: () => Promise<T>) => Promise<T | undefined>;
@@ -1998,7 +2028,7 @@ function openAdding(kind: "note" | "step" | "reminder", s: Loaded, saving: Savin
   const p = s.process!;
   const finish: Done = (fresh) => { closeModal(); done(fresh); };
   openModal(kind === "note" ? <NoteForm p={p} saving={saving} done={finish} />
-    : kind === "step" ? <StepForm p={p} people={s.detail?.people || []} saving={saving} done={finish} />
+    : kind === "step" ? <StepForm p={p} companyId={s.app.company_id} saving={saving} done={() => finish(true)} />
       : <ReminderForm p={p} saving={saving} done={finish} />);
 }
 
@@ -2028,60 +2058,6 @@ function NoteForm({ p, saving, done }: { p: Row; saving: Saving; done: Done }) {
         <Field><Label htmlFor="nf-on">When</Label><DatePicker id="nf-on" value={v.on} onChange={(d) => { v.on = d; }} /></Field>
       </div>
       {dialogActions("Add note")}
-    </form>
-  );
-}
-
-function StepForm({ p, people, saving, done }: { p: Row; people: Row[]; saving: Saving; done: Done }) {
-  const lengths = listOf("step_length"), formats = listOf("step_format");
-  // An hour, and the first format, unless the lists say otherwise.
-  const v = useRef({ title: "", date: null as string | null, time: "", minutes: lengths.some(([m]) => m === "60") ? "60" : lengths[0]?.[0] || "", format: formats[0]?.[0] || "",
-    status: "scheduled", with: "", place: "", prep: "", remind: "hour" }).current;
-  const set = (k: keyof typeof v) => (e: React.FormEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => { (v as Row)[k] = e.currentTarget.value; };
-  return (
-    <form onSubmit={async (e) => {
-      e.preventDefault();
-      if (!v.title.trim()) return;
-      const person = people.find((pe) => pe.name.toLowerCase() === v.with.trim().toLowerCase());
-      const made = await saving(async () => {
-        const made = await post("steps", { process_id: p.id, title: v.title.trim(), at: v.date ? `${v.date}T${v.time || "00:00"}` : null,
-          minutes: v.minutes ? Number(v.minutes) : null, format: v.format || null, status: v.status, attendees: person ? null : v.with.trim() || null,
-          place: v.place.trim() || null, prep_note: v.prep || null, remind: v.status === "scheduled" ? v.remind || null : null });
-        if (person) await put(`steps/${made.id}/people`, { person_ids: [person.id] });
-        return made;
-      });
-      if (made) { toast(`Interview added${v.status === "scheduled" && v.remind && v.date ? ` · reminder set ${v.remind === "hour" ? "an hour" : "the day"} before` : ""}`); done(true); }
-    }}>
-      <h2 className="al-dialog__title" id="modal-title">Add an interview</h2>
-      <div className="al-dialog__body composer-form">
-        <Field className="composer-wide"><Label htmlFor="sf-title">Interview</Label><Input id="sf-title" placeholder="e.g. Final round with the CTO" onInput={set("title")} /></Field>
-        <Field><Label htmlFor="sf-date">Date</Label><DatePicker id="sf-date" value={null} onChange={(d) => { v.date = d; }} /></Field>
-        <Field><Label htmlFor="sf-time">Time</Label><Input id="sf-time" type="time" onInput={set("time")} /></Field>
-        <Field><Label htmlFor="sf-dur">Length</Label>
-          <Select id="sf-dur" defaultValue={v.minutes} onChange={set("minutes")}>
-            {[...lengths, ["", "Not set"]].map(([m, l]) => <option key={m} value={m}>{l}</option>)}
-          </Select></Field>
-        <Field><Label htmlFor="sf-format">Format</Label>
-          <Select id="sf-format" defaultValue={v.format} onChange={set("format")}>
-            {[...formats, ["", "Not set"]].map(([f, l]) => <option key={f} value={f}>{l}</option>)}
-          </Select></Field>
-        <Field><Label htmlFor="sf-status">Status</Label>
-          <Select id="sf-status" defaultValue={v.status} onChange={set("status")}>
-            {R("steps").fields.find((f) => f.name === "status")!.options.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-          </Select></Field>
-        <Field><Label htmlFor="sf-remind">Remind me</Label>
-          <Select id="sf-remind" defaultValue={v.remind} onChange={set("remind")}>
-            {[["hour", "An hour before"], ["day", "The day before"], ["", "Don't remind me"]].map(([r, l]) => <option key={r} value={r}>{l}</option>)}
-          </Select></Field>
-        <Field className="composer-half"><Label htmlFor="sf-with">With <Optional /></Label>
-          <Input id="sf-with" list="sf-people" placeholder="Pick from People or type a name" onInput={set("with")} />
-          <datalist id="sf-people">{people.map((pe) => <option key={pe.id} value={pe.name} />)}</datalist></Field>
-        <Field className="composer-half"><Label htmlFor="sf-where">Joining link or address <Optional /></Label>
-          <Input id="sf-where" placeholder="meet.example/… or office address" onInput={set("place")} /></Field>
-        <Field className="composer-wide"><Label htmlFor="sf-prep">What to prepare <Optional /></Label>
-          <RichText id="sf-prep" value="" rows={2} label="What to prepare" placeholder="Topics they mentioned, things to bring" onChange={(html) => { v.prep = richOrNull(html) || ""; }} /></Field>
-      </div>
-      {dialogActions("Add interview")}
     </form>
   );
 }

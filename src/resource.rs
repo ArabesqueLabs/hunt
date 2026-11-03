@@ -618,8 +618,16 @@ pub static RESOURCES: &[Resource] = &[
             ),
             hint(field("minutes", "Length (minutes)", Number), "e.g. 45"),
             hint(
-                field("place", "Joining link or address", Text),
-                "meet.example/… or an office address",
+                field("place", "Joining link", Text),
+                "meet.example/… (an address written here before shows as one)",
+            ),
+            hint(
+                field("phone", "Phone", Text),
+                "A number to call: a dial-in, or the call's backup",
+            ),
+            hint(
+                field("address", "Address", Text),
+                "Where to go, for one in person",
             ),
             hint(
                 field("prep_note", "What to prepare", LongText),
@@ -639,7 +647,7 @@ pub static RESOURCES: &[Resource] = &[
         search_sql: "t.title",
         order_sql: "coalesce(t.at, t.created_at), t.id",
         process_sql: Some("t.process_id"),
-        taggable: false,
+        taggable: true,
     },
     Resource {
         name: "notes",

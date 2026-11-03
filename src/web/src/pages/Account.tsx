@@ -125,8 +125,8 @@ function AskForAccount({ head, who }: { head: ReactNode; who: ReactNode }) {
 /** The admin centre's tabs: each one's key, name, what's in it, and its icon. */
 const ALL_ADMIN_TABS: [string, string, string, string][] = [
   ["general", "General", "Name, notice, address, new accounts", "sliders"],
-  ["lists", "Lists", "Work modes, interview steps, roles, kinds of file", "tag"],
   ["access", "Access and accounts", "Sign-ups, invites, accounts", "key"],
+  ["lists", "Field choices", "Work modes, interview steps, roles, kinds of file", "tag"],
   ["users", "User stats", "How accounts use hunt", "users"],
   ["system", "System resources", "The machine, by account", "server"],
   ["debug", "Debugging info", "Version, sign-in, health, the API", "bug"],
@@ -259,6 +259,13 @@ async function saveAdmin(change: Row, was: Row, then: (saved: Row) => void) {
   return true;
 }
 
+/** The lists, by what they're on: each group's name, and its lists' keys. */
+const LIST_GROUPS: [string, string[]][] = [
+  ["Applications", ["work_mode", "employment"]],
+  ["Interview steps", ["step_status", "step_format", "step_length"]],
+  ["People and files", ["person_role", "document_kind"]],
+];
+
 /** Where each list shows, for its intro. */
 const LIST_INTROS: Record<string, string> = {
   work_mode: "Where a role is done: on an application, and read from a posting.",
@@ -280,10 +287,11 @@ function minutesIn(text: string): number | null {
 }
 
 /**
- * Lists: the choices offered across hunt, for everyone, each edited as the
- * board's stages are (renamed in place, reordered, removed, added; Undo
- * puts it back). What hunt itself relies on can be renamed, not removed;
- * a list goes back to hunt's own with Reset.
+ * Field choices: the choices offered across hunt, for everyone, each list
+ * edited as the board's stages are (renamed in place, reordered, removed,
+ * added; Undo puts it back), a card each, grouped by what they're on. What
+ * hunt itself relies on can be renamed, not removed; a list goes back to
+ * hunt's own with Reset.
  */
 function AdminLists({ data }: { data: Row }) {
   const [lists, setLists] = useState<Row>(data.choices || {});
@@ -302,36 +310,53 @@ function AdminLists({ data }: { data: Row }) {
     changed();
     return () => save(key, was);
   };
-  return <>
-    {Object.entries<Row>(lists).map(([key, list]) => {
-      const rows = items(key);
-      const redraw = (o: { focus?: string | number | null } = {}) => setFocus({ ...focus, [key]: o.focus == null ? null : String(o.focus) });
-      return (
-        <OrderedSettings key={key} list={`choices-${key}`} title={list.label} intro={LIST_INTROS[key]} items={rows} noun="choice"
-          focus={focus[key] ?? null} redraw={redraw}
-          placeholder={list.numeric ? "Minutes, e.g. 120 or 2 hours" : "A new choice"}
-          rename={(it, name) => save(key, plain(rows.map((r) => (r.id === it.id ? { ...r, name } : r))))}
-          reorder={(ids) => save(key, plain(ids.map((id) => rows.find((r) => r.id === id)!)))}
-          remove={async (it) => save(key, plain(rows.filter((r) => r.id !== it.id)))}
-          add={async (name) => {
-            if (!list.numeric) return save(key, [...plain(rows), { value: null, label: name }]);
-            const n = minutesIn(name);
-            if (!n) throw new Error("Say how long, in minutes (e.g. 120) or hours (e.g. 2 hours)");
-            const label = n % 60 === 0 && n >= 60 ? `${n / 60} hr` : `${n} min`;
-            return save(key, [...plain(rows), { value: String(n), label }]);
-          }}
-          extra={(it) => (list.kept.includes(it.value)
-            ? <span className="al-badge al-badge--outline" title="hunt relies on it: it can be renamed, not removed">Built in</span>
-            : list.numeric ? <span className="muted small">{`${it.value} min`}</span> : null)}
-          before={list.changed ? (
-            <p className="small"><button className="al-button al-button--sm al-button--quiet" type="button" onClick={async () => {
-              const undo = await attempt(() => save(key, null));
-              if (undo) toast(`${list.label}: back to hunt's own`, "info", { label: "Undo", onclick: async () => { if (await attempt(undo)) toast("Undone"); } });
-            }}>Reset to hunt's own</button></p>
-          ) : null} />
-      );
-    })}
-  </>;
+  const card = (key: string) => {
+    const list: Row = lists[key];
+    const rows = items(key);
+    const redraw = (o: { focus?: string | number | null } = {}) => setFocus({ ...focus, [key]: o.focus == null ? null : String(o.focus) });
+    return (
+      <OrderedSettings key={key} list={`choices-${key}`} title={list.label} intro={LIST_INTROS[key]} items={rows} noun="choice"
+        focus={focus[key] ?? null} redraw={redraw}
+        placeholder={list.numeric ? "Minutes, e.g. 120 or 2 hours" : "A new choice"}
+        rename={(it, name) => save(key, plain(rows.map((r) => (r.id === it.id ? { ...r, name } : r))))}
+        reorder={(ids) => save(key, plain(ids.map((id) => rows.find((r) => r.id === id)!)))}
+        remove={async (it) => save(key, plain(rows.filter((r) => r.id !== it.id)))}
+        add={async (name) => {
+          if (!list.numeric) return save(key, [...plain(rows), { value: null, label: name }]);
+          const n = minutesIn(name);
+          if (!n) throw new Error("Say how long, in minutes (e.g. 120) or hours (e.g. 2 hours)");
+          const label = n % 60 === 0 && n >= 60 ? `${n / 60} hr` : `${n} min`;
+          return save(key, [...plain(rows), { value: String(n), label }]);
+        }}
+        quietAdd
+        extra={(it) => <span className="choice-extra">{list.kept.includes(it.value)
+          ? <span className="al-badge al-badge--outline" title="hunt relies on it: it can be renamed, not removed">Built in</span>
+          : list.numeric ? <span className="muted small">{`${it.value} min`}</span> : null}</span>}
+        headEnd={list.changed ? (
+          <button className="al-button al-button--sm al-button--quiet" type="button" title="Back to hunt's own choices" onClick={async () => {
+            const undo = await attempt(() => save(key, null));
+            if (undo) toast(`${list.label}: back to hunt's own`, "info", { label: "Undo", onclick: async () => { if (await attempt(undo)) toast("Undone"); } });
+          }}>Reset</button>
+        ) : null} />
+    );
+  };
+  // Grouped as LIST_GROUPS has them; any list it doesn't know of, after.
+  const known = LIST_GROUPS.flatMap(([, keys]) => keys);
+  const groups: [string, string[]][] = [
+    ...LIST_GROUPS.map(([name, keys]) => [name, keys.filter((k) => lists[k])] as [string, string[]]),
+    ["Other", Object.keys(lists).filter((k) => !known.includes(k))],
+  ];
+  return (
+    <div className="choice-groups">
+      <p className="muted">The choices offered in hunt's fields, for everyone. Rename one in place, drag or use the arrows to reorder; each change is saved at once, with Undo.</p>
+      {groups.filter(([, keys]) => keys.length).map(([name, keys]) => (
+        <section key={name} className="choice-group" aria-label={name}>
+          <h2>{name}</h2>
+          <div className="choice-lists">{keys.map(card)}</div>
+        </section>
+      ))}
+    </div>
+  );
 }
 
 /** General: what this hunt says of itself, and what new accounts start with. */

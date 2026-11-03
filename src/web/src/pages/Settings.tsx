@@ -27,8 +27,8 @@ import { GMAIL, GmailSettings } from "./Mail";
 import { takeHomeNumber } from "./TakeHome";
 
 /** A section: its title, and Edit (or Done) beside it when it's edited as a whole. */
-export function SettingsPanel({ title, editing = false, onToggle, intro, done = "Done", className, list, children }: {
-  title?: string; editing?: boolean; onToggle?: (on: boolean) => void; intro?: ReactNode; done?: string; className?: string; list?: string; children?: ReactNode;
+export function SettingsPanel({ title, editing = false, onToggle, intro, done = "Done", className, list, headEnd = null, children }: {
+  title?: string; editing?: boolean; onToggle?: (on: boolean) => void; intro?: ReactNode; done?: string; className?: string; list?: string; headEnd?: ReactNode; children?: ReactNode;
 }) {
   return (
     <section className={`al-panel panel settings-panel${editing ? " editing" : ""}${className ? ` ${className}` : ""}`} data-list={list} data-unsaved={editing ? "" : undefined}>
@@ -36,6 +36,7 @@ export function SettingsPanel({ title, editing = false, onToggle, intro, done = 
         {onToggle ? <button className="al-button al-button--sm al-button--quiet settings-edit" type="button" onClick={(e) => {
           if (!editing || mayDiscard(e.currentTarget)) onToggle(!editing);
         }}>{editing ? done : "Edit"}</button> : null}
+        {headEnd}
       </div>
       {intro ? <p className="muted">{intro}</p> : null}
       {children}
@@ -101,7 +102,7 @@ export function SettingsPage() {
   return (
     <div className="page settings">
       <header className="al-page-head"><h1>Settings</h1><p className="al-page-head__lede">Your preferences.</p></header>
-      <div className="settings-content" id="settings-content" role="region" aria-labelledby={`settings-tab-${tab}`}>{parts[tab]()}</div>
+      <div className="settings-content" id="settings-content" data-tab={tab} role="region" aria-labelledby={`settings-tab-${tab}`}>{parts[tab]()}</div>
     </div>
   );
 }
@@ -299,17 +300,26 @@ function DeleteAccountSettings() {
     }
   };
   return (
-    <SettingsPanel title="Delete account">
+    <SettingsPanel title="Danger Zone" className="danger-zone">
       {me ? <p><b translate="no">{me.email}</b></p> : null}
-      <p className="muted">{me
-        ? "Clearing your data deletes everything you've tracked, and keeps your account and settings. Deleting your account deletes it and everything in it. Both happen at once and for good."
-        : "Clearing your data deletes everything you've tracked, at once and for good, and keeps your settings."}
-        {S.META.terms ? <>{" "}<a href={sitePage("/data-deletion/")} target="_blank" rel="noopener">More about deleting your data</a></> : null}</p>
-      <div className="actions">
+      <div className="danger-zone__part">
+        <div>
+          <h3>Delete my data</h3>
+          <p className="muted">{me
+            ? "Deletes everything you've tracked, at once and for good. Your account and settings stay."
+            : "Deletes everything you've tracked, at once and for good. Your settings stay."}
+            {S.META.terms ? <>{" "}<a href={sitePage("/data-deletion/")} target="_blank" rel="noopener">More about deleting your data</a></> : null}</p>
+        </div>
         <button className="al-button al-button--danger" type="button" onClick={clear}>Clear my data…</button>
-        {me ? <button className="al-button al-button--danger al-button--primary" type="button" onClick={remove}
-          aria-disabled={why ? true : undefined} data-al-tip={why ? `|${why[0].toUpperCase()}${why.slice(1)}.` : undefined}>Delete my account…</button> : null}
       </div>
+      {me ? <div className="danger-zone__part">
+        <div>
+          <h3>Delete my account</h3>
+          <p className="muted">Deletes your account and everything in it, at once and for good.</p>
+        </div>
+        <button className="al-button al-button--danger al-button--primary" type="button" onClick={remove}
+          aria-disabled={why ? true : undefined} data-al-tip={why ? `|${why[0].toUpperCase()}${why.slice(1)}.` : undefined}>Delete my account…</button>
+      </div> : null}
       <ContactLine />
     </SettingsPanel>
   );
@@ -834,6 +844,10 @@ interface OrderedProps {
   add: (name: string) => Promise<Row>;
   placeholder: string; sub?: SubSpec | null; extra?: ((it: Row, done: Done) => ReactNode) | null;
   rowClass?: ((it: Row) => string) | null; nest?: ((it: Row) => ReactNode) | null; scope?: string; bare?: boolean; before?: ReactNode;
+  /** By the list's title, at its end (Reset). */
+  headEnd?: ReactNode;
+  /** The Add button as an ordinary one, not the page's main one: where there are many lists. */
+  quietAdd?: boolean;
 }
 
 /** A name, edited in place: saved when left, or on Enter; Escape puts it back. */
@@ -871,7 +885,7 @@ function NameField({ it, label, save, redraw }: { it: Row; label: string; save: 
  * and gives back what puts it back, or null if nothing was removed.
  * Adding one is said, without Undo.
  */
-export function OrderedSettings({ list, title, intro, items, noun, focus, redraw, rename, remove, reorder, add, placeholder, sub = null, extra = null, rowClass = null, nest = null, scope = "", bare = false, before = null }: OrderedProps) {
+export function OrderedSettings({ list, title, intro, items, noun, focus, redraw, rename, remove, reorder, add, placeholder, sub = null, extra = null, rowClass = null, nest = null, scope = "", bare = false, before = null, headEnd = null, quietAdd = false }: OrderedProps) {
   const listEl = useRef<HTMLOListElement>(null);
   const nameBox = useRef<HTMLInputElement>(null);
   const [dragOrder, setDragOrder] = useState<number[] | null>(null);
@@ -938,7 +952,7 @@ export function OrderedSettings({ list, title, intro, items, noun, focus, redraw
     return [...rows, <SubAdd key={`sub-add-${it.id}`} it={it} sub={sub} redraw={redraw} done={done} focusKey={at(`new-${it.id}`)!} />];
   };
   return (
-    <SettingsShell bare={bare} title={title} intro={intro} list={list}>
+    <SettingsShell bare={bare} title={title} intro={intro} list={list} headEnd={headEnd}>
       {before}
       {items.length ? (
         <ol className="stage-list" ref={listEl} onDragOver={(e) => {
@@ -1002,16 +1016,16 @@ export function OrderedSettings({ list, title, intro, items, noun, focus, redraw
         if (added) { if (nameBox.current) nameBox.current.value = ""; done(`Added ${v}`, null, { focus: "new" }); }
       }}>
         <Input ref={nameBox} aria-label={`New ${noun}`} placeholder={placeholder} required />
-        <button className="al-button al-button--primary" type="submit">{`Add ${noun}`}</button>
+        <button className={quietAdd ? "al-button" : "al-button al-button--primary"} type="submit">{`Add ${noun}`}</button>
       </form>
     </SettingsShell>
   );
 }
 
 /** A list in a panel of its own; or bare, in another's row (nest). */
-function SettingsShell({ bare, title, intro, list, children }: { bare: boolean; title?: string; intro?: string; list: string; children: ReactNode }) {
+function SettingsShell({ bare, title, intro, list, headEnd, children }: { bare: boolean; title?: string; intro?: string; list: string; headEnd?: ReactNode; children: ReactNode }) {
   if (bare) return <div className="nested-list" data-list={list}>{children}</div>;
-  return <SettingsPanel title={title} intro={intro} list={list}>{children}</SettingsPanel>;
+  return <SettingsPanel title={title} intro={intro} list={list} headEnd={headEnd}>{children}</SettingsPanel>;
 }
 
 /** A sub stage's name, being added under its stage. */

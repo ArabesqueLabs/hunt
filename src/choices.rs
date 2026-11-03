@@ -40,10 +40,12 @@ pub const STEP_FORMATS: &[(&str, &str)] = &[
 
 /// A step's lengths, in minutes.
 pub const STEP_LENGTHS: &[(&str, &str)] = &[
+    ("15", "15 min"),
     ("30", "30 min"),
     ("45", "45 min"),
     ("60", "60 min"),
     ("90", "90 min"),
+    ("120", "2 hours"),
     ("240", "Half a day"),
 ];
 

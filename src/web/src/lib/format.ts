@@ -48,6 +48,16 @@ export function fmtTime(hhmm: string | null | undefined): string {
   return d.toLocaleTimeString(LOC(), { hour: "numeric", minute: "2-digit", ...(S.PREFS.clock === "12" ? { hour12: true } : {}) });
 }
 
+/** Whether times read on a 12-hour clock (3:00 pm), as the clock setting has it, or the region does. */
+export function twelveHour(): boolean {
+  if (S.PREFS.clock === "24") return false;
+  if (S.PREFS.clock === "12") return true;
+  return new Intl.DateTimeFormat(LOC(), { hour: "numeric" }).resolvedOptions().hour12 === true;
+}
+
+/** The time zone times are read in: Settings', or the browser's. */
+export const timeZone = (): string => S.PREFS.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+
 /** "2026-10-09" or "2026-10-09T15:00", as a local Date. */
 export function parseLocal(s: string): Date;
 export function parseLocal(s: string | null | undefined): Date | null;
