@@ -1,6 +1,8 @@
 # Browser extensions
 
-![hunt's browser extension: the popup, keeping the page you're on in your stash](../screenshots/browser-extension-intro.png)
+[![hunt's browser extension: the popup on a job posting, with its title and the selected text as the note. Press to watch it keep the posting, and sort it in hunt](../app-store/mac/1-keep-light.png)](../app-store/mac/preview.mp4)
+
+*Press the picture to watch it: a posting kept from the popup, a link from the right-click menu, and both sorted in hunt.*
 
 The hunt extension keeps what you find while you browse (a job posting, a
 link, an image, or a few lines you've selected) in your
@@ -29,8 +31,8 @@ The extension needs to know where your hunt is, and a token to send with.
    else. Allow it, and the extension checks the address and token with hunt,
    then says whose stash it's connected to.
 
-![The extension's settings: hunt's address, the token, Cloudflare Access, and the keyboard shortcuts](../screenshots/extension-settings-light.png#gh-light-mode-only)
-![The extension's settings: hunt's address, the token, Cloudflare Access, and the keyboard shortcuts](../screenshots/extension-settings-dark.png#gh-dark-mode-only)
+![The extension's settings, connected: hunt's address, the token, and Behind Cloudflare Access](../app-store/mac/5-settings-light.png#gh-light-mode-only)
+![The extension's settings, connected: hunt's address, the token, and Behind Cloudflare Access](../app-store/mac/5-settings-dark.png#gh-dark-mode-only)
 
 The token is kept in this browser's local storage, and isn't synced. Give
 each browser its own token, so you can revoke one alone in hunt's Settings.
@@ -48,10 +50,8 @@ Press hunt's button in the browser's toolbar, or
 <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>H</kbd>. The popup has the page's
 address and title, and a note: what you'd selected on the page is in it
 already. Change what you like, then press **Stash** (or
-<kbd>Ctrl</kbd>+<kbd>Enter</kbd>, <kbd>⌘</kbd>+<kbd>Enter</kbd> on a Mac).
-
-![The popup on a job posting: its address, title, and the selected text as the note](../screenshots/extension-popup-light.png#gh-light-mode-only)
-![The popup on a job posting: its address, title, and the selected text as the note](../screenshots/extension-popup-dark.png#gh-dark-mode-only)
+<kbd>Ctrl</kbd>+<kbd>Enter</kbd>, <kbd>⌘</kbd>+<kbd>Enter</kbd> on a Mac), as
+in the picture at the top of this page.
 
 Untick **Keep the page's link** to keep just the note, without the page.
 
@@ -59,8 +59,15 @@ Once it's kept, the popup says what hunt thinks it could become: an
 application, a person, a company, a task, or a note on something already in
 hunt. **Sort it in hunt** opens your stash.
 
-![Kept: hunt says it looks like a job posting, with a link to sort it in hunt](../screenshots/extension-kept-light.png#gh-light-mode-only)
-![Kept: hunt says it looks like a job posting, with a link to sort it in hunt](../screenshots/extension-kept-dark.png#gh-dark-mode-only)
+![Kept in your stash: hunt says it looks like a job posting, with Sort it in hunt](../app-store/mac/2-kept-light.png#gh-light-mode-only)
+![Kept in your stash: hunt says it looks like a job posting, with Sort it in hunt](../app-store/mac/2-kept-dark.png#gh-dark-mode-only)
+
+In hunt, your stash has everything you've kept, each with what it could
+become: **Add as an application**, a note on an application it mentions,
+or **Make into…** something else. See [`hunt stash`](../cli/stash.md).
+
+![hunt's stash: the kept posting, a link and a note, each with what it could become](../app-store/mac/4-stash-light.png#gh-light-mode-only)
+![hunt's stash: the kept posting, a link and a note, each with what it could become](../app-store/mac/4-stash-dark.png#gh-dark-mode-only)
 
 ### From the right-click menu
 
@@ -72,6 +79,9 @@ Right-click a page, a link, an image or some selected text, and choose:
 | A link | **Stash this link to hunt** | The link, with its text as the title |
 | An image | **Stash this image to hunt** | The image's address, from the page it's on |
 | Selected text | **Stash the selection to hunt** | The page, with the selection as the note |
+
+![Right-clicking a link in a newsletter: Stash this link to hunt](../app-store/mac/3-menu-light.png#gh-light-mode-only)
+![Right-clicking a link in a newsletter: Stash this link to hunt](../app-store/mac/3-menu-dark.png#gh-dark-mode-only)
 
 ### With a keyboard shortcut
 
