@@ -19,7 +19,8 @@ Along the top of every page:
 
 The **theme** (light, dark, or matching the system; a click moves to the
 next) and the **language** (a click switches to the other one) are at the
-foot of the sidebar, under "Hide sidebar".
+foot of the sidebar, under "Hide sidebar". Below them is hunt's version,
+linked to its release notes, and a note when a newer release is out.
 
 ## Two views
 

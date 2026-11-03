@@ -20,6 +20,7 @@ pub mod lookup;
 pub mod mail;
 pub mod posting;
 pub mod prep;
+pub mod releases;
 pub mod resource;
 pub mod scope;
 pub mod search;

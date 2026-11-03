@@ -531,12 +531,21 @@ function PlaceInput({ value, onInput }: { value: string; onInput: (v: string) =>
 
 // ---- its details, whole ---------------------------------------------------------------------
 
+/** Where an interview is in the calendar: its day, opened on it (none without a date). */
+export const stepCalendarHref = (step: Row) => (step.at ? `/calendar?date=${String(step.at).slice(0, 10)}&event=step-${step.id}` : null);
+
 /**
  * An interview, whole, in the dialog: when, what, with whom, where, its
  * links, what to prepare (and the tasks for it), and how it went. Edit
  * turns the dialog into its form.
  */
-export function StepView({ step, prep, canEdit, onEdit }: { step: Row; prep: Row[]; canEdit: boolean; onEdit: () => void }) {
+export function StepView({ step, prep, canEdit, onEdit, about, actions }: {
+  step: Row; prep: Row[]; canEdit: boolean; onEdit?: () => void;
+  /** What it's for, under its title (in the calendar: its company and role). */
+  about?: ReactNode;
+  /** More buttons, before Edit (in the calendar: its application). */
+  actions?: ReactNode;
+}) {
   const statuses = R("steps").fields.find((f) => f.name === "status")!.options;
   const tone = step.status === "failed" ? "danger" : ["passed", "completed", "done"].includes(step.status) ? "success" : step.status === "scheduled" ? "accent" : undefined;
   const links: StepLink[] = step.links || [];
@@ -548,6 +557,7 @@ export function StepView({ step, prep, canEdit, onEdit }: { step: Row; prep: Row
         <h2 className="al-dialog__title" id="modal-title" translate="no">{step.title}</h2>
         <span className={`al-badge${tone ? ` al-badge--${tone}` : ""}`}>{optionLabel(statuses, step.status)}</span>
       </div>
+      {about ? <div className="step-view-about">{about}</div> : null}
       {tagNames(step.tags).length ? <div className="step-tag-chips">{tagNames(step.tags).map((t: string) => <TagChip key={t} name={t} />)}</div> : null}
       <div className="al-dialog__body step-view-body">
         <div className="step-view-when">
@@ -579,7 +589,8 @@ export function StepView({ step, prep, canEdit, onEdit }: { step: Row; prep: Row
       </div>
       <div className="al-dialog__actions">
         <button className="al-button" type="button" onClick={closeModal}>Close</button>
-        {canEdit ? <button className="al-button al-button--primary" type="button" onClick={onEdit}><Icon name="edit" /><span>Edit</span></button> : null}
+        {actions}
+        {canEdit && onEdit ? <button className="al-button al-button--primary" type="button" onClick={onEdit}><Icon name="edit" /><span>Edit</span></button> : null}
       </div>
     </div>
   );
