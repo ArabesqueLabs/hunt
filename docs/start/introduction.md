@@ -41,6 +41,11 @@ that's yours.
   sign-in proxy (Authelia, Authentik, oauth2-proxy, Tailscale).
 - **In English and Arabic,** right to left, with Arabic-Indic digits if
   you'd like them.
+- **In your browser, and on your phone.** A
+  [browser extension](../extensions/extensions.md) keeps postings and links
+  in your stash as you browse, and the [mobile app](../mobile/mobile.md)
+  has what's due, your applications and your stash, with hunt in the
+  phone's share sheet.
 
 ## Where next
 

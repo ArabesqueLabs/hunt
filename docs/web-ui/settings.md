@@ -40,7 +40,8 @@ long as Admin → General says); adding something is said, without Undo.
   - **Browser extension:** how to connect it (see
     [`extension/`](../../extension/README.md)).
   - **Access tokens:** for the extension, an iOS Shortcut or your own
-    scripts. Each has a name, and can either only add to your stash or
+    scripts. The [mobile app](../mobile/mobile.md) makes its own when you
+    sign in to it ("hunt app (iOS)" or "(Android)"). Each has a name, and can either only add to your stash or
     have full access (everything you can do, except tokens, your sign-in
     and Admin). A new token is shown once. The list says when each was
     made and last used, and **Revoke** stops one at once.

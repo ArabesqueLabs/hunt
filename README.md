@@ -336,7 +336,9 @@ docker run -e HUNT_ADMIN_EMAIL=you@example.com -e HUNT_ADMIN_PASSWORD='a long pa
 - **The CLI** signs in as an account: set `HUNT_EMAIL` and `HUNT_PASSWORD`
   where you run `hunt`, or `HUNT_TOKEN` to an access token.
 - **Access tokens** (Settings → Connected apps) let apps act as you: the
-  [browser extension](extension/README.md), an iOS Shortcut, a script.
+  [browser extension](extension/README.md), the
+  [mobile app](mobile/README.md) (which makes its own when you sign in to
+  it), an iOS Shortcut, a script.
   They're sent as `Authorization: Bearer hunt_…`. Each one either only adds
   to your stash, or has full access to what you can do, except tokens, your
   sign-in and the admin centre. Only a token's SHA-256 is kept, so it's
