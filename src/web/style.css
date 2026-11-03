@@ -404,6 +404,7 @@ td.actions > * { margin-inline-start: 0.4rem; }
 .stage-list { display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 0.85rem; }
 .stage { display: grid; grid-template-columns: auto auto 1fr auto auto auto; gap: 0.5rem; align-items: center; padding: 0.35rem 0.5rem; background: var(--al-color-surface); border: 1px solid var(--al-color-line); border-radius: var(--al-radius-sm); }
 .stage:has(.stage-active) { grid-template-columns: auto auto 1fr auto auto auto auto; }
+.stage:has(> .choice-extra) { grid-template-columns: auto auto 1fr auto auto auto auto; }
 .stage.dragging { opacity: 0.5; }
 .handle { cursor: grab; color: var(--al-color-text-muted); letter-spacing: -0.2em; padding-inline-end: 0.3rem; }
 /* A name edited where it is (Settings' lists): text until pointed at or focused. */
@@ -1346,6 +1347,31 @@ body.no-account .al-sidebar__nav { display: none; }
 .account-form textarea { width: 100%; resize: vertical; }
 .account-form .agree { font-family: var(--al-font-serif); font-size: 1rem; line-height: 1.5; color: var(--al-color-text-muted); }
 .admin-page { gap: 1.75rem; }
+
+/* Admin → Field choices: each list a card, the cards side by side, grouped. */
+.choice-groups { display: flex; flex-direction: column; gap: var(--al-space-6); }
+.choice-groups > p.muted { margin: 0; max-inline-size: 60ch; }
+.choice-group > h2 { margin: 0 0 var(--al-space-3); font-size: var(--al-text-lg); }
+.choice-lists { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr)); gap: var(--al-space-4); align-items: start; }
+.settings-content .choice-lists > .settings-panel {
+  display: flex; flex-direction: column; gap: 0; padding: var(--al-space-4);
+  background: var(--al-color-surface); border: 1px solid var(--al-color-line); border-radius: var(--al-radius-md);
+}
+.settings-content .choice-lists .panel-head { justify-content: space-between; flex-wrap: nowrap; min-block-size: 1.75rem; align-items: center; margin: 0; }
+.settings-content .choice-lists .panel-head h2 { font-size: var(--al-text-base); font-weight: 600; }
+.choice-lists .settings-panel > p.muted { margin: var(--al-space-1) 0 var(--al-space-3); font-size: var(--al-text-sm); }
+.choice-lists .stage-list { gap: 0; margin-bottom: var(--al-space-3); border-block-start: 1px solid var(--al-color-line); }
+.choice-lists .stage { gap: var(--al-space-1); padding: var(--al-space-1) 0; background: transparent; border: 0; border-block-end: 1px solid var(--al-color-line); border-radius: 0; }
+.choice-lists .stage .handle { padding-inline: var(--al-space-1) 0; }
+.choice-lists .stage-no { min-inline-size: 1.25em; text-align: end; }
+.choice-lists .stage .al-button--icon { color: var(--al-color-text-muted); }
+.choice-lists .stage .al-button--icon:hover:not(:disabled) { color: var(--al-color-text); }
+.choice-lists .stage .al-button--icon:disabled { visibility: hidden; }
+.choice-lists .stage .al-button--danger:hover { color: var(--al-color-danger); }
+.choice-extra { display: inline-flex; justify-content: flex-end; }
+.choice-extra .al-badge { font-size: var(--al-text-xs); }
+.choice-lists .inline-add { margin-top: auto; }
+.choice-lists .inline-add .al-input { flex: 1; min-inline-size: 0; }
 /* Settings and the admin centre: their own sections in the sidebar in place
    of the app's, and their own colour for hunt's teal (Settings a plum, the
    admin centre a slate blue), so it's plain which you're in. */
@@ -1655,7 +1681,7 @@ body:is(.admin-mode, .settings-mode) :is(.app-nav, #cycle-box) { display: none; 
 .app-tl-col > .app-tl { align-self: stretch; }
 /* The heading tops the timeline's column, so the interviews beside it start level with it. */
 .app-tl-col > .app-panel-head { align-self: stretch; margin-block-end: var(--al-space-1); }
-.app-step-cards > .app-step-cards-sub:first-child { margin-block-start: 0; }
+.app-step-cards > .app-step-cards-head:first-child { margin-block-start: 0; }
 /* The role: its details narrow, about the job wide beside them; one column on a phone. */
 .app-role-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: var(--al-space-6); align-items: start; }
 .app-role-cols > * { min-inline-size: 0; }
@@ -1665,7 +1691,51 @@ body:is(.admin-mode, .settings-mode) :is(.app-nav, #cycle-box) { display: none; 
 /* The interviews, each a card: those to come, then those that happened. */
 .app-step-cards { display: flex; flex-direction: column; gap: var(--al-space-3); min-inline-size: 0; }
 .app-step-cards > .app-panel-tools { justify-content: flex-end; }
-.app-step-cards-sub { margin: var(--al-space-1) 0 0; font-size: var(--al-text-xs); font-weight: var(--al-weight-medium); color: var(--al-color-text-muted); }
+/* Each list's heading, and the button that folds it, on one line. */
+.app-step-cards-head { display: flex; align-items: center; justify-content: space-between; gap: var(--al-space-2); margin-block-start: var(--al-space-1); }
+.app-step-cards-sub { margin: 0; font-size: var(--al-text-xs); font-weight: var(--al-weight-medium); color: var(--al-color-text-muted); }
+.app-step-cards-head .app-step-cards-fold { min-block-size: 1.5rem; padding-block: 0; padding-inline: var(--al-space-2); font-size: var(--al-text-xs); }
+.app-step-cards-fold svg { inline-size: 0.875rem; block-size: 0.875rem; transition: transform 0.15s; }
+.app-step-cards-fold svg:not(.is-open) { transform: rotate(-90deg); }
+[dir="rtl"] .app-step-cards-fold svg:not(.is-open) { transform: rotate(90deg); }
+.app-step-cards-list { display: flex; flex-direction: column; gap: var(--al-space-3); }
+.app-step-cards-list.is-folded { gap: var(--al-space-1-5); }
+/* Folded, a card is a line: its title, when, and how it went. */
+.app-step-card.is-line { flex-direction: row; align-items: center; gap: var(--al-space-2); padding: var(--al-space-1-5) var(--al-space-3); font-size: var(--al-text-sm); }
+.app-step-card.is-line h4 { margin: 0; flex: 1 1 auto; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--al-text-sm); font-weight: var(--al-weight-medium); }
+.app-step-card.is-line .app-step-card-at { flex: none; color: var(--al-color-text-muted); white-space: nowrap; }
+.app-step-card.is-line .app-step-card-at.is-late { color: var(--al-color-warning); }
+.app-step-card.is-line .al-badge { flex: none; }
+/* An interview's links: its joining link, a logo alone; the others, a logo and a name. */
+.step-links { display: flex; flex-wrap: wrap; align-items: center; gap: var(--al-space-1) var(--al-space-3); font-size: var(--al-text-sm); }
+.step-link { display: inline-flex; align-items: center; gap: var(--al-space-1); min-inline-size: 0; color: inherit; text-decoration: none; }
+.step-link > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-inline-size: 16rem; }
+.step-link:hover > span { color: var(--al-color-accent); text-decoration: underline; }
+.step-link svg { flex: none; }
+.step-link > svg:not(.platform-mark) { color: var(--al-color-text-muted); }
+/* Its title opens it whole: a button that reads as the heading. */
+/* Its title, in the heading's own type: underlined as a link is, as it's pointed at. */
+.app-step-card-title { appearance: none; display: inline; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; font: inherit; color: inherit; text-align: start; white-space: normal; cursor: pointer; }
+.app-step-card-title:hover { color: var(--al-color-accent); text-decoration: underline; text-decoration-color: var(--al-color-accent); text-underline-offset: 0.15em; }
+.app-step-card-title:focus-visible { outline: 2px solid var(--al-color-focus, var(--al-color-accent)); outline-offset: 2px; border-radius: 2px; }
+.app-step-card.is-line h4 { display: flex; min-inline-size: 0; }
+.app-step-card.is-line .app-step-card-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* When: the day, start to end, and how long. */
+.step-when { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--al-space-1-5); }
+.step-when.is-late { color: var(--al-color-warning); }
+.step-when > [aria-hidden] { color: var(--al-color-text-muted); }
+/* Join: its platform's logo, and the word; Log outcome a button that opens its choices. */
+.step-join { gap: var(--al-space-1-5); }
+.step-join svg { inline-size: 1rem; block-size: 1rem; }
+.step-outcome { gap: var(--al-space-1); }
+.step-outcome svg { inline-size: 0.75rem; block-size: 0.75rem; }
+.step-tag-chips { display: flex; flex-wrap: wrap; gap: var(--al-space-1); }
+/* Editing them: a row each, its logo, name, address and Remove. */
+.step-links-edit { display: flex; flex-direction: column; gap: var(--al-space-2); }
+.step-links-row { display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(0, 2fr) auto; align-items: center; gap: var(--al-space-2); }
+.step-links-mark { display: inline-flex; color: var(--al-color-text-muted); }
+.step-links-add { align-self: flex-start; }
+@media (max-width: 36rem) { .step-links-row { grid-template-columns: auto minmax(0, 1fr) auto; } .step-links-row > :nth-child(3) { grid-column: 2; grid-row: 2; } }
 .app-step-card { gap: var(--al-space-1-5); padding: var(--al-space-3) var(--al-space-4); }
 .app-step-card-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--al-space-1) var(--al-space-2); }
 .app-step-card-head h4 { margin: 0; font-size: var(--al-text-base); font-weight: var(--al-weight-medium); min-inline-size: 0; }
@@ -1730,6 +1800,19 @@ body:is(.admin-mode, .settings-mode) :is(.app-nav, #cycle-box) { display: none; 
 .settings-row-control { display: flex; flex-direction: column; align-items: flex-start; gap: var(--al-space-2); min-inline-size: 0; }
 .settings-row-control > .al-select, .settings-row-control > .al-input { inline-size: min(100%, 24rem); }
 .settings-row-control > .al-input[aria-invalid="true"] { border-color: var(--al-color-danger); }
+/* General: no rules between its settings, one between its sections. */
+.settings-content[data-tab="general"] .settings-row { border-block-start: 0; }
+.settings-content[data-tab="general"] > .settings-panel + .settings-panel { border-block-start: 1px solid var(--al-color-line); padding-block-start: var(--al-space-6); }
+/* The Danger Zone: boxed in red, apart from the settings above it. */
+.settings-content > .settings-panel.danger-zone { border: 1px solid var(--al-color-danger); border-radius: var(--al-radius-md); padding: var(--al-space-4) var(--al-space-5); background: color-mix(in oklch, var(--al-color-danger-wash) 40%, transparent); }
+.settings-content[data-tab="general"] > .settings-panel + .settings-panel.danger-zone { margin-block-start: var(--al-space-2); }
+.danger-zone .panel-head h2 { color: var(--al-color-danger); }
+.danger-zone > p { margin: var(--al-space-2) 0 0; }
+.danger-zone__part { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--al-space-2) var(--al-space-6); padding-block: var(--al-space-3); }
+.danger-zone__part + .danger-zone__part { border-block-start: 1px solid color-mix(in oklch, var(--al-color-danger) 35%, transparent); }
+.danger-zone__part > div { flex: 1 1 18rem; }
+.danger-zone__part h3 { margin: 0; font-size: var(--al-text-base); font-weight: 600; }
+.danger-zone__part p { margin: var(--al-space-0-5) 0 0; }
 .settings-row-control .work-hours { margin-block-start: 0; }
 .settings-row-control .other-zone select { inline-size: min(22rem, 60vw); }
 .contact-line { margin-block-start: var(--al-space-3); }
@@ -1910,15 +1993,14 @@ tr.loading td { padding-block: var(--al-space-3); }
 .topbar-search .al-input:placeholder-shown { text-overflow: ellipsis; }
 .topbar-tools { display: flex; align-items: center; gap: var(--al-space-1); margin-inline-start: auto; }
 .topbar-button { position: relative; }
-/* How many are coming up, on the bell's corner: plain, or the warning colour when one's overdue. */
+/* How many are coming up, on the bell's corner, in red. */
 .topbar-count {
   position: absolute; inset-block-start: 0.125rem; inset-inline-end: 0.125rem;
   min-inline-size: 1.125rem; min-block-size: 1.125rem; padding-inline: 0.25rem;
   font-size: 0.625rem; border-radius: var(--al-radius-full); pointer-events: none;
-  background: var(--al-color-text); color: var(--al-color-bg);
+  background: var(--al-color-danger); color: var(--al-color-on-accent);
   box-shadow: 0 0 0 2px var(--al-color-bg);
 }
-.topbar-count.al-badge--warning { background: var(--al-color-warning); color: var(--al-color-on-accent); }
 /* You: your photo or initials, in the accent. */
 .topbar-me { all: unset; display: inline-grid; place-items: center; margin-inline-start: var(--al-space-1); border-radius: var(--al-radius-full); cursor: pointer; }
 .topbar-me:hover .me-avatar { box-shadow: 0 0 0 2px var(--al-color-line-strong); }
@@ -2028,8 +2110,55 @@ tr.loading td { padding-block: var(--al-space-3); }
 /* Rich text on the timeline: a note, and what to prepare for an interview. */
 .app-tl .al-timeline__title .rich.tl-serif { white-space: normal; }
 .tl-prep { white-space: normal; }
-.tl-prep .tl-rich { display: inline; }
 .tl-prep .tl-rich:not(.rich) { white-space: pre-line; }
-.tl-prep .tl-rich.rich { display: block; }
+.tl-prep .tl-rich > :first-child { margin-block-start: 0; }
+.tl-prep .tl-rich > :last-child { margin-block-end: 0; }
+/* Cut to its first few lines (the count is set where it's used), Read more beneath. */
+.app-clamp { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
 .prep-description { margin-block: var(--al-space-1); max-inline-size: 60ch; }
 .version-note { display: flex; flex-direction: column; gap: var(--al-space-1); }
+
+/* ---- an interview's dialog: its form, in groups, and its details ---- */
+.step-form-body { display: flex; flex-direction: column; gap: var(--al-space-5); }
+.step-form-title .al-input { font-size: var(--al-text-lg); font-weight: var(--al-weight-medium); }
+.step-form-group { display: flex; flex-direction: column; gap: var(--al-space-3); margin: 0; padding: var(--al-space-4); border: 1px solid var(--al-color-line); border-radius: var(--al-radius-sm); background: var(--al-color-surface-sunk); min-inline-size: 0; }
+.step-form-group > legend { padding: 0 var(--al-space-1-5); margin-inline-start: calc(-1 * var(--al-space-1-5)); font-size: var(--al-text-xs); font-weight: var(--al-weight-medium); letter-spacing: 0.04em; text-transform: uppercase; color: var(--al-color-text-muted); }
+.step-form-group .al-input, .step-form-group .al-select, .step-form-group .al-textarea { background: var(--al-color-surface); }
+.step-form-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--al-space-3); }
+.step-form-row--where { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); }
+.step-when-fields { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr); gap: var(--al-space-3); align-items: end; }
+.step-when-length, .step-when-zone { grid-column: 1 / -1; }
+.step-when-length { display: flex; flex-wrap: wrap; align-items: center; gap: var(--al-space-1-5); }
+.step-when-length-label { font-size: var(--al-text-sm); color: var(--al-color-text-muted); margin-inline-end: var(--al-space-1); }
+.step-when-length-now { font-size: var(--al-text-sm); color: var(--al-color-text-muted); }
+.step-chip { border-radius: 999px; min-block-size: 1.75rem; padding-block: 0; background: var(--al-color-surface); }
+.step-chip[aria-pressed="true"] { background: var(--al-color-accent); border-color: var(--al-color-accent); color: var(--al-color-on-accent, #fff); }
+.step-when-zone { margin: 0; }
+.time-field .combo-list { max-height: 14rem; }
+.time-list li.chosen { font-weight: var(--al-weight-medium); color: var(--al-color-accent); }
+.step-place { position: relative; }
+.step-place-mark { position: absolute; inset-inline-start: var(--al-space-3); inset-block: 0; display: inline-flex; align-items: center; color: var(--al-color-text-muted); pointer-events: none; }
+.step-place .al-input { padding-inline-start: calc(var(--al-space-3) + 1.5rem); }
+.step-form .step-with .combo, .step-form .step-tags .combo { min-width: 12rem; }
+@media (max-width: 40rem) {
+  .step-form-row { grid-template-columns: 1fr 1fr; }
+  .step-form-row--where { grid-template-columns: 1fr; }
+  .step-when-fields { grid-template-columns: 1fr 1fr; }
+  .step-when-fields > :first-child { grid-column: 1 / -1; }
+}
+.step-view-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--al-space-2) var(--al-space-3); }
+.step-view-head { padding-block-end: var(--al-space-3); border-block-end: 1px solid var(--al-color-line); }
+.step-view-head .al-dialog__title { margin: 0; padding: 0; border: 0; }
+.step-view-body { display: flex; flex-direction: column; gap: var(--al-space-4); }
+.step-view-when { display: flex; flex-wrap: wrap; align-items: center; gap: var(--al-space-2); font-size: var(--al-text-base); }
+.step-view-actions { display: inline-flex; gap: var(--al-space-1-5); margin-inline-start: auto; }
+.step-icon-button svg { inline-size: 0.95rem; block-size: 0.95rem; }
+.step-view-links, .step-view-tasks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--al-space-1-5); }
+.step-view-links li { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--al-space-2); }
+.step-view-facts .step-link > span { max-inline-size: 28rem; }
+.step-view-part h3 { margin: 0 0 var(--al-space-1-5); font-size: var(--al-text-xs); font-weight: var(--al-weight-medium); letter-spacing: 0.04em; text-transform: uppercase; color: var(--al-color-text-muted); }
+.step-view-text { font-family: var(--al-font-serif); }
+.step-view-text > :first-child { margin-block-start: 0; }
+.step-view-tasks li { display: flex; align-items: center; gap: var(--al-space-2); font-size: var(--al-text-sm); }
+.step-view-tasks li svg { color: var(--al-color-text-muted); }
+.step-view-tasks li.is-done span { color: var(--al-color-text-muted); text-decoration: line-through; }

@@ -3579,6 +3579,102 @@ fn a_server_database_upgrades_itself() {
 }
 
 #[tokio::test]
+async fn a_step_has_links() {
+    let app = app();
+    let card = ok(
+        &app,
+        "POST",
+        "/api/processes",
+        Some(json!({ "company": "Acme", "title": "SRE" })),
+    )
+    .await;
+    let step = ok(
+        &app,
+        "POST",
+        "/api/steps",
+        Some(json!({ "process_id": card["id"], "title": "Pairing" })),
+    )
+    .await;
+    assert_eq!(step["links"], json!([]));
+    let id = step["id"].clone();
+    let with = ok(
+        &app,
+        "PUT",
+        &format!("/api/steps/{id}/links"),
+        Some(json!({ "links": [
+            { "label": " Pad ", "url": "https://app.coderpad.io/abc" },
+            { "label": "", "url": " https://example.com/brief " },
+        ] })),
+    )
+    .await;
+    assert_eq!(
+        with["links"],
+        json!([
+            { "label": "Pad", "url": "https://app.coderpad.io/abc" },
+            { "label": null, "url": "https://example.com/brief" },
+        ]),
+        "in their order, trimmed, a blank name none"
+    );
+    let detail = ok(
+        &app,
+        "GET",
+        &format!("/api/processes/{}/detail", card["id"]),
+        None,
+    )
+    .await;
+    assert_eq!(
+        detail["steps"][0]["links"], with["links"],
+        "steps carry their links"
+    );
+    assert_eq!(
+        detail["activity"][0]["summary"],
+        "Updated step Pairing: links: — → Pad, https://example.com/brief"
+    );
+    // A link needs its URL.
+    let (status, _) = call(
+        &app,
+        "PUT",
+        &format!("/api/steps/{id}/links"),
+        Some(json!({ "links": [{ "label": "Pad", "url": " " }] })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    // Beside its joining link, a number to call and an address.
+    let wher = ok(
+        &app,
+        "PATCH",
+        &format!("/api/steps/{id}"),
+        Some(json!({ "phone": "+44 20 7946 0000,,1234#", "address": "1 Canal St, London" })),
+    )
+    .await;
+    assert_eq!(wher["phone"], "+44 20 7946 0000,,1234#");
+    assert_eq!(wher["address"], "1 Canal St, London");
+    // A step can be tagged, and is listed by its tag.
+    let tags = ok(
+        &app,
+        "PUT",
+        &format!("/api/steps/{id}/tags"),
+        Some(json!({ "tags": ["Coding", "remote"] })),
+    )
+    .await;
+    assert_eq!(tags, json!(["Coding", "remote"]));
+    let tagged = ok(&app, "GET", "/api/steps?tag=coding", None).await;
+    assert_eq!(tagged.as_array().unwrap().len(), 1);
+    assert_eq!(tagged[0]["tags"], json!(["Coding", "remote"]));
+    // Sending a step back with its links is fine; deleting it takes them.
+    ok(&app, "PATCH", &format!("/api/steps/{id}"), Some(with)).await;
+    ok(
+        &app,
+        "PUT",
+        &format!("/api/steps/{id}/links"),
+        Some(json!({ "links": [] })),
+    )
+    .await;
+    let step = ok(&app, "GET", &format!("/api/steps/{id}"), None).await;
+    assert_eq!(step["links"], json!([]));
+}
+
+#[tokio::test]
 async fn a_step_is_with_people() {
     let app = app();
     let card = ok(
@@ -6332,7 +6428,7 @@ async fn admins_change_the_lists_of_choices() {
         meta["choices"]["work_mode"]["choices"][0]["value"],
         "remote"
     );
-    assert_eq!(meta["choices"]["step_length"]["choices"][2]["value"], "60");
+    assert_eq!(meta["choices"]["step_length"]["choices"][3]["value"], "60");
     // A new kind of employment, named; its value made from its name.
     let mut employment = meta["choices"]["employment"]["choices"]
         .as_array()

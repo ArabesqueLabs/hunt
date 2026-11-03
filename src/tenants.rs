@@ -150,6 +150,7 @@ const REMOVE_ORDER: &[&str] = &[
     "reminder",
     "link",
     "process_file",
+    "step_link",
     "step_person",
     "step",
     "note",

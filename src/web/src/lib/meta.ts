@@ -56,7 +56,7 @@ export const isAdmin = () => myAccount()?.role === "admin" && myAccount()?.statu
 export const siteName = () => S.META?.about?.name || "hunt";
 
 /**
- * A list admins can change (Admin → Lists), as `[value, label]`s: work
+ * A list admins can change (Admin → Field choices), as `[value, label]`s: work
  * modes, employment, a step's statuses, formats and lengths, people's
  * roles, kinds of file.
  */

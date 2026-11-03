@@ -1683,6 +1683,14 @@ impl Db {
     }
 }
 
+/// One of an interview's links, as sent: a name (or none) and a URL.
+#[derive(Deserialize, Clone)]
+pub struct StepLink {
+    #[serde(default)]
+    pub label: Option<String>,
+    pub url: String,
+}
+
 impl Db {
     /// Set who an interview step is with, by their ids. The change is
     /// logged on the step.
@@ -1729,6 +1737,64 @@ impl Db {
                     "updated",
                     &format!("Updated step {}: with: {was} → {now}", label(&after)),
                     Some(json!({ "people": [step["people"], after["people"]] })),
+                )?;
+            }
+            Ok(after)
+        })
+    }
+
+    /// Set an interview's links, in their order; each needs a URL, its name
+    /// is optional. The change is logged on the step.
+    pub fn set_step_links(&self, step_id: i64, links: &[StepLink]) -> Result<Record> {
+        let mut clean = Vec::new();
+        for l in links {
+            let url = l.url.trim();
+            if url.is_empty() {
+                return Err(invalid("each link needs its URL"));
+            }
+            let label = l.label.as_deref().map(str::trim).filter(|t| !t.is_empty());
+            clean.push((label.map(String::from), url.to_string()));
+        }
+        self.atomic(|db| {
+            let r = res("steps");
+            let step = db.get(r, step_id)?;
+            db.exec(
+                "DELETE FROM step_link WHERE step_id = ?1",
+                crate::args![step_id],
+            )?;
+            for (i, (label, url)) in clean.iter().enumerate() {
+                db.exec(
+                    "INSERT INTO step_link (step_id, label, url, position) VALUES (?1, ?2, ?3, ?4)",
+                    crate::args![step_id, label.clone(), url.clone(), i as i64],
+                )?;
+            }
+            let after = db.get(r, step_id)?;
+            let names = |rec: &Record| -> String {
+                let list: Vec<&str> = rec["links"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|l| l["label"].as_str().or_else(|| l["url"].as_str()))
+                    .collect();
+                if list.is_empty() {
+                    "—".into()
+                } else {
+                    list.join(", ")
+                }
+            };
+            if step["links"] != after["links"] {
+                db.log(
+                    &db.stamp(),
+                    r,
+                    &after,
+                    "updated",
+                    &format!(
+                        "Updated step {}: links: {} → {}",
+                        label(&after),
+                        names(&step),
+                        names(&after)
+                    ),
+                    Some(json!({ "links": [step["links"], after["links"]] })),
                 )?;
             }
             Ok(after)

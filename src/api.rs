@@ -65,7 +65,8 @@
 //! | `GET /api/processes/{id}/mail` | its Gmail search (built, and its own), label, domains and people |
 //! | `POST /api/{notes,steps,emails,links}/{id}/transfer` | `{application_id}`: move it to another application (a link), or to that application's process (its newest open one); an interview's prep goes with it |
 //! | `PUT /api/steps/{id}/people` | `{person_ids: [...]}`: who an interview step is with (steps list them as `people`) |
-//! | `PUT /api/{resource}/{id}/tags` | `{tags: [names]}`: set what a record is tagged (applications, companies, people, documents); lists take `?tag=` |
+//! | `PUT /api/steps/{id}/links` | `{links: [{label, url}]}`: an interview's links, in order (steps list them as `links`) |
+//! | `PUT /api/{resource}/{id}/tags` | `{tags: [names]}`: set what a record is tagged (applications, companies, people, documents, interview steps); lists take `?tag=` |
 //! | `DELETE /api/stages/{id}?move_to=` | delete a stage, moving its processes |
 //! | `POST /api/applications` | also takes `company` by name, with `company_website` and `company_linkedin` |
 //! | `GET /api/applications/same-posting?url=` | applications already tracking that posting link, however it was copied |
@@ -487,6 +488,7 @@ fn routes(state: AppState) -> Router {
             "/api/steps/{id}/people",
             axum::routing::put(set_step_people),
         )
+        .route("/api/steps/{id}/links", axum::routing::put(set_step_links))
         .route("/api/{resource}/{id}/tags", axum::routing::put(set_tags))
         .route("/api/companies/lookup", post(lookup_company))
         .route(
@@ -2668,6 +2670,15 @@ struct StepPeople {
 
 async fn set_step_people(s: Scoped, Path(id): Path<i64>, Json(b): Json<StepPeople>) -> ApiResult {
     ok(with_db(&s, |db| db.set_step_people(id, &b.person_ids))?)
+}
+
+#[derive(Deserialize)]
+struct StepLinks {
+    links: Vec<crate::service::StepLink>,
+}
+
+async fn set_step_links(s: Scoped, Path(id): Path<i64>, Json(b): Json<StepLinks>) -> ApiResult {
+    ok(with_db(&s, |db| db.set_step_links(id, &b.links))?)
 }
 
 #[derive(Deserialize)]

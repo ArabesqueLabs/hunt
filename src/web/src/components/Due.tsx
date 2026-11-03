@@ -1,8 +1,8 @@
 // In the top bar: what's coming up, a click away from any page. Reminders
 // that are due (or overdue), interviews, and applications closing, from
-// today until tomorrow's end; how many, on the bell's corner (in the
-// warning colour when something's overdue). From the calendar's events,
-// read again on each page.
+// today until tomorrow's end; how many, on the bell's corner in red, and a
+// red dot on the tab's icon. From the calendar's events, read again on each
+// page.
 
 import { useEffect, useState } from "react";
 import { get } from "../lib/api";
@@ -32,6 +32,53 @@ async function loadDue(): Promise<Row[]> {
     .sort((a, b) => String(a.at).localeCompare(String(b.at)));
 }
 
+/** The tab's icon as the page has it, and as it is with the dot, drawn once. */
+let plainIcon: string | null = null;
+let markedIcon: Promise<string> | null = null;
+let marked = false;
+
+/** The tab's icon with a red dot on its corner. */
+function drawMarked(href: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const size = 64;
+      const canvas = document.createElement("canvas");
+      canvas.width = canvas.height = size;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return reject(new Error("no canvas"));
+      ctx.drawImage(img, 0, 0, size, size);
+      const r = size * 0.22, cx = size - r - 1, cy = r + 1;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r + 4, 0, 2 * Math.PI);
+      ctx.fillStyle = "#fff";
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, 2 * Math.PI);
+      ctx.fillStyle = "#e5342b";
+      ctx.fill();
+      resolve(canvas.toDataURL("image/png"));
+    };
+    img.onerror = reject;
+    img.src = href;
+  });
+}
+
+/** Marks the tab's icon while something's due, and takes the mark off when not. */
+function markTab(on: boolean) {
+  const link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
+  if (!link) return;
+  if (plainIcon === null) plainIcon = link.href;
+  marked = on;
+  if (!on) {
+    link.type = "image/svg+xml";
+    link.href = plainIcon;
+    return;
+  }
+  markedIcon ??= drawMarked(plainIcon);
+  markedIcon.then((href) => { if (!marked) return; link.type = "image/png"; link.href = href; }).catch(() => { markedIcon = null; });
+}
+
 export function DueMenu() {
   const visit = useVisit();
   const [due, setDue] = useState<Row[] | null>(null);
@@ -41,7 +88,8 @@ export function DueMenu() {
     return () => { alive = false; };
   }, [visit]);
   const n = due?.length ?? 0;
-  const late = due?.some((e) => e.kind === "next" && isOverdue(e.at));
+  useEffect(() => { markTab(n > 0); }, [n]);
+  useEffect(() => () => markTab(false), []);
   const label = n ? `Coming up: ${n}` : "Coming up";
   return (
     <MenuButton className="al-button al-button--icon al-button--quiet topbar-button" menuClassName="due-menu" label={label}
@@ -62,7 +110,7 @@ export function DueMenu() {
         <MenuItem close={close} onClick={() => go("/calendar?view=agenda")}>Open the calendar</MenuItem>
       </>}>
       <PathIcon d={ICONS.bell} className="al-icon" />
-      {n ? <span className={`topbar-count al-badge al-badge--count${late ? " al-badge--warning" : ""}`} aria-hidden="true">{n > 99 ? "99+" : n}</span> : null}
+      {n ? <span className="topbar-count al-badge al-badge--count" aria-hidden="true">{n > 99 ? "99+" : n}</span> : null}
     </MenuButton>
   );
 }
